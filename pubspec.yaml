@@ -1,0 +1,40 @@
+name: detectco
+description: "A new Flutter project."
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Icons and SVG support
+  cupertino_icons: ^1.0.8
+  flutter_svg: ^2.2.4
+
+  # Firebase core for initialization (downgraded to match cloud_firestore)
+  firebase_core: ^2.32.0
+
+  # Firebase Realtime Database
+  firebase_database: ^10.5.7
+
+  # Firebase Firestore
+  cloud_firestore: ^4.17.5
+  
+  # Maps and location
+  flutter_map: ^6.0.0
+  latlong2: ^0.9.0
+  geolocator: ^10.1.0
+  permission_handler: ^11.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/icon/placeholder.webp
