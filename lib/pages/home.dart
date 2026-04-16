@@ -11,14 +11,14 @@ class HomeTab extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'DETECT:CO',
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+          'DETECT-CO',
+          style: TextStyle(fontWeight: FontWeight.bold, color: Color.fromARGB(255, 0, 0, 0)),
         ),
         centerTitle: true,
-        backgroundColor: const Color(0xFF0353A4),
+        backgroundColor: const Color.fromARGB(255, 255, 255, 255),
         leading: Container(
           decoration: const BoxDecoration(color: Colors.white),
-          child: Image.asset("assets/icon/placeholder.webp"),
+          child: Image.asset("assets/icon/logo.png"),
         ),
       ),
       body: Padding(
@@ -39,7 +39,6 @@ class HomeTab extends StatelessWidget {
             final rawData = snapshot.data!.snapshot.value as Map<dynamic, dynamic>;
             final data = rawData.map((key, value) => MapEntry(key.toString(), value));
 
-            // ⚡ Use 'distance' as water level
             final dynamic distanceRaw = data['distance'];
             final double waterLevel = distanceRaw is num
                 ? distanceRaw.toDouble()
@@ -49,12 +48,28 @@ class HomeTab extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SensorCard(
-                    title: 'Temperature',
-                    value: data['temperature']?.toString() ?? '--',
-                    unit: '°C',
+                  // Row of 2 cards (Temperature and Humidity)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SensorCard(
+                          title: 'Temperature',
+                          value: data['temperature']?.toString() ?? '--',
+                          unit: '°C',
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: SensorCard(
+                          title: 'Humidity',
+                          value: data['humidity']?.toString() ?? '--',
+                          unit: '%',
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 12),
+                  // Water Level card 
                   SensorCard(
                     title: 'Water Level',
                     value: waterLevel.toString(),
@@ -62,12 +77,7 @@ class HomeTab extends StatelessWidget {
                     waterLevel: waterLevel,
                   ),
                   const SizedBox(height: 12),
-                  SensorCard(
-                    title: 'Humidity',
-                    value: data['humidity']?.toString() ?? '--',
-                    unit: '%',
-                  ),
-                  const SizedBox(height: 12),
+                  // Warning card
                   WarningCard(
                     waterLevel: waterLevel,
                   ),
@@ -81,7 +91,7 @@ class HomeTab extends StatelessWidget {
   }
 }
 
-/// Sensor Card
+///Sensor Card (Box style)
 class SensorCard extends StatelessWidget {
   final String title;
   final String value;
@@ -97,6 +107,7 @@ class SensorCard extends StatelessWidget {
   });
 
   Color _getCardColor() {
+    if (waterLevel == null) return Colors.white;
     final level = waterLevel ?? 0;
     if (level > 30) return Colors.green.shade100;
     if (level > 20) return Colors.orange.shade100;
@@ -107,30 +118,53 @@ class SensorCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8), // Smaller padding
       decoration: BoxDecoration(
         color: _getCardColor(),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(12), // Rounded corners like boxes
+        border: Border.all(color: Colors.grey.shade300, width: 1),
         boxShadow: [
           BoxShadow(
             color: Colors.grey.shade200,
-            blurRadius: 4,
-            offset: const Offset(0, 2),
+            blurRadius: 2,
+            offset: const Offset(0, 1),
           ),
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center, // Centered content
         children: [
-          Text(title,
-              style:
-                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-          const SizedBox(height: 8),
           Text(
-            '$value $unit',
+            title,
             style: const TextStyle(
-                fontSize: 32, fontWeight: FontWeight.bold, color: Colors.black),
+              fontSize: 12, 
+              fontWeight: FontWeight.w500,
+              color: Colors.grey,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 24, 
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                ),
+              ),
+              const SizedBox(width: 2),
+              Text(
+                unit,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -138,16 +172,16 @@ class SensorCard extends StatelessWidget {
   }
 }
 
-/// Warning Card (dynamic)
+/// Warning Card 
 class WarningCard extends StatelessWidget {
   final double waterLevel;
 
   const WarningCard({super.key, required this.waterLevel});
 
   String get statusText {
-    if (waterLevel > 30) return 'No Flood / Safe';
-    if (waterLevel > 21) return 'Medium Flood Risk';
-    return 'Flood is Happening!';
+    if (waterLevel > 30) return 'Safe';
+    if (waterLevel > 20) return 'Medium Risk';
+    return 'Flooding!';
   }
 
   Color get statusColor {
@@ -160,28 +194,41 @@ class WarningCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
       decoration: BoxDecoration(
         color: statusColor,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: statusColor.withOpacity(0.5),
+            color: statusColor.withOpacity(0.3),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const Text('Flood Risk Status',
-              style: TextStyle(fontSize: 16, color: Colors.black)),
+          // Flood Risk Status label
+          const Text(
+            'Flood Risk Status',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: Colors.white70,
+            ),
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: 8),
+          
           Text(
-            '${statusText} (${waterLevel.toStringAsFixed(1)}cm)',
+            statusText,
             style: const TextStyle(
-                fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+            textAlign: TextAlign.center,
           ),
         ],
       ),

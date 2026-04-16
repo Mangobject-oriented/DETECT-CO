@@ -120,10 +120,10 @@ class _MapTabState extends State<MapTab> {
       appBar: AppBar(
         title: const Text(
           'Flood Monitoring Map',
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
         ),
         centerTitle: true,
-        backgroundColor: const Color(0xFF0353A4),
+        backgroundColor: const Color.fromARGB(255, 255, 255, 255),
       ),
       body: Stack(
         children: [

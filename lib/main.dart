@@ -15,15 +15,10 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'DETECT:CO',
+      title: 'DETECT CO',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         primarySwatch: Colors.blue,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF0353A4),
-          foregroundColor: Colors.white,
-          centerTitle: true,
-        ),
       ),
       home: const BottomNavPage(),
     );
