@@ -6,6 +6,17 @@ version: 1.0.0+1
 environment:
   sdk: ^3.11.1
 
+flutter_native_splash:
+  color: "#ffffff"
+  image: assets/icon/logo.png
+  android: true
+  ios: true
+  fullscreen: true
+
+  android_12:
+    image: assets/icon/logo.png
+    icon_background_color: "#ffffff"
+
 dependencies:
   flutter:
     sdk: flutter
@@ -28,6 +39,7 @@ dependencies:
   latlong2: ^0.9.0
   geolocator: ^10.1.0
   permission_handler: ^11.0.0
+  flutter_native_splash: ^2.4.7
 
 dev_dependencies:
   flutter_test:
