@@ -14,17 +14,25 @@ class _MapTabState extends State<MapTab> {
   final mapController = MapController();
   LatLng? currentPosition;
 
-  // Calamba bounding box
+  // ✅ Boundary (restriction box)
   final LatLng swCorner = LatLng(14.13466576727542, 121.00698800147504);
   final LatLng neCorner = LatLng(14.242176187772285, 121.20972008423361);
 
   late final LatLng calambaCenter = LatLng(
-      (swCorner.latitude + neCorner.latitude) / 2,
-      (swCorner.longitude + neCorner.longitude) / 2);
+    (swCorner.latitude + neCorner.latitude) / 2,
+    (swCorner.longitude + neCorner.longitude) / 2,
+  );
 
-  late final LatLngBounds calambaBounds = LatLngBounds(swCorner, neCorner);
+  /// -------------------------------
+  /// 🚨 EVACUATION SITES (UPDATED)
+  /// -------------------------------
+  final List<LatLng> evacSites = [
+    LatLng(14.23707209551028, 121.17340069445697), // old evac site
+    LatLng(14.215765305050551, 121.18228271136698), // Lingga Elem School
+    LatLng(14.215617735789499, 121.1861596967596), // Palingon
+  ];
 
-  final LatLng evacSite = LatLng(14.23707209551028, 121.17340069445697);
+  int selectedEvacIndex = 0;
 
   /// -------------------------------
   /// LOCATION HANDLING
@@ -33,9 +41,10 @@ class _MapTabState extends State<MapTab> {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       _showLocationDialog(
-          'Location Services Disabled',
-          'Please turn on location services to use this feature.',
-          openSettings: true);
+        'Location Services Disabled',
+        'Please turn on location services to use this feature.',
+        openSettings: true,
+      );
       return;
     }
 
@@ -44,35 +53,43 @@ class _MapTabState extends State<MapTab> {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
         _showLocationDialog(
-            'Permission Denied',
-            'Location permission is required to show your current position.');
+          'Permission Denied',
+          'Location permission is required to show your current position.',
+        );
         return;
       }
     }
 
     if (permission == LocationPermission.deniedForever) {
       _showLocationDialog(
-          'Permission Permanently Denied',
-          'Please enable location permission from app settings to continue.',
-          openSettings: true);
+        'Permission Permanently Denied',
+        'Please enable location permission from app settings.',
+        openSettings: true,
+      );
       return;
     }
 
     try {
       final pos = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high);
-      final latLng = LatLng(pos.latitude, pos.longitude);
+        desiredAccuracy: LocationAccuracy.high,
+      );
 
-      // Clamp to Calamba bounds
-      double lat = latLng.latitude.clamp(swCorner.latitude, neCorner.latitude);
-      double lng = latLng.longitude.clamp(swCorner.longitude, neCorner.longitude);
+      final lat = pos.latitude.clamp(
+        swCorner.latitude,
+        neCorner.latitude,
+      );
+      final lng = pos.longitude.clamp(
+        swCorner.longitude,
+        neCorner.longitude,
+      );
+
+      final clamped = LatLng(lat, lng);
 
       setState(() {
-        currentPosition = LatLng(lat, lng);
+        currentPosition = clamped;
       });
 
-      // Move AND zoom in to user location (zoom level 16)
-      mapController.move(LatLng(lat, lng), 16.0);
+      mapController.move(clamped, 16.0);
     } catch (e) {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('Error: $e')));
@@ -87,7 +104,10 @@ class _MapTabState extends State<MapTab> {
         title: Text(title),
         content: Text(message),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
           if (openSettings)
             TextButton(
               onPressed: () {
@@ -101,14 +121,20 @@ class _MapTabState extends State<MapTab> {
     );
   }
 
+  /// -------------------------------
+  /// 🚨 MOVE TO EVAC SITE
+  /// -------------------------------
   void _locateEvac() {
-    if (currentPosition != null) {
-      // Move AND zoom to evacuation site (zoom level 16)
-      mapController.move(evacSite, 16.0);
-    } else {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Locate your position first')));
-    }
+    final target = evacSites[selectedEvacIndex];
+    mapController.move(target, 16.0);
+  }
+
+  void _nextEvacSite() {
+    setState(() {
+      selectedEvacIndex = (selectedEvacIndex + 1) % evacSites.length;
+    });
+
+    mapController.move(evacSites[selectedEvacIndex], 16.0);
   }
 
   /// -------------------------------
@@ -120,10 +146,13 @@ class _MapTabState extends State<MapTab> {
       appBar: AppBar(
         title: const Text(
           'Flood Monitoring Map',
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.black,
+          ),
         ),
         centerTitle: true,
-        backgroundColor: const Color.fromARGB(255, 255, 255, 255),
+        backgroundColor: Colors.white,
       ),
       body: Stack(
         children: [
@@ -135,59 +164,21 @@ class _MapTabState extends State<MapTab> {
               minZoom: 12.0,
               maxZoom: 18.0,
               interactiveFlags: InteractiveFlag.all,
-              bounds: calambaBounds,
-              boundsOptions: const FitBoundsOptions(padding: EdgeInsets.all(12.0)),
-              onPositionChanged: (pos, _) {
-                final center = pos.center;
-                if (center == null) return;
 
-                double lat = center.latitude.clamp(swCorner.latitude, neCorner.latitude);
-                double lng = center.longitude.clamp(swCorner.longitude, neCorner.longitude);
-
-                if (lat != center.latitude || lng != center.longitude) {
-                  mapController.move(LatLng(lat, lng), pos.zoom ?? 13.5);
-                }
-              },
+              cameraConstraint: CameraConstraint.contain(
+                bounds: LatLngBounds(swCorner, neCorner),
+              ),
             ),
             children: [
               TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                urlTemplate:
+                    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 userAgentPackageName: 'com.example.detectco',
               ),
-              PolygonLayer(
-                polygons: [
-                  // Black border
-                  Polygon(
-                    points: [
-                      swCorner,
-                      LatLng(swCorner.latitude, neCorner.longitude),
-                      neCorner,
-                      LatLng(neCorner.latitude, swCorner.longitude),
-                      swCorner,
-                    ],
-                    color: Colors.transparent,
-                    borderColor: Colors.black,
-                    borderStrokeWidth: 3,
-                  ),
-                  // Dim outside (4 polygons)
-                  Polygon(
-                    points: [LatLng(neCorner.latitude, -180), LatLng(90, -180), LatLng(90, 180), LatLng(neCorner.latitude, 180)],
-                    color: Colors.black.withOpacity(0.4),
-                  ),
-                  Polygon(
-                    points: [LatLng(-90, -180), LatLng(swCorner.latitude, -180), LatLng(swCorner.latitude, 180), LatLng(-90, 180)],
-                    color: Colors.black.withOpacity(0.4),
-                  ),
-                  Polygon(
-                    points: [LatLng(swCorner.latitude, -180), LatLng(neCorner.latitude, -180), LatLng(neCorner.latitude, swCorner.longitude), LatLng(swCorner.latitude, swCorner.longitude)],
-                    color: Colors.black.withOpacity(0.4),
-                  ),
-                  Polygon(
-                    points: [LatLng(swCorner.latitude, neCorner.longitude), LatLng(neCorner.latitude, neCorner.longitude), LatLng(neCorner.latitude, 180), LatLng(swCorner.latitude, 180)],
-                    color: Colors.black.withOpacity(0.4),
-                  ),
-                ],
-              ),
+
+              /// -------------------------------
+              /// MARKERS
+              /// -------------------------------
               MarkerLayer(
                 markers: [
                   if (currentPosition != null)
@@ -195,18 +186,30 @@ class _MapTabState extends State<MapTab> {
                       point: currentPosition!,
                       width: 40,
                       height: 40,
-                      child: const Icon(Icons.my_location, color: Colors.blue, size: 36),
+                      child: const Icon(
+                        Icons.my_location,
+                        color: Colors.blue,
+                        size: 36,
+                      ),
                     ),
-                  Marker(
-                    point: evacSite,
-                    width: 40,
-                    height: 40,
-                    child: const Icon(Icons.local_hospital, color: Colors.red, size: 36),
-                  ),
+
+                  // 🚨 All evacuation sites
+                  for (final site in evacSites)
+                    Marker(
+                      point: site,
+                      width: 40,
+                      height: 40,
+                      child: const Icon(
+                        Icons.local_hospital,
+                        color: Colors.red,
+                        size: 36,
+                      ),
+                    ),
                 ],
               ),
             ],
           ),
+
           Positioned(
             top: 16,
             right: 16,
@@ -226,6 +229,14 @@ class _MapTabState extends State<MapTab> {
                   heroTag: 'locateEvac',
                   backgroundColor: Colors.redAccent,
                   child: const Icon(Icons.local_hospital),
+                ),
+                const SizedBox(height: 8),
+                FloatingActionButton(
+                  mini: true,
+                  onPressed: _nextEvacSite,
+                  heroTag: 'nextEvac',
+                  backgroundColor: Colors.orange,
+                  child: const Icon(Icons.swap_horiz),
                 ),
               ],
             ),
