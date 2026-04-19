@@ -187,7 +187,7 @@ class WarningCard extends StatelessWidget {
   Color get statusColor {
     if (waterLevel > 30) return Colors.green;
     if (waterLevel > 20) return Colors.orange;
-    return Colors.red;
+    return const Color.fromRGBO(244, 67, 54, 1);
   }
 
   @override
