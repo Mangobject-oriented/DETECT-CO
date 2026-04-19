@@ -3,6 +3,8 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:async';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 class MapTab extends StatefulWidget {
   const MapTab({super.key});
@@ -11,9 +13,6 @@ class MapTab extends StatefulWidget {
   State<MapTab> createState() => _MapTabState();
 }
 
-/// -------------------------------
-/// EVAC DATA MODEL (ADDED ONLY)
-/// -------------------------------
 class EvacSite {
   final String name;
   final String description;
@@ -32,7 +31,9 @@ class _MapTabState extends State<MapTab> {
   final mapController = MapController();
   LatLng? currentPosition;
 
-  // ✅ Boundary (unchanged)
+  List<LatLng> routePoints = [];
+  EvacSite? selectedSite;
+
   final LatLng swCorner = LatLng(14.13466576727542, 121.00698800147504);
   final LatLng neCorner = LatLng(14.242176187772285, 121.20972008423361);
 
@@ -41,161 +42,170 @@ class _MapTabState extends State<MapTab> {
     (swCorner.longitude + neCorner.longitude) / 2,
   );
 
-  /// 🚨 EVACUATION SITES (UPDATED INTO OBJECTS, NOT REMOVED)
   final List<EvacSite> evacSites = [
     EvacSite(
       name: "Uwisan Brgy Hall Evacuation Site",
-      description: "65PF+RC8, Looc Road, Calamba, 4027 Laguna",
+      description: "65PF+RC8, Looc Road, Calamba",
       image: "assets/images/evac1.png",
       location: LatLng(14.23707209551028, 121.17340069445697),
     ),
     EvacSite(
-      name: "Lingga Elementary School Evacuation Site",
-      description: "658J+7WC, Dany, Calamba, 4027 Laguna",
+      name: "Lingga Elementary School",
+      description: "Calamba Laguna",
       image: "assets/images/evac2.png",
       location: LatLng(14.215765305050551, 121.18228271136698),
     ),
     EvacSite(
-      name: "Palingon Elementary School Evacuation Site",
-      description: "658P+425, 202 Caballero St, Real, Calamba, 4027 Laguna",
+      name: "Palingon Elementary School",
+      description: "Real, Calamba",
       image: "assets/images/evac3.png",
       location: LatLng(14.215617735789499, 121.1861596967596),
     ),
   ];
 
-  int selectedEvacIndex = 0;
-
   bool followMe = false;
   StreamSubscription<Position>? _positionStream;
 
-  /// -------------------------------
-  /// EVAC PANEL (NEW FEATURE ONLY)
-  /// -------------------------------
+  Future<void> getRoute(LatLng start, LatLng end) async {
+    final url =
+        'https://router.project-osrm.org/route/v1/driving/'
+        '${start.longitude},${start.latitude};'
+        '${end.longitude},${end.latitude}'
+        '?overview=full&geometries=geojson';
+
+    final response = await http.get(Uri.parse(url));
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+
+      final coords = data['routes'][0]['geometry']['coordinates'];
+
+      setState(() {
+        routePoints = coords.map<LatLng>((c) => LatLng(c[1], c[0])).toList();
+      });
+    }
+  }
+
+  void _goToNearestEvac() {
+    if (currentPosition == null) return;
+
+    final Distance d = Distance();
+
+    EvacSite nearest = evacSites[0];
+    double minDist = double.infinity;
+
+    for (final site in evacSites) {
+      final dist = d.as(LengthUnit.Meter, currentPosition!, site.location);
+
+      if (dist < minDist) {
+        minDist = dist;
+        nearest = site;
+      }
+    }
+
+    setState(() {
+      selectedSite = nearest;
+    });
+
+    mapController.move(nearest.location, 16);
+    getRoute(currentPosition!, nearest.location);
+
+    _showEvacPanel(nearest);
+  }
+
+  /// =========================================================
+  /// SIDE PANEL (UNCHANGED UI, 40% HEIGHT)
+  /// =========================================================
   void _showEvacPanel(EvacSite site) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 0.4,
-          maxChildSize: 0.7,
-          minChildSize: 0.3,
-          builder: (_, controller) {
-            return SingleChildScrollView(
-              controller: controller,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Image.asset(
-                    site.image,
-                    height: 180,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          site.name,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Text(site.description),
-                        const SizedBox(height: 20),
+      backgroundColor: Colors.transparent,
+      builder: (_) {
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.40,
+          width: double.infinity,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(20),
+              topRight: Radius.circular(20),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClipRRect(
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(20),
+                  topRight: Radius.circular(20),
+                ),
+                child: Image.asset(
+                  site.image,
+                  height: 140,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                ),
+              ),
 
-                        ElevatedButton.icon(
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        site.name,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(site.description),
+                      const Spacer(),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
                           onPressed: () {
-                            mapController.move(site.location, 16.0);
+                            if (currentPosition != null) {
+                              getRoute(currentPosition!, site.location);
+                            }
+                            mapController.move(site.location, 16);
                             Navigator.pop(context);
                           },
                           icon: const Icon(Icons.directions),
                           label: const Text("Go to Location"),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            );
-          },
+            ],
+          ),
         );
       },
     );
   }
 
-  /// -------------------------------
-  /// YOUR ORIGINAL FUNCTIONS (UNCHANGED)
-  /// -------------------------------
-
   Future<void> _locateMe() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) return;
+    final pos = await Geolocator.getCurrentPosition();
 
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) return;
-    }
+    final clamped = LatLng(pos.latitude, pos.longitude);
 
     setState(() {
-      followMe = !followMe;
+      currentPosition = clamped;
+      followMe = true;
     });
 
-    if (followMe) {
-      final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-
-      final lat = pos.latitude.clamp(swCorner.latitude, neCorner.latitude);
-      final lng = pos.longitude.clamp(swCorner.longitude, neCorner.longitude);
-
-      final clamped = LatLng(lat, lng);
-
-      setState(() {
-        currentPosition = clamped;
-      });
-
-      mapController.move(clamped, 16.0);
-    } else {
-      _positionStream?.cancel();
-      _positionStream = null;
-    }
+    mapController.move(clamped, 16);
   }
 
-  void _locateEvac() {
-    final target = evacSites[selectedEvacIndex].location;
-    mapController.move(target, 16.0);
-  }
-
-  void _nextEvacSite() {
-    setState(() {
-      selectedEvacIndex = (selectedEvacIndex + 1) % evacSites.length;
-    });
-
-    mapController.move(evacSites[selectedEvacIndex].location, 16.0);
-  }
-
-  /// -------------------------------
-  /// UI
-  /// -------------------------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Flood Monitoring Map'),
-        centerTitle: true,
-        backgroundColor: Colors.white,
-      ),
+      appBar: AppBar(title: const Text("Flood Map")),
       body: Stack(
         children: [
           FlutterMap(
@@ -203,21 +213,30 @@ class _MapTabState extends State<MapTab> {
             options: MapOptions(
               center: calambaCenter,
               zoom: 13.5,
-              minZoom: 12.0,
-              maxZoom: 18.0,
+
+              // 🔒 THIS IS THE IMPORTANT FIX (HARD BOUNDARY LOCK)
               cameraConstraint: CameraConstraint.contain(
-                bounds: LatLngBounds(swCorner, neCorner),
+                bounds: LatLngBounds(
+                  swCorner,
+                  neCorner,
+                ),
               ),
             ),
             children: [
               TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.example.detectco',
+                urlTemplate:
+                    'https://cartodb-basemaps-a.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png',
+                subdomains: const ['a', 'b', 'c'],
+              ),
+
+              PolylineLayer(
+                polylines: [
+                  Polyline(points: routePoints, strokeWidth: 4),
+                ],
               ),
 
               MarkerLayer(
                 markers: [
-                  /// 📍 USER MARKER (UNCHANGED)
                   if (currentPosition != null)
                     Marker(
                       point: currentPosition!,
@@ -226,22 +245,17 @@ class _MapTabState extends State<MapTab> {
                       child: const Icon(
                         Icons.my_location,
                         color: Colors.blue,
-                        size: 36,
                       ),
                     ),
 
-                  /// 🚨 EVAC MARKERS (NOW CLICKABLE)
-                  for (int i = 0; i < evacSites.length; i++)
+                  for (final site in evacSites)
                     Marker(
-                      point: evacSites[i].location,
+                      point: site.location,
                       width: 45,
                       height: 45,
                       child: GestureDetector(
-                        onTap: () => _showEvacPanel(evacSites[i]),
-                        child: Transform.scale(
-                          scale: i == selectedEvacIndex ? 1.2 : 1.0,
-                          child: Image.asset('assets/icon/evacsite.png'),
-                        ),
+                        onTap: () => _showEvacPanel(site),
+                        child: Image.asset('assets/icon/evacsite.png'),
                       ),
                     ),
                 ],
@@ -249,36 +263,24 @@ class _MapTabState extends State<MapTab> {
             ],
           ),
 
-          /// -------------------------------
-          /// FLOATING BUTTONS (UNCHANGED)
-          /// -------------------------------
           Positioned(
             top: 16,
             right: 16,
             child: Column(
               children: [
                 FloatingActionButton(
+                  heroTag: 'gps',
                   mini: true,
                   onPressed: _locateMe,
-                  heroTag: 'locateMe',
-                  backgroundColor: Colors.blue,
                   child: const Icon(Icons.my_location),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 10),
                 FloatingActionButton(
+                  heroTag: 'nearest',
                   mini: true,
-                  onPressed: _locateEvac,
-                  heroTag: 'locateEvac',
-                  backgroundColor: Colors.redAccent,
-                  child: const Icon(Icons.local_hospital),
-                ),
-                const SizedBox(height: 8),
-                FloatingActionButton(
-                  mini: true,
-                  onPressed: _nextEvacSite,
-                  heroTag: 'nextEvac',
-                  backgroundColor: Colors.orange,
-                  child: const Icon(Icons.swap_horiz),
+                  backgroundColor: Colors.green,
+                  onPressed: _goToNearestEvac,
+                  child: const Icon(Icons.place),
                 ),
               ],
             ),
