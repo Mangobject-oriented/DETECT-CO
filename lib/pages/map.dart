@@ -158,14 +158,14 @@ void _showEvacPanel(EvacSite site) {
   Color riskColor;
 
   if (waterLevel > 30) {
-    riskText = "FLOODING";
-    riskColor = Colors.red;
+    riskText = "SAFE";
+    riskColor = const Color.fromRGBO(76, 175, 80, 1);
   } else if (waterLevel > 20) {
     riskText = "MEDIUM RISK";
     riskColor = Colors.orange;
   } else {
-    riskText = "SAFE";
-    riskColor = Colors.green;
+    riskText = "FLOODING";
+    riskColor = const Color.fromRGBO(244, 67, 54, 1);
   }
 
   showModalBottomSheet(
@@ -344,15 +344,15 @@ Widget _legendItem(Color color, String text) {
                     radius: 600,
                     useRadiusInMeter: true,
                     color: waterLevel > 30
-                        ? Colors.red.withOpacity(0.35)
+                        ? const Color.fromRGBO(76, 175, 80, 1).withOpacity(0.35)
                         : waterLevel > 20
                             ? Colors.orange.withOpacity(0.35)
-                            : Colors.green.withOpacity(0.35),
+                            : const Color.fromRGBO(244, 67, 54, 1).withOpacity(0.35),
                     borderColor: waterLevel > 30
-                        ? Colors.red
+                        ? const Color.fromRGBO(76, 175, 80, 1)
                         : waterLevel > 20
                             ? Colors.orange
-                            : Colors.green,
+                            :const Color.fromRGBO(244, 67, 54, 1),
                     borderStrokeWidth: 2,
                   ),
 
@@ -362,15 +362,15 @@ Widget _legendItem(Color color, String text) {
                     radius: 600,
                     useRadiusInMeter: true,
                     color: waterLevel > 30
-                        ? Colors.red.withOpacity(0.35)
+                        ?const Color.fromRGBO(76, 175, 80, 1).withOpacity(0.35)
                         : waterLevel > 20
                             ? Colors.orange.withOpacity(0.35)
-                            : Colors.green.withOpacity(0.35),
+                            : const Color.fromRGBO(244, 67, 54, 1).withOpacity(0.35),
                     borderColor: waterLevel > 30
-                        ? Colors.red
+                        ? const Color.fromRGBO(76, 175, 80, 1)
                         : waterLevel > 20
                             ? Colors.orange
-                            : Colors.green,
+                            : const Color.fromRGBO(244, 67, 54, 1),
                     borderStrokeWidth: 2,
                   ),
 
@@ -380,15 +380,15 @@ Widget _legendItem(Color color, String text) {
                     radius: 600,
                     useRadiusInMeter: true,
                     color: waterLevel > 30
-                        ? Colors.red.withOpacity(0.35)
+                        ? const Color.fromRGBO(76, 175, 80, 1).withOpacity(0.35)
                         : waterLevel > 20
                             ? Colors.orange.withOpacity(0.35)
-                            : Colors.green.withOpacity(0.35),
+                            : const Color.fromRGBO(244, 67, 54, 1),
                     borderColor: waterLevel > 30
-                        ? Colors.red
+                        ? const Color.fromRGBO(76, 175, 80, 1)
                         : waterLevel > 20
                             ? Colors.orange
-                            : Colors.green,
+                            :const Color.fromRGBO(244, 67, 54, 1),
                     borderStrokeWidth: 2,
                   ),
                 ],
