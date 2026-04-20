@@ -54,13 +54,13 @@ class _MapTabState extends State<MapTab> {
     ),
     EvacSite(
       name: "Lingga Elementary School",
-      description: "Calamba Laguna",
+      description: "658J+7WC, Dany, Calamba, 4027 Laguna",
       image: "assets/images/evac2.png",
       location: LatLng(14.215765305050551, 121.18228271136698),
     ),
     EvacSite(
       name: "Palingon Elementary School",
-      description: "Real, Calamba",
+      description: "658P+425, 202 Caballero St, Real, Calamba, 4027 Laguna",
       image: "assets/images/evac3.png",
       location: LatLng(14.215617735789499, 121.1861596967596),
     ),

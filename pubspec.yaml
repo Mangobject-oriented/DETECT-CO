@@ -1,7 +1,7 @@
 name: detectco
-description: "The revamp."
+description: "A new Flutter project."
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
-version: version: 2.0.0+2
+version: 2.0.0+2
 
 environment:
   sdk: ^3.11.1
