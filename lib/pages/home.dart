@@ -172,8 +172,8 @@ class SensorCard extends StatelessWidget {
     }
 
     final level = waterLevel!;
-    if (level > 30) return Colors.green.shade700;
-    if (level > 20) return Colors.orange.shade700;
+    if (level > 40) return Colors.green.shade700;
+    if (level > 30) return Colors.orange.shade700;
     return Colors.red.shade700;
   }
 
@@ -253,18 +253,17 @@ class WarningCard extends StatelessWidget {
   });
 
   String get statusText {
-    if (waterLevel > 30) return 'Safe';
-    if (waterLevel > 20) return 'Medium Risk';
+    if (waterLevel > 40) return 'Safe';
+    if (waterLevel > 30) return 'Medium Risk';
     return 'Flooding!';
   }
 
   Color get statusColor {
-    if (waterLevel > 30) return const Color.fromRGBO(76, 175, 80, 1);
-    if (waterLevel > 20) return Colors.orange;
+    if (waterLevel > 40) return const Color.fromRGBO(76, 175, 80, 1);
+    if (waterLevel > 30) return Colors.orange;
     return const Color.fromRGBO(244, 67, 54, 1);
   }
-
-  @override
+    @override
   Widget build(BuildContext context) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 400),

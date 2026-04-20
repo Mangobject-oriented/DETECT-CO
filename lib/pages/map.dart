@@ -157,16 +157,17 @@ void _showEvacPanel(EvacSite site) {
   String riskText;
   Color riskColor;
 
-  if (waterLevel > 30) {
+  if (waterLevel > 40) {
     riskText = "SAFE";
     riskColor = const Color.fromRGBO(76, 175, 80, 1);
-  } else if (waterLevel > 20) {
+  } else if (waterLevel > 30) {
     riskText = "MEDIUM RISK";
     riskColor = Colors.orange;
   } else {
     riskText = "FLOODING";
     riskColor = const Color.fromRGBO(244, 67, 54, 1);
   }
+
 
   showModalBottomSheet(
     context: context,
@@ -343,16 +344,16 @@ Widget _legendItem(Color color, String text) {
                     point: LatLng(14.234706315729172, 121.17367192746359),
                     radius: 600,
                     useRadiusInMeter: true,
-                    color: waterLevel > 30
-                        ? const Color.fromRGBO(76, 175, 80, 1).withOpacity(0.35)
-                        : waterLevel > 20
-                            ? Colors.orange.withOpacity(0.35)
-                            : const Color.fromRGBO(244, 67, 54, 1).withOpacity(0.35),
-                    borderColor: waterLevel > 30
+                    color: waterLevel > 40
+                        ? const Color.fromRGBO(76, 175, 80, 1).withOpacity(0.35) // Green
+                        : waterLevel > 30
+                            ? Colors.orange.withOpacity(0.35) // Orange
+                            : const Color.fromRGBO(244, 67, 54, 1).withOpacity(0.35), // Red
+                    borderColor: waterLevel > 40
                         ? const Color.fromRGBO(76, 175, 80, 1)
-                        : waterLevel > 20
+                        : waterLevel > 30
                             ? Colors.orange
-                            :const Color.fromRGBO(244, 67, 54, 1),
+                            : const Color.fromRGBO(244, 67, 54, 1),
                     borderStrokeWidth: 2,
                   ),
 
@@ -361,14 +362,14 @@ Widget _legendItem(Color color, String text) {
                     point: LatLng(14.209895867059025, 121.18097126019865),
                     radius: 600,
                     useRadiusInMeter: true,
-                    color: waterLevel > 30
-                        ?const Color.fromRGBO(76, 175, 80, 1).withOpacity(0.35)
-                        : waterLevel > 20
+                    color: waterLevel > 40
+                        ? const Color.fromRGBO(76, 175, 80, 1).withOpacity(0.35)
+                        : waterLevel > 30
                             ? Colors.orange.withOpacity(0.35)
                             : const Color.fromRGBO(244, 67, 54, 1).withOpacity(0.35),
-                    borderColor: waterLevel > 30
+                    borderColor: waterLevel > 40
                         ? const Color.fromRGBO(76, 175, 80, 1)
-                        : waterLevel > 20
+                        : waterLevel > 30
                             ? Colors.orange
                             : const Color.fromRGBO(244, 67, 54, 1),
                     borderStrokeWidth: 2,
@@ -379,16 +380,16 @@ Widget _legendItem(Color color, String text) {
                     point: LatLng(14.215510239402107, 121.18530211042635),
                     radius: 600,
                     useRadiusInMeter: true,
-                    color: waterLevel > 30
+                    color: waterLevel > 40
                         ? const Color.fromRGBO(76, 175, 80, 1).withOpacity(0.35)
-                        : waterLevel > 20
+                        : waterLevel > 30
                             ? Colors.orange.withOpacity(0.35)
-                            : const Color.fromRGBO(244, 67, 54, 1),
-                    borderColor: waterLevel > 30
+                            : const Color.fromRGBO(244, 67, 54, 1).withOpacity(0.35),
+                    borderColor: waterLevel > 40
                         ? const Color.fromRGBO(76, 175, 80, 1)
-                        : waterLevel > 20
+                        : waterLevel > 30
                             ? Colors.orange
-                            :const Color.fromRGBO(244, 67, 54, 1),
+                            : const Color.fromRGBO(244, 67, 54, 1),
                     borderStrokeWidth: 2,
                   ),
                 ],
