@@ -41,35 +41,36 @@ class _HomeTabState extends State<HomeTab> {
       duration: const Duration(milliseconds: 400),
       color: isDarkMode ? const Color(0xFF212121) : Colors.white,
       child: Scaffold(
-        backgroundColor:
-            isDarkMode ? const Color(0xFF212121) : Colors.white,
+        backgroundColor: isDarkMode ? const Color(0xFF212121) : Colors.white,
 
-        appBar: AppBar(
-          title: Text(
-            'DETECT-CO',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: isDarkMode ? Colors.white : Colors.black,
-            ),
-          ),
-          centerTitle: true,
+        endDrawer: Drawer(
           backgroundColor:
               isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
-
-          leading: GestureDetector(
-            onDoubleTap: toggleTheme,
-            child: Container(
-              color: isDarkMode
-                  ? const Color(0xFF1A1A1A)
-                  : Colors.white,
-              child: Image.asset("assets/icon/logo.png"),
-            ),
+          child: ListView(
+            padding: EdgeInsets.zero,
+            children: [
+              DrawerHeader(
+                decoration: BoxDecoration(
+                  color: isDarkMode
+                      ? const Color(0xFF1A1A1A)
+                      : Colors.blue,
+                ),
+                child: const Text(
+                  'Menu',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
 
-        body: Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: StreamBuilder<DatabaseEvent>(
+      //AppBar with a title and a theme toggle button
+
+        body: StreamBuilder<DatabaseEvent>(
             stream: dbRef.child('flood').onValue,
             builder: (context, snapshot) {
               if (snapshot.hasError) {
@@ -94,48 +95,165 @@ class _HomeTabState extends State<HomeTab> {
                   ? distanceRaw.toDouble()
                   : double.tryParse(distanceRaw.toString()) ?? 0;
 
+              final double screenHeight = MediaQuery.of(context).size.height;
+              final double topHeight = screenHeight * 0.40;
+
               return SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: SensorCard(
-                            title: 'Temperature',
-                            value:
-                                data['temperature']?.toString() ?? '--',
-                            unit: '°C',
-                            isDark: isDarkMode,
+                    Container(
+                      height: topHeight,
+                      width: double.infinity,
+                      alignment: Alignment.topCenter,
+                      color: isDarkMode
+                          ? const Color(0xFF212121)
+                          : const Color.fromARGB(255, 72, 119, 247),
+                      child: SafeArea(
+                        bottom: false,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  GestureDetector(
+                                    onDoubleTap: toggleTheme,
+                                    child: SizedBox(
+                                      width: 50,
+                                      height: 50,
+                                      child: Image.asset("assets/icon/logo.png"),
+                                    ),
+                                  ),
+                                  const Text(
+                                    'DETECT-CO',
+                                    style: TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  IconButton(
+                                    icon: const Icon(Icons.notifications_none_rounded,
+                                        color: Colors.white, size: 26),
+                                    onPressed: () {},
+                                  ),
+                                  Builder(
+                                    builder: (context) => IconButton(
+                                      icon: const Icon(Icons.menu_rounded,
+                                          color: Colors.white, size: 26),
+                                      onPressed: () {
+                                        Scaffold.of(context).openEndDrawer();
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              const Text(
+                                'Hello, Mike!',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  const Icon(Icons.location_on, color: Colors.white70, size: 16),
+                                  const SizedBox(width: 4),
+                                  const Text('Barangay Biringan',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.white70,
+                                      )),
+                                  const Spacer(),
+                                  const Text('Time Check haydol',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.white70,
+                                      )),
+                                ],
+                              )
+                            ],
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: SensorCard(
-                            title: 'Humidity',
-                            value:
-                                data['humidity']?.toString() ?? '--',
-                            unit: '%',
-                            isDark: isDarkMode,
+                      ),
+                    ),
+                    Transform.translate(
+                      offset: const Offset(0, -50),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: isDarkMode
+                                ? const Color(0xFF2C2C2C)
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(isDarkMode ? 0.25 : 0.08),
+                                blurRadius: 6,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('Current Temperature:',
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w500,
+                                              color: isDarkMode ? Colors.white : Colors.black,
+                                            )),
+                                        const SizedBox(height: 4),
+                                        Text('${data['temperature']?.toString() ?? '--'}°C',
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              color: isDarkMode ? Colors.white : Colors.black,
+                                            )),
+                                      ],
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      children: [
+                                        Text('Humidity:',
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w500,
+                                              color: isDarkMode ? Colors.white : Colors.black,
+                                            )),
+                                        const SizedBox(height: 4),
+                                        Text('${data['humidity']?.toString() ?? '--'}%',
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              color: isDarkMode ? Colors.white : Colors.black,
+                                            )),
+                                        
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-
-                    SensorCard(
-                      title: 'Water Level',
-                      value: waterLevel.toString(),
-                      unit: 'cm',
-                      waterLevel: waterLevel,
-                      isDark: isDarkMode,
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    WarningCard(
-                      waterLevel: waterLevel,
-                      isDark: isDarkMode,
+                      ),
                     ),
                   ],
                 ),
@@ -143,7 +261,6 @@ class _HomeTabState extends State<HomeTab> {
             },
           ),
         ),
-      ),
     );
   }
 }
