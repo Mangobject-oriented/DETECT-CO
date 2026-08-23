@@ -87,6 +87,27 @@ void main() async {
   await androidPlugin?.createNotificationChannel(channel);
 
   // ===================================================
+  // TEST NOTIFICATION CHANNEL
+  // ===================================================
+
+  const AndroidNotificationChannel testChannel =
+      AndroidNotificationChannel(
+    'test_alerts',
+    'Test Alerts',
+    description:
+        'Custom sound notifications for DETECT-CO testing.',
+    importance: Importance.max,
+    playSound: true,
+    sound: RawResourceAndroidNotificationSound(
+      'test_alert',
+    ),
+  );
+
+  await androidPlugin?.createNotificationChannel(
+    testChannel,
+  );
+
+  // ===================================================
   // REQUEST NOTIFICATION PERMISSION
   // ===================================================
 
@@ -138,7 +159,7 @@ void main() async {
 
   // ===================================================
   // FOREGROUND FCM MESSAGE
-  // ===================================================
+  // =====================================================
 
   FirebaseMessaging.onMessage.listen(
     (RemoteMessage message) async {
@@ -150,6 +171,9 @@ void main() async {
       print(
         'Body: ${message.notification?.body}',
       );
+      print(
+        'Type: ${message.data['type']}',
+      );
       print('================================');
 
       final RemoteNotification? notification =
@@ -159,20 +183,50 @@ void main() async {
         return;
       }
 
+      // =================================================
+      // DETERMINE NOTIFICATION TYPE
+      // =================================================
+
+      final bool isTestNotification =
+          message.data['type'] == 'test';
+
+      if (isTestNotification) {
+        print('🔔 TEST NOTIFICATION → CUSTOM SOUND');
+        print('Channel: test_alerts');
+        print('Sound: test_alert');
+      } else {
+        print('⚠️ CLASS NOTIFICATION → NORMAL SOUND');
+        print('Channel: class_alerts');
+      }
+
+      // =================================================
+      // SHOW LOCAL NOTIFICATION
+      // =================================================
+
       await flutterLocalNotificationsPlugin.show(
         id: notification.hashCode,
         title: notification.title ?? 'DETECT CO',
         body: notification.body ?? '',
-        notificationDetails:
-            const NotificationDetails(
+        notificationDetails: NotificationDetails(
           android: AndroidNotificationDetails(
-            'class_alerts',
-            'Class Alerts',
+            isTestNotification
+                ? 'test_alerts'
+                : 'class_alerts',
+            isTestNotification
+                ? 'Test Alerts'
+                : 'Class Alerts',
             channelDescription:
-                'Notifications for class suspension announcements.',
+                isTestNotification
+                    ? 'Custom sound notifications for DETECT-CO testing.'
+                    : 'Notifications for class suspension announcements.',
             importance: Importance.max,
             priority: Priority.high,
             playSound: true,
+            sound: isTestNotification
+                ? const RawResourceAndroidNotificationSound(
+                    'test_alert',
+                  )
+                : null,
           ),
         ),
       );
