@@ -106,6 +106,22 @@ void main() async {
   );
 
   // ===================================================
+  // SUBSCRIBE TO DETECT-CO ANNOUNCEMENT TOPIC
+  // ===================================================
+
+  try {
+    await messaging.subscribeToTopic(
+      'detect_co_announcements',
+    );
+
+    print(
+      'FCM: Subscribed to detect_co_announcements',
+    );
+  } catch (e) {
+    print('FCM TOPIC ERROR: $e');
+  }
+
+  // ===================================================
   // GET FCM TOKEN
   // ===================================================
 
