@@ -15,7 +15,7 @@ async function sendTestNotification() {
 
       notification: {
         title: "DETECT-CO ANNOUNCEMENT",
-        body: "https://bingoplus.com/",
+        body: "kurt papwet",
       },
 
       android: {

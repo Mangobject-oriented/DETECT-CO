@@ -781,9 +781,9 @@ class _MapTabState extends State<MapTab> {
 
                     TileLayer(
                       urlTemplate:
-                          'https://cartodb-basemaps-a.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png',
-                      subdomains:
-                          const ['a', 'b', 'c'],
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      maxZoom: 19,
+                      userAgentPackageName: 'com.example.detect_co',
                     ),
 
                     // =======================================
