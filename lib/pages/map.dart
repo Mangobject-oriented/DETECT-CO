@@ -10,7 +10,7 @@ import 'package:detectco/pages/notification.dart';
 // Firebase Realtime Database
 import 'package:firebase_database/firebase_database.dart';
 
-import 'package:detectco/main.dart'; // <-- for isDarkModeNotifier
+import 'package:detectco/main.dart'; // for isDarkModeNotifier
 
 class MapTab extends StatefulWidget {
   const MapTab({super.key});
@@ -57,19 +57,29 @@ class _MapTabState extends State<MapTab> {
       name: "Uwisan Brgy Hall Evacuation Site",
       description: "65PF+RC8, Looc Road, Calamba",
       image: "assets/images/evac1.png",
-      location: LatLng(14.23707209551028, 121.17340069445697),
+      location: LatLng(
+        14.23707209551028,
+        121.17340069445697,
+      ),
     ),
     EvacSite(
       name: "Lingga Elementary School",
       description: "658J+7WC, Dany, Calamba, 4027 Laguna",
       image: "assets/images/evac2.png",
-      location: LatLng(14.215765305050551, 121.18228271136698),
+      location: LatLng(
+        14.215765305050551,
+        121.18228271136698,
+      ),
     ),
     EvacSite(
       name: "Palingon Elementary School",
-      description: "658P+425, 202 Caballero St, Real, Calamba, 4027 Laguna",
+      description:
+          "658P+425, 202 Caballero St, Real, Calamba, 4027 Laguna",
       image: "assets/images/evac3.png",
-      location: LatLng(14.215617735789499, 121.1861596967596),
+      location: LatLng(
+        14.215617735789499,
+        121.1861596967596,
+      ),
     ),
   ];
 
@@ -89,14 +99,17 @@ class _MapTabState extends State<MapTab> {
 
     _firebaseSub = dbRef.onValue.listen((event) {
       final data = event.snapshot.value as Map<dynamic, dynamic>?;
+
       if (data == null) return;
 
       final dynamic distanceRaw = data['distance'];
+
       final double value = distanceRaw is num
           ? distanceRaw.toDouble()
           : double.tryParse(distanceRaw.toString()) ?? 0;
 
       if (!mounted) return;
+
       setState(() {
         waterLevel = value;
       });
@@ -110,34 +123,63 @@ class _MapTabState extends State<MapTab> {
     super.dispose();
   }
 
-  Future<void> getRoute(LatLng start, LatLng end) async {
-    final url = 'https://router.project-osrm.org/route/v1/driving/'
+  // =====================================================
+  // GET ROUTE
+  // =====================================================
+
+  Future<void> getRoute(
+    LatLng start,
+    LatLng end,
+  ) async {
+    final url =
+        'https://router.project-osrm.org/route/v1/driving/'
         '${start.longitude},${start.latitude};'
         '${end.longitude},${end.latitude}'
         '?overview=full&geometries=geojson';
 
-    final response = await http.get(Uri.parse(url));
+    try {
+      final response = await http.get(Uri.parse(url));
 
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      final coords = data['routes'][0]['geometry']['coordinates'];
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
 
-      if (!mounted) return;
-      setState(() {
-        routePoints = coords.map<LatLng>((c) => LatLng(c[1], c[0])).toList();
-      });
+        final coords =
+            data['routes'][0]['geometry']['coordinates'];
+
+        if (!mounted) return;
+
+        setState(() {
+          routePoints = coords
+              .map<LatLng>(
+                (c) => LatLng(c[1], c[0]),
+              )
+              .toList();
+        });
+      }
+    } catch (e) {
+      debugPrint('Route API error: $e');
     }
   }
+
+  // =====================================================
+  // GO TO NEAREST EVACUATION SITE
+  // =====================================================
 
   void _goToNearestEvac() {
     if (currentPosition == null) return;
 
     final Distance distance = Distance();
+
     EvacSite nearest = evacSites[0];
     double minDist = double.infinity;
 
     for (final site in evacSites) {
-      final dist = distance.as(LengthUnit.Meter, currentPosition!, site.location);
+      final dist = distance.as(
+        LengthUnit.Meter,
+        currentPosition!,
+        site.location,
+      );
+
       if (dist < minDist) {
         minDist = dist;
         nearest = site;
@@ -149,9 +191,18 @@ class _MapTabState extends State<MapTab> {
     });
 
     mapController.move(nearest.location, 16);
-    getRoute(currentPosition!, nearest.location);
+
+    getRoute(
+      currentPosition!,
+      nearest.location,
+    );
+
     _showEvacPanel(nearest);
   }
+
+  // =====================================================
+  // EVACUATION SITE PANEL
+  // =====================================================
 
   void _showEvacPanel(EvacSite site) {
     String riskText;
@@ -159,13 +210,23 @@ class _MapTabState extends State<MapTab> {
 
     if (waterLevel > 40) {
       riskText = "SAFE";
-      riskColor = const Color.fromRGBO(76, 175, 80, 1);
+      riskColor = const Color.fromRGBO(
+        76,
+        175,
+        80,
+        1,
+      );
     } else if (waterLevel > 30) {
       riskText = "MEDIUM RISK";
       riskColor = Colors.orange;
     } else {
       riskText = "FLOODING";
-      riskColor = const Color.fromRGBO(244, 67, 54, 1);
+      riskColor = const Color.fromRGBO(
+        244,
+        67,
+        54,
+        1,
+      );
     }
 
     showModalBottomSheet(
@@ -198,59 +259,103 @@ class _MapTabState extends State<MapTab> {
                   fit: BoxFit.cover,
                 ),
               ),
+
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
                     children: [
                       Text(
                         site.name,
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
+
                       const SizedBox(height: 8),
+
                       Text(site.description),
+
                       const SizedBox(height: 12),
+
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: riskColor.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: riskColor),
+                          borderRadius:
+                              BorderRadius.circular(20),
+                          border: Border.all(
+                            color: riskColor,
+                          ),
                         ),
                         child: Text(
                           "Flood Risk: $riskText",
-                          style: TextStyle(color: riskColor, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            color: riskColor,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
+
                       const Spacer(),
+
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
                           onPressed: () {
                             if (currentPosition != null) {
-                              getRoute(currentPosition!, site.location);
+                              getRoute(
+                                currentPosition!,
+                                site.location,
+                              );
                             }
-                            mapController.move(site.location, 16);
+
+                            mapController.move(
+                              site.location,
+                              16,
+                            );
+
                             Navigator.pop(context);
                           },
                           icon: const Icon(Icons.directions),
-                          label: const Text("Go to Location"),
+                          label: const Text(
+                            "Go to Location",
+                          ),
                         ),
                       ),
+
                       const SizedBox(height: 8),
+
                       SizedBox(
                         width: double.infinity,
                         child: OutlinedButton.icon(
                           onPressed: () {
                             if (currentPosition != null) {
-                              getRoute(currentPosition!, site.location);
-                              mapController.move(currentPosition!, 16);
+                              getRoute(
+                                currentPosition!,
+                                site.location,
+                              );
+
+                              mapController.move(
+                                currentPosition!,
+                                16,
+                              );
                             }
+
                             Navigator.pop(context);
                           },
-                          icon: const Icon(Icons.navigation),
-                          label: const Text("Directions from Me"),
+                          icon: const Icon(
+                            Icons.navigation,
+                          ),
+                          label: const Text(
+                            "Directions from Me",
+                          ),
                         ),
                       ),
                     ],
@@ -264,170 +369,340 @@ class _MapTabState extends State<MapTab> {
     );
   }
 
-  // Now takes the current dark-mode flag so the label color adapts too.
-  Widget _legendItem(Color color, String text, bool isDarkMode) {
+  // =====================================================
+  // LEGEND ITEM
+  // =====================================================
+
+  Widget _legendItem(
+    Color color,
+    String text,
+    bool isDarkMode,
+  ) {
     return Row(
       children: [
         Container(
           width: 14,
           height: 14,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
         ),
+
         const SizedBox(width: 8),
+
         Text(
           text,
           style: TextStyle(
-            color: isDarkMode ? Colors.white : Colors.black,
+            color: isDarkMode
+                ? Colors.white
+                : Colors.black,
           ),
         ),
       ],
     );
   }
 
+  // =====================================================
+  // LOCATE USER
+  // =====================================================
+
   Future<void> _locateMe() async {
-    final pos = await Geolocator.getCurrentPosition();
-    if (!mounted) return;
+    try {
+      final serviceEnabled =
+          await Geolocator.isLocationServiceEnabled();
 
-    setState(() {
-      currentPosition = LatLng(pos.latitude, pos.longitude);
-      followMe = true;
-    });
+      if (!serviceEnabled) {
+        debugPrint('Location services are disabled.');
+        return;
+      }
 
-    mapController.move(currentPosition!, 16);
+      LocationPermission permission =
+          await Geolocator.checkPermission();
+
+      if (permission == LocationPermission.denied) {
+        permission =
+            await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.denied ||
+          permission ==
+              LocationPermission.deniedForever) {
+        debugPrint('Location permission denied.');
+        return;
+      }
+
+      final pos =
+          await Geolocator.getCurrentPosition();
+
+      if (!mounted) return;
+
+      setState(() {
+        currentPosition = LatLng(
+          pos.latitude,
+          pos.longitude,
+        );
+
+        followMe = true;
+      });
+
+      mapController.move(
+        currentPosition!,
+        16,
+      );
+    } catch (e) {
+      debugPrint('Location error: $e');
+    }
   }
 
-  void _showMenu(BuildContext menuContext, bool isDarkMode) {
-    final RenderBox button = menuContext.findRenderObject() as RenderBox;
-    final RenderBox overlay =
-        Overlay.of(menuContext).context.findRenderObject() as RenderBox;
+  // =====================================================
+  // BURGER MENU
+  // =====================================================
 
-    final Offset position = button.localToGlobal(Offset.zero, ancestor: overlay);
+  void _showMenu(
+    BuildContext menuContext,
+    bool isDarkMode,
+  ) {
+    final RenderBox button =
+        menuContext.findRenderObject() as RenderBox;
+
+    final RenderBox overlay =
+        Overlay.of(menuContext)
+            .context
+            .findRenderObject() as RenderBox;
+
+    final Offset position =
+        button.localToGlobal(
+      Offset.zero,
+      ancestor: overlay,
+    );
 
     showMenu<String>(
       context: menuContext,
       position: RelativeRect.fromLTRB(
         position.dx - 155,
         position.dy + 48,
-        overlay.size.width - position.dx - button.size.width,
+        overlay.size.width -
+            position.dx -
+            button.size.width,
         0,
       ),
-      color: isDarkMode ? const Color(0xFF303030) : Colors.white,
+      color: isDarkMode
+          ? const Color(0xFF303030)
+          : Colors.white,
       elevation: 8,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
       items: [
         PopupMenuItem<String>(
           value: 'how_to_use',
           height: 52,
           child: Row(
             children: [
-              Icon(Icons.help,
-                  color: isDarkMode ? Colors.white : const Color(0xFF1D2B4A), size: 22),
+              Icon(
+                Icons.help,
+                color: isDarkMode
+                    ? Colors.white
+                    : const Color(0xFF1D2B4A),
+                size: 22,
+              ),
+
               const SizedBox(width: 12),
-              Text('How to Use',
-                  style: TextStyle(
-                      color: isDarkMode ? Colors.white : const Color(0xFF1D2B4A),
-                      fontSize: 16)),
+
+              Text(
+                'How to Use',
+                style: TextStyle(
+                  color: isDarkMode
+                      ? Colors.white
+                      : const Color(0xFF1D2B4A),
+                  fontSize: 16,
+                ),
+              ),
             ],
           ),
         ),
+
         PopupMenuItem<String>(
           value: 'terms',
           height: 52,
           child: Row(
             children: [
-              Icon(Icons.description,
-                  color: isDarkMode ? Colors.white : const Color(0xFF1D2B4A), size: 22),
+              Icon(
+                Icons.description,
+                color: isDarkMode
+                    ? Colors.white
+                    : const Color(0xFF1D2B4A),
+                size: 22,
+              ),
+
               const SizedBox(width: 12),
-              Text('Terms of Service',
-                  style: TextStyle(
-                      color: isDarkMode ? Colors.white : const Color(0xFF1D2B4A),
-                      fontSize: 16)),
+
+              Text(
+                'Terms of Service',
+                style: TextStyle(
+                  color: isDarkMode
+                      ? Colors.white
+                      : const Color(0xFF1D2B4A),
+                  fontSize: 16,
+                ),
+              ),
             ],
           ),
         ),
+
         PopupMenuItem<String>(
           value: 'about',
           height: 52,
           child: Row(
             children: [
-              Icon(Icons.info,
-                  color: isDarkMode ? Colors.white : const Color(0xFF1D2B4A), size: 22),
+              Icon(
+                Icons.info,
+                color: isDarkMode
+                    ? Colors.white
+                    : const Color(0xFF1D2B4A),
+                size: 22,
+              ),
+
               const SizedBox(width: 12),
-              Text('About app',
-                  style: TextStyle(
-                      color: isDarkMode ? Colors.white : const Color(0xFF1D2B4A),
-                      fontSize: 16)),
+
+              Text(
+                'About app',
+                style: TextStyle(
+                  color: isDarkMode
+                      ? Colors.white
+                      : const Color(0xFF1D2B4A),
+                  fontSize: 16,
+                ),
+              ),
             ],
           ),
         ),
       ],
     ).then((value) {
       if (!mounted) return;
+
       switch (value) {
         case 'how_to_use':
           break;
+
         case 'terms':
           break;
+
         case 'about':
           break;
       }
     });
   }
 
+  // =====================================================
+  // BUILD
+  // =====================================================
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<bool>(
       valueListenable: isDarkModeNotifier,
-      builder: (context, isDarkMode, child) {
+      builder: (
+        context,
+        isDarkMode,
+        child,
+      ) {
         return Scaffold(
-          backgroundColor: isDarkMode ? const Color(0xFF212121) : Colors.white,
+          backgroundColor: isDarkMode
+              ? const Color(0xFF212121)
+              : Colors.white,
+
           body: Column(
             children: [
-              // ===== HEADER =====
+              // =================================================
+              // HEADER
+              // =================================================
+
               Container(
                 color: isDarkMode
                     ? const Color(0xFF212121)
-                    : const Color.fromARGB(255, 72, 119, 247),
+                    : const Color.fromARGB(
+                        255,
+                        72,
+                        119,
+                        247,
+                      ),
                 child: SafeArea(
                   bottom: false,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding:
+                        const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     child: Row(
                       children: [
+                        // LOGO
+
                         GestureDetector(
                           onDoubleTap: () {
-                            isDarkModeNotifier.value = !isDarkModeNotifier.value;
+                            isDarkModeNotifier.value =
+                                !isDarkModeNotifier.value;
                           },
                           child: SizedBox(
                             width: 50,
                             height: 50,
-                            child: Image.asset("assets/icon/detect-co_logo.png"),
+                            child: Image.asset(
+                              "assets/icon/detect-co_logo.png",
+                            ),
                           ),
                         ),
+
                         const SizedBox(width: 8),
+
+                        // APP NAME
+
                         const Text(
                           'DETECT-CO',
                           style: TextStyle(
-                              fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
                         ),
+
                         const Spacer(),
+
+                        // NOTIFICATION
+
                         IconButton(
-                          icon: const Icon(Icons.notifications_none_rounded,
-                              color: Colors.white, size: 26),
+                          icon: const Icon(
+                            Icons.notifications_none_rounded,
+                            color: Colors.white,
+                            size: 26,
+                          ),
                           onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(builder: (_) => const NotificationTab()),
-                                    );
-                                  },
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    const NotificationTab(),
+                              ),
+                            );
+                          },
                         ),
+
+                        // BURGER MENU
+
                         Builder(
                           builder: (menuContext) {
                             return IconButton(
-                              icon: const Icon(Icons.menu_rounded,
-                                  color: Colors.white, size: 26),
+                              icon: const Icon(
+                                Icons.menu_rounded,
+                                color: Colors.white,
+                                size: 26,
+                              ),
                               onPressed: () {
-                                _showMenu(menuContext, isDarkMode);
+                                _showMenu(
+                                  menuContext,
+                                  isDarkMode,
+                                );
                               },
                             );
                           },
@@ -438,82 +713,191 @@ class _MapTabState extends State<MapTab> {
                 ),
               ),
 
-              // ===== MAP =====
+              // =================================================
+              // MAP
+              // =================================================
+
               Expanded(
                 child: Stack(
                   children: [
                     FlutterMap(
                       mapController: mapController,
+
                       options: MapOptions(
                         center: calambaCenter,
                         zoom: 13.5,
-                        cameraConstraint: CameraConstraint.contain(
-                          bounds: LatLngBounds(swCorner, neCorner),
+                        cameraConstraint:
+                            CameraConstraint.contain(
+                          bounds: LatLngBounds(
+                            swCorner,
+                            neCorner,
+                          ),
                         ),
                       ),
+
                       children: [
+                        // =================================================
+                        // MAP TILES
+                        // =================================================
+
                         TileLayer(
                           urlTemplate:
                               'https://cartodb-basemaps-a.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png',
-                          subdomains: const ['a', 'b', 'c'],
+                          subdomains: const [
+                            'a',
+                            'b',
+                            'c',
+                          ],
                         ),
+
+                        // =================================================
+                        // FLOOD ZONES
+                        // =================================================
+
                         CircleLayer(
                           circles: [
                             CircleMarker(
-                              point: LatLng(14.234706315729172, 121.17367192746359),
+                              point: LatLng(
+                                14.234706315729172,
+                                121.17367192746359,
+                              ),
                               radius: 600,
                               useRadiusInMeter: true,
                               color: waterLevel > 40
-                                  ? const Color.fromRGBO(76, 175, 80, 1).withOpacity(0.35)
-                                  : waterLevel > 30
-                                      ? Colors.orange.withOpacity(0.35)
-                                      : const Color.fromRGBO(244, 67, 54, 1).withOpacity(0.35),
-                              borderColor: waterLevel > 40
-                                  ? const Color.fromRGBO(76, 175, 80, 1)
+                                  ? const Color.fromRGBO(
+                                      76,
+                                      175,
+                                      80,
+                                      1,
+                                    ).withOpacity(0.35)
                                   : waterLevel > 30
                                       ? Colors.orange
-                                      : const Color.fromRGBO(244, 67, 54, 1),
+                                          .withOpacity(0.35)
+                                      : const Color.fromRGBO(
+                                          244,
+                                          67,
+                                          54,
+                                          1,
+                                        ).withOpacity(0.35),
+                              borderColor: waterLevel > 40
+                                  ? const Color.fromRGBO(
+                                      76,
+                                      175,
+                                      80,
+                                      1,
+                                    )
+                                  : waterLevel > 30
+                                      ? Colors.orange
+                                      : const Color.fromRGBO(
+                                          244,
+                                          67,
+                                          54,
+                                          1,
+                                        ),
                               borderStrokeWidth: 2,
                             ),
+
                             CircleMarker(
-                              point: LatLng(14.209895867059025, 121.18097126019865),
+                              point: LatLng(
+                                14.209895867059025,
+                                121.18097126019865,
+                              ),
                               radius: 600,
                               useRadiusInMeter: true,
                               color: waterLevel > 40
-                                  ? const Color.fromRGBO(76, 175, 80, 1).withOpacity(0.35)
-                                  : waterLevel > 30
-                                      ? Colors.orange.withOpacity(0.35)
-                                      : const Color.fromRGBO(244, 67, 54, 1).withOpacity(0.35),
-                              borderColor: waterLevel > 40
-                                  ? const Color.fromRGBO(76, 175, 80, 1)
+                                  ? const Color.fromRGBO(
+                                      76,
+                                      175,
+                                      80,
+                                      1,
+                                    ).withOpacity(0.35)
                                   : waterLevel > 30
                                       ? Colors.orange
-                                      : const Color.fromRGBO(244, 67, 54, 1),
+                                          .withOpacity(0.35)
+                                      : const Color.fromRGBO(
+                                          244,
+                                          67,
+                                          54,
+                                          1,
+                                        ).withOpacity(0.35),
+                              borderColor: waterLevel > 40
+                                  ? const Color.fromRGBO(
+                                      76,
+                                      175,
+                                      80,
+                                      1,
+                                    )
+                                  : waterLevel > 30
+                                      ? Colors.orange
+                                      : const Color.fromRGBO(
+                                          244,
+                                          67,
+                                          54,
+                                          1,
+                                        ),
                               borderStrokeWidth: 2,
                             ),
+
                             CircleMarker(
-                              point: LatLng(14.215510239402107, 121.18530211042635),
+                              point: LatLng(
+                                14.215510239402107,
+                                121.18530211042635,
+                              ),
                               radius: 600,
                               useRadiusInMeter: true,
                               color: waterLevel > 40
-                                  ? const Color.fromRGBO(76, 175, 80, 1).withOpacity(0.35)
-                                  : waterLevel > 30
-                                      ? Colors.orange.withOpacity(0.35)
-                                      : const Color.fromRGBO(244, 67, 54, 1).withOpacity(0.35),
-                              borderColor: waterLevel > 40
-                                  ? const Color.fromRGBO(76, 175, 80, 1)
+                                  ? const Color.fromRGBO(
+                                      76,
+                                      175,
+                                      80,
+                                      1,
+                                    ).withOpacity(0.35)
                                   : waterLevel > 30
                                       ? Colors.orange
-                                      : const Color.fromRGBO(244, 67, 54, 1),
+                                          .withOpacity(0.35)
+                                      : const Color.fromRGBO(
+                                          244,
+                                          67,
+                                          54,
+                                          1,
+                                        ).withOpacity(0.35),
+                              borderColor: waterLevel > 40
+                                  ? const Color.fromRGBO(
+                                      76,
+                                      175,
+                                      80,
+                                      1,
+                                    )
+                                  : waterLevel > 30
+                                      ? Colors.orange
+                                      : const Color.fromRGBO(
+                                          244,
+                                          67,
+                                          54,
+                                          1,
+                                        ),
                               borderStrokeWidth: 2,
                             ),
                           ],
                         ),
+
+                        // =================================================
+                        // ROUTE
+                        // =================================================
+
                         PolylineLayer(
                           polylines: [
-                            Polyline(points: routePoints, strokeWidth: 4),
+                            Polyline(
+                              points: routePoints,
+                              strokeWidth: 4,
+                            ),
                           ],
                         ),
+
+                        // =================================================
+                        // MARKERS
+                        // =================================================
+
                         MarkerLayer(
                           markers: [
                             if (currentPosition != null)
@@ -521,22 +905,33 @@ class _MapTabState extends State<MapTab> {
                                 point: currentPosition!,
                                 width: 40,
                                 height: 40,
-                                child: const Icon(Icons.my_location, color: Colors.blue),
+                                child: const Icon(
+                                  Icons.my_location,
+                                  color: Colors.blue,
+                                ),
                               ),
+
                             for (final site in evacSites)
                               Marker(
                                 point: site.location,
                                 width: 45,
                                 height: 45,
                                 child: GestureDetector(
-                                  onTap: () => _showEvacPanel(site),
-                                  child: Image.asset('assets/icon/evacsite.png'),
+                                  onTap: () =>
+                                      _showEvacPanel(site),
+                                  child: Image.asset(
+                                    'assets/icon/evacsite.png',
+                                  ),
                                 ),
                               ),
                           ],
                         ),
                       ],
                     ),
+
+                    // =================================================
+                    // GPS + NEAREST BUTTONS
+                    // =================================================
 
                     Positioned(
                       top: 16,
@@ -546,48 +941,95 @@ class _MapTabState extends State<MapTab> {
                           FloatingActionButton(
                             heroTag: 'gps',
                             mini: true,
-                            backgroundColor: const Color.fromARGB(255, 245, 245, 245),
+                            backgroundColor:
+                                const Color.fromARGB(
+                              255,
+                              245,
+                              245,
+                              245,
+                            ),
                             onPressed: _locateMe,
-                            child: const Icon(Icons.my_location, color: Colors.blue),
+                            child: const Icon(
+                              Icons.my_location,
+                              color: Colors.blue,
+                            ),
                           ),
+
                           const SizedBox(height: 10),
+
                           FloatingActionButton(
                             heroTag: 'nearest',
                             mini: true,
-                            backgroundColor: const Color.fromARGB(255, 129, 160, 247),
-                            onPressed: _goToNearestEvac,
-                            child: const Icon(Icons.place, color: Colors.white),
+                            backgroundColor:
+                                const Color.fromARGB(
+                              255,
+                              129,
+                              160,
+                              247,
+                            ),
+                            onPressed:
+                                _goToNearestEvac,
+                            child: const Icon(
+                              Icons.place,
+                              color: Colors.white,
+                            ),
                           ),
                         ],
                       ),
                     ),
 
-                    // ===== LEGEND — now adapts to dark mode =====
+                    // =================================================
+                    // LEGEND
+                    // =================================================
+
                     Positioned(
                       top: 16,
                       left: 16,
                       child: Container(
-                        padding: const EdgeInsets.all(12),
+                        padding:
+                            const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: isDarkMode
-                              ? const Color(0xFF2C2C2C).withOpacity(0.92)
-                              : Colors.white.withOpacity(0.92),
-                          borderRadius: BorderRadius.circular(14),
+                              ? const Color(0xFF2C2C2C)
+                                  .withOpacity(0.92)
+                              : Colors.white
+                                  .withOpacity(0.92),
+                          borderRadius:
+                              BorderRadius.circular(14),
                           boxShadow: [
                             BoxShadow(
-                              color: isDarkMode ? Colors.black54 : Colors.black26,
+                              color: isDarkMode
+                                  ? Colors.black54
+                                  : Colors.black26,
                               blurRadius: 10,
                             ),
                           ],
                         ),
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                          crossAxisAlignment:
+                              CrossAxisAlignment.start,
                           children: [
-                            _legendItem(Colors.green, "Safe", isDarkMode),
+                            _legendItem(
+                              Colors.green,
+                              "Safe",
+                              isDarkMode,
+                            ),
+
                             const SizedBox(height: 6),
-                            _legendItem(Colors.orange, "Medium Risk", isDarkMode),
+
+                            _legendItem(
+                              Colors.orange,
+                              "Medium Risk",
+                              isDarkMode,
+                            ),
+
                             const SizedBox(height: 6),
-                            _legendItem(Colors.red, "Flooding", isDarkMode),
+
+                            _legendItem(
+                              Colors.red,
+                              "Flooding",
+                              isDarkMode,
+                            ),
                           ],
                         ),
                       ),
