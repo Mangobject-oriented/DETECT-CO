@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:curved_navigation_bar/curved_navigation_bar.dart';
 import 'package:detectco/pages/home.dart';
 import 'package:detectco/pages/map.dart';
 import 'package:detectco/pages/evacuate.dart';
@@ -40,8 +41,7 @@ class MyApp extends StatelessWidget {
             scaffoldBackgroundColor: const Color(0xFF212121),
           ),
 
-          themeMode:
-              isDarkMode ? ThemeMode.dark : ThemeMode.light,
+          themeMode: isDarkMode ? ThemeMode.dark : ThemeMode.light,
 
           home: const BottomNavPage(),
         );
@@ -60,6 +60,9 @@ class BottomNavPage extends StatefulWidget {
 class _BottomNavPageState extends State<BottomNavPage> {
   int _currentIndex = 0;
 
+  final GlobalKey<CurvedNavigationBarState> _navKey =
+      GlobalKey<CurvedNavigationBarState>();
+
   final List<Widget> _tabs = const [
     HomeTab(),
     MapTab(),
@@ -68,40 +71,42 @@ class _BottomNavPageState extends State<BottomNavPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: _tabs[_currentIndex],
+    return ValueListenableBuilder<bool>(
+      valueListenable: isDarkModeNotifier,
+      builder: (context, isDarkMode, child) {
+        final Color navBackground =
+            isDarkMode ? const Color(0xFF212121) : Colors.white;
+        final Color barColor =
+            isDarkMode ? const Color(0xFF303030) : const Color(0xFF0353A4);
+        final Color iconColor =
+            isDarkMode ? Colors.white70 : Colors.white;
 
-      bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: Theme.of(context).brightness == Brightness.dark
-            ? const Color(0xFF303030)
-            : Colors.white,
+        return Scaffold(
+          backgroundColor: navBackground,
+          body: _tabs[_currentIndex],
 
-        currentIndex: _currentIndex,
-
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'Home',
+          bottomNavigationBar: CurvedNavigationBar(
+            key: _navKey,
+            index: _currentIndex,
+            height: 55,
+            backgroundColor: navBackground, // shows behind the curve
+            color: barColor, // the curved bar itself
+            buttonBackgroundColor: barColor,
+            animationDuration: const Duration(milliseconds: 350),
+            animationCurve: Curves.easeInOut,
+            items: [
+              Icon(Icons.home, size: 26, color: iconColor),
+              Icon(Icons.map, size: 26, color: iconColor),
+              Icon(Icons.directions_run, size: 26, color: iconColor),
+            ],
+            onTap: (index) {
+              setState(() {
+                _currentIndex = index;
+              });
+            },
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.map),
-            label: 'Map',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.directions_run),
-            label: 'Evacuate',
-          ),
-        ],
-
-        onTap: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
-        },
-
-        selectedItemColor: const Color(0xFF0353A4),
-        unselectedItemColor: Colors.grey,
-      ),
+        );
+      },
     );
   }
 }
