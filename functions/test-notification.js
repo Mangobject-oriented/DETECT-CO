@@ -15,7 +15,7 @@ async function sendTestNotification() {
 
       notification: {
         title: "DETECT-CO ANNOUNCEMENT",
-        body: "gumagana ba o meron ng iba",
+        body: "https://bingoplus.com/",
       },
 
       android: {
