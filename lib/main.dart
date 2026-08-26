@@ -1,13 +1,244 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:curved_navigation_bar/curved_navigation_bar.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+
 import 'package:detectco/pages/home.dart';
 import 'package:detectco/pages/map.dart';
 import 'package:detectco/pages/evacuate.dart';
 
+// =====================================================
+// LOCAL NOTIFICATIONS
+// =====================================================
+
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+    FlutterLocalNotificationsPlugin();
+
+// =====================================================
+// BACKGROUND FCM HANDLER
+// =====================================================
+
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(
+    RemoteMessage message) async {
+  await Firebase.initializeApp();
+
+  print('Background notification received!');
+  print('Title: ${message.notification?.title}');
+  print('Body: ${message.notification?.body}');
+}
+
+// =====================================================
+// MAIN
+// =====================================================
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // ===================================================
+  // FIREBASE
+  // ===================================================
+
   await Firebase.initializeApp();
+
+  // ===================================================
+  // BACKGROUND FCM
+  // ===================================================
+
+  FirebaseMessaging.onBackgroundMessage(
+    firebaseMessagingBackgroundHandler,
+  );
+
+  // ===================================================
+  // LOCAL NOTIFICATION INITIALIZATION
+  // ===================================================
+
+  const AndroidInitializationSettings androidSettings =
+      AndroidInitializationSettings('@mipmap/ic_launcher');
+
+  const InitializationSettings initializationSettings =
+      InitializationSettings(
+    android: androidSettings,
+  );
+
+  await flutterLocalNotificationsPlugin.initialize(
+    settings: initializationSettings,
+  );
+
+  // ===================================================
+  // ANDROID NOTIFICATION CHANNEL
+  // ===================================================
+
+  const AndroidNotificationChannel channel =
+      AndroidNotificationChannel(
+    'class_alerts',
+    'Class Alerts',
+    description:
+        'Notifications for class suspension announcements.',
+    importance: Importance.max,
+    playSound: true,
+  );
+
+  final AndroidFlutterLocalNotificationsPlugin? androidPlugin =
+      flutterLocalNotificationsPlugin
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
+
+  await androidPlugin?.createNotificationChannel(
+    channel,
+  );
+
+  // ===================================================
+  // TEST NOTIFICATION CHANNEL
+  // ===================================================
+
+  const AndroidNotificationChannel testChannel =
+      AndroidNotificationChannel(
+    'test_alerts',
+    'Test Alerts',
+    description:
+        'Custom sound notifications for DETECT-CO testing.',
+    importance: Importance.max,
+    playSound: true,
+    sound: RawResourceAndroidNotificationSound(
+      'test_alert',
+    ),
+  );
+
+  await androidPlugin?.createNotificationChannel(
+    testChannel,
+  );
+
+  // ===================================================
+  // REQUEST NOTIFICATION PERMISSION
+  // ===================================================
+
+  final FirebaseMessaging messaging =
+      FirebaseMessaging.instance;
+
+  final NotificationSettings settings =
+      await messaging.requestPermission(
+    alert: true,
+    badge: true,
+    sound: true,
+  );
+
+  print(
+    'Notification permission: '
+    '${settings.authorizationStatus}',
+  );
+
+  // ===================================================
+  // SUBSCRIBE TO DETECT-CO ANNOUNCEMENT TOPIC
+  // ===================================================
+
+  try {
+    await messaging.subscribeToTopic(
+      'detect_co_announcements',
+    );
+
+    print(
+      'FCM: Subscribed to detect_co_announcements',
+    );
+  } catch (e) {
+    print('FCM TOPIC ERROR: $e');
+  }
+
+  // ===================================================
+  // GET FCM TOKEN
+  // ===================================================
+
+  print('FCM: Getting token...');
+
+  try {
+    final String? token = await messaging.getToken();
+
+    print('FCM: Token request completed.');
+    print('FCM TOKEN: $token');
+  } catch (e) {
+    print('FCM TOKEN ERROR: $e');
+  }
+
+  // ===================================================
+  // FOREGROUND FCM MESSAGE
+  // ===================================================
+
+  FirebaseMessaging.onMessage.listen(
+    (RemoteMessage message) async {
+      print('================================');
+      print('NOTIFICATION RECEIVED!');
+      print(
+        'Title: ${message.notification?.title}',
+      );
+      print(
+        'Body: ${message.notification?.body}',
+      );
+      print(
+        'Type: ${message.data['type']}',
+      );
+      print('================================');
+
+      final RemoteNotification? notification =
+          message.notification;
+
+      if (notification == null) {
+        return;
+      }
+
+      // =================================================
+      // DETERMINE NOTIFICATION TYPE
+      // =================================================
+
+      final bool isTestNotification =
+          message.data['type'] == 'test';
+
+      if (isTestNotification) {
+        print('TEST NOTIFICATION -> CUSTOM SOUND');
+        print('Channel: test_alerts');
+        print('Sound: test_alert');
+      } else {
+        print('CLASS NOTIFICATION -> NORMAL SOUND');
+        print('Channel: class_alerts');
+      }
+
+      // =================================================
+      // SHOW LOCAL NOTIFICATION
+      // =================================================
+
+      await flutterLocalNotificationsPlugin.show(
+        id: notification.hashCode,
+        title: notification.title ?? 'DETECT CO',
+        body: notification.body ?? '',
+        notificationDetails: NotificationDetails(
+          android: AndroidNotificationDetails(
+            isTestNotification
+                ? 'test_alerts'
+                : 'class_alerts',
+            isTestNotification
+                ? 'Test Alerts'
+                : 'Class Alerts',
+            channelDescription:
+                isTestNotification
+                    ? 'Custom sound notifications for DETECT-CO testing.'
+                    : 'Notifications for class suspension announcements.',
+            importance: Importance.max,
+            priority: Priority.high,
+            playSound: true,
+            sound: isTestNotification
+                ? const RawResourceAndroidNotificationSound(
+                    'test_alert',
+                  )
+                : null,
+          ),
+        ),
+      );
+    },
+  );
+
+  // ===================================================
+  // START APP
+  // ===================================================
 
   runApp(const MyApp());
 }
@@ -16,7 +247,12 @@ void main() async {
 // GLOBAL DARK MODE
 // =====================================================
 
-final ValueNotifier<bool> isDarkModeNotifier = ValueNotifier<bool>(false);
+final ValueNotifier<bool> isDarkModeNotifier =
+    ValueNotifier<bool>(false);
+
+// =====================================================
+// APP
+// =====================================================
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -38,10 +274,14 @@ class MyApp extends StatelessWidget {
 
           darkTheme: ThemeData(
             brightness: Brightness.dark,
-            scaffoldBackgroundColor: const Color(0xFF212121),
+            scaffoldBackgroundColor:
+                const Color(0xFF212121),
           ),
 
-          themeMode: isDarkMode ? ThemeMode.dark : ThemeMode.light,
+          themeMode:
+              isDarkMode
+                  ? ThemeMode.dark
+                  : ThemeMode.light,
 
           home: const BottomNavPage(),
         );
@@ -50,14 +290,20 @@ class MyApp extends StatelessWidget {
   }
 }
 
+// =====================================================
+// BOTTOM NAVIGATION
+// =====================================================
+
 class BottomNavPage extends StatefulWidget {
   const BottomNavPage({super.key});
 
   @override
-  State<BottomNavPage> createState() => _BottomNavPageState();
+  State<BottomNavPage> createState() =>
+      _BottomNavPageState();
 }
 
-class _BottomNavPageState extends State<BottomNavPage> {
+class _BottomNavPageState
+    extends State<BottomNavPage> {
   int _currentIndex = 0;
 
   final GlobalKey<CurvedNavigationBarState> _navKey =
@@ -75,30 +321,54 @@ class _BottomNavPageState extends State<BottomNavPage> {
       valueListenable: isDarkModeNotifier,
       builder: (context, isDarkMode, child) {
         final Color navBackground =
-            isDarkMode ? const Color(0xFF212121) : Colors.white;
+            isDarkMode
+                ? const Color(0xFF212121)
+                : Colors.white;
+
         final Color barColor =
-            isDarkMode ? const Color(0xFF303030) : const Color(0xFF0353A4);
+            isDarkMode
+                ? const Color(0xFF303030)
+                : const Color(0xFF0353A4);
+
         final Color iconColor =
-            isDarkMode ? Colors.white70 : Colors.white;
+            isDarkMode
+                ? Colors.white70
+                : Colors.white;
 
         return Scaffold(
           backgroundColor: navBackground,
           body: _tabs[_currentIndex],
 
-          bottomNavigationBar: CurvedNavigationBar(
+          bottomNavigationBar:
+              CurvedNavigationBar(
             key: _navKey,
             index: _currentIndex,
             height: 55,
-            backgroundColor: navBackground, // shows behind the curve
-            color: barColor, // the curved bar itself
+            backgroundColor: navBackground,
+            color: barColor,
             buttonBackgroundColor: barColor,
-            animationDuration: const Duration(milliseconds: 350),
+            animationDuration:
+                const Duration(milliseconds: 350),
             animationCurve: Curves.easeInOut,
+
             items: [
-              Icon(Icons.home, size: 26, color: iconColor),
-              Icon(Icons.map, size: 26, color: iconColor),
-              Icon(Icons.directions_run, size: 26, color: iconColor),
+              Icon(
+                Icons.home,
+                size: 26,
+                color: iconColor,
+              ),
+              Icon(
+                Icons.map,
+                size: 26,
+                color: iconColor,
+              ),
+              Icon(
+                Icons.directions_run,
+                size: 26,
+                color: iconColor,
+              ),
             ],
+
             onTap: (index) {
               setState(() {
                 _currentIndex = index;

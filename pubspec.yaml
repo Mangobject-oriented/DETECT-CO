@@ -45,6 +45,8 @@ dependencies:
 
   http: ^1.2.0
   rounded_background_text: ^0.6.0
+  firebase_messaging: ^14.7.10
+  flutter_local_notifications: ^22.3.0
 
   curved_navigation_bar: ^1.0.3
 dev_dependencies:

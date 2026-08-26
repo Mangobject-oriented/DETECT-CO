@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:detectco/main.dart'; // for isDarkModeNotifier
 import 'package:detectco/pages/survival_kit_prep.dart';
 import 'package:detectco/pages/during_after_flood.dart';
-
+import 'package:detectco/pages/notification.dart';
 class EvacuateTab extends StatelessWidget {
   const EvacuateTab({super.key});
 
@@ -440,7 +440,12 @@ class EvacuateTab extends StatelessWidget {
                             color: Colors.white,
                             size: 26,
                           ),
-                          onPressed: () {},
+                          onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(builder: (_) => const NotificationTab()),
+                                    );
+                                  },
                         ),
 
                         // BURGER MENU

@@ -5,6 +5,7 @@ import 'package:geolocator/geolocator.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:detectco/pages/notification.dart';
 
 // Firebase Realtime Database
 import 'package:firebase_database/firebase_database.dart';
@@ -413,7 +414,12 @@ class _MapTabState extends State<MapTab> {
                         IconButton(
                           icon: const Icon(Icons.notifications_none_rounded,
                               color: Colors.white, size: 26),
-                          onPressed: () {},
+                          onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(builder: (_) => const NotificationTab()),
+                                    );
+                                  },
                         ),
                         Builder(
                           builder: (menuContext) {

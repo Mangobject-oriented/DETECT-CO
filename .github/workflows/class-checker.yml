@@ -1,0 +1,43 @@
+name: Class Announcement Checker
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  check-announcements:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: checker/package-lock.json
+
+      - name: Install dependencies
+        working-directory: checker
+        run: npm ci
+
+      - name: Create Firebase service account
+        working-directory: checker
+        run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > serviceAccountKey.json
+
+      - name: Run class announcement checker
+        working-directory: checker
+        run: node index.js
+
+      - name: Save processed announcement
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add checker/lastPost.json
+          git diff --cached --quiet || git commit -m "Update processed announcement"
+          git push
