@@ -39,7 +39,7 @@ class DuringAfterFlood extends StatelessWidget {
   // =====================================================
 
   Widget _guideItem(
-    IconData icon,
+    String iconPath,
     String text,
     bool isDarkMode,
   ) {
@@ -50,13 +50,14 @@ class DuringAfterFlood extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // ICON
+          // PNG ICON
           SizedBox(
             width: 50,
-            child: Icon(
-              icon,
-              color: const Color(0xFF4F7FF7),
-              size: 25,
+            child: Image.asset(
+              iconPath,
+              width: 40,
+              height: 40,
+              fit: BoxFit.contain,
             ),
           ),
 
@@ -176,25 +177,25 @@ class DuringAfterFlood extends StatelessWidget {
                       ),
 
                       _guideItem(
-                        Icons.exit_to_app,
+                        'assets/icon/evac.png',
                         'Evacuate immediately',
                         isDarkMode,
                       ),
 
                       _guideItem(
-                        Icons.water_damage,
+                        'assets/icon/boots.png',
                         'Refrain from walking through floodwaters barefoot',
                         isDarkMode,
                       ),
 
                       _guideItem(
-                        Icons.directions_car,
+                        'assets/icon/car.png',
                         'Avoid driving through moving water',
                         isDarkMode,
                       ),
 
                       _guideItem(
-                        Icons.warning,
+                        'assets/icon/warning.png',
                         'Turn off electrical appliances, LPG tanks, and main power switch as necessary',
                         isDarkMode,
                       ),
@@ -209,25 +210,25 @@ class DuringAfterFlood extends StatelessWidget {
                       ),
 
                       _guideItem(
-                        Icons.home,
+                        'assets/icon/home.png',
                         'Return home only when it’s safe according to local authorities',
                         isDarkMode,
                       ),
 
                       _guideItem(
-                        Icons.search,
+                        'assets/icon/search.png',
                         'Inspect for structural damage, gas leaks, and electrical systems while wearing protective clothing',
                         isDarkMode,
                       ),
 
                       _guideItem(
-                        Icons.coronavirus,
+                        'assets/icon/contamination.png',
                         'Avoid floodwater contact which can be contaminated with sewage, chemicals, and bacteria',
                         isDarkMode,
                       ),
 
                       _guideItem(
-                        Icons.delete,
+                        'assets/icon/delete.png',
                         'Discard contaminated items such as food, medicines, or bottled water that may have come into contact with floodwater',
                         isDarkMode,
                       ),

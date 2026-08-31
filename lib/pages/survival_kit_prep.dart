@@ -9,7 +9,7 @@ class SurvivalKitPreparation extends StatelessWidget {
   // =====================================================
 
   Widget _kitItem(
-    IconData icon,
+    String iconPath,
     String title,
     bool isDarkMode,
   ) {
@@ -20,10 +20,11 @@ class SurvivalKitPreparation extends StatelessWidget {
         children: [
           SizedBox(
             width: 50,
-            child: Icon(
-              icon,
-              size: 25,
-              color: const Color(0xFF4F7FF7),
+            child: Image.asset(
+              iconPath,
+              width: 40,
+              height: 40,
+              fit: BoxFit.contain,
             ),
           ),
 
@@ -153,61 +154,61 @@ class SurvivalKitPreparation extends StatelessWidget {
                       // =================================================
 
                       _kitItem(
-                        Icons.water_drop,
+                        'assets/icon/water.png',
                         'Water, one gallon per person',
                         isDarkMode,
                       ),
 
                       _kitItem(
-                        Icons.shopping_basket,
+                        'assets/icon/food.png',
                         'Food, non-perishable, easy-to-prepare items',
                         isDarkMode,
                       ),
 
                       _kitItem(
-                        Icons.flashlight_on,
+                        'assets/icon/flashlight.png',
                         'Flashlights',
                         isDarkMode,
                       ),
 
                       _kitItem(
-                        Icons.medical_services,
+                        'assets/icon/first_aid.png',
                         'First aid kits',
                         isDarkMode,
                       ),
 
                       _kitItem(
-                        Icons.medication,
+                        'assets/icon/medic.png',
                         'Medications and medical items',
                         isDarkMode,
                       ),
 
                       _kitItem(
-                        Icons.cleaning_services,
+                        'assets/icon/sanitation.png',
                         'Sanitation and personal hygiene',
                         isDarkMode,
                       ),
 
                       _kitItem(
-                        Icons.description,
+                        'assets/icon/docu.png',
                         'Personal documents',
                         isDarkMode,
                       ),
 
                       _kitItem(
-                        Icons.phone_android,
+                        'assets/icon/phone.png',
                         'Phone with chargers for communication',
                         isDarkMode,
                       ),
 
                       _kitItem(
-                        Icons.account_balance_wallet,
+                        'assets/icon/cash.png',
                         'Extra cash',
                         isDarkMode,
                       ),
 
                       _kitItem(
-                        Icons.bed,
+                        'assets/icon/blankets.png',
                         'Blankets and other comforts',
                         isDarkMode,
                       ),
