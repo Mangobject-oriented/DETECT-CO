@@ -1,11 +1,10 @@
-
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:detectco/main.dart'; // <-- for isDarkModeNotifier
-import 'package:detectco/pages/notification.dart'; // <-- for NotificationTab
+import 'package:detectco/main.dart'; // for isDarkModeNotifier
 
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key});
@@ -14,19 +13,50 @@ class HomeTab extends StatefulWidget {
   State<HomeTab> createState() => _HomeTabState();
 }
 
-class _HomeTabState extends State<HomeTab> {
+class _HomeTabState extends State<HomeTab>
+    with SingleTickerProviderStateMixin {
+  // =====================================================
+  // WATER SETTINGS
+  // =====================================================
+
+  // Maximum water level is now 3 meters = 300 cm.
+  // The value displayed to the user remains in centimeters.
+  static const double maxWaterLevel = 300.0;
+
+  static const double idleWaterLevel = 40.0;
+
+  late final AnimationController _waterAnimationController;
+
+  double _previousWaterLevel = idleWaterLevel;
+
   @override
   void initState() {
     super.initState();
+
     loadTheme();
+
+    // Continuous water-wave animation.
+    _waterAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat();
   }
+
+  @override
+  void dispose() {
+    _waterAnimationController.dispose();
+    super.dispose();
+  }
+
+  // =====================================================
+  // THEME
+  // =====================================================
 
   void loadTheme() async {
     final prefs = await SharedPreferences.getInstance();
+
     if (!mounted) return;
 
-    // Sync the global notifier with whatever was last saved,
-    // only if it hasn't already been set elsewhere in this session.
     isDarkModeNotifier.value =
         prefs.getBool('darkMode') ?? isDarkModeNotifier.value;
   }
@@ -42,129 +72,9 @@ class _HomeTabState extends State<HomeTab> {
     );
   }
 
-  void _showMenu(BuildContext menuContext, bool isDarkMode) {
-    final RenderBox button =
-        menuContext.findRenderObject() as RenderBox;
-
-    final RenderBox overlay =
-        Overlay.of(menuContext).context.findRenderObject()
-            as RenderBox;
-
-    final Offset position =
-        button.localToGlobal(
-      Offset.zero,
-      ancestor: overlay,
-    );
-
-    showMenu<String>(
-      context: menuContext,
-      position: RelativeRect.fromLTRB(
-        position.dx - 155,
-        position.dy + 48,
-        overlay.size.width -
-            position.dx -
-            button.size.width,
-        0,
-      ),
-      color: isDarkMode
-          ? const Color(0xFF303030)
-          : Colors.white,
-      elevation: 8,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      items: [
-        PopupMenuItem<String>(
-          value: 'how_to_use',
-          height: 52,
-          child: Row(
-            children: [
-              Icon(
-                Icons.help,
-                color: isDarkMode
-                    ? Colors.white
-                    : const Color(0xFF1D2B4A),
-                size: 22,
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'How to Use',
-                style: TextStyle(
-                  color: isDarkMode
-                      ? Colors.white
-                      : const Color(0xFF1D2B4A),
-                  fontSize: 16,
-                ),
-              ),
-            ],
-          ),
-        ),
-        PopupMenuItem<String>(
-          value: 'terms',
-          height: 52,
-          child: Row(
-            children: [
-              Icon(
-                Icons.description,
-                color: isDarkMode
-                    ? Colors.white
-                    : const Color(0xFF1D2B4A),
-                size: 22,
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'Terms of Service',
-                style: TextStyle(
-                  color: isDarkMode
-                      ? Colors.white
-                      : const Color(0xFF1D2B4A),
-                  fontSize: 16,
-                ),
-              ),
-            ],
-          ),
-        ),
-        PopupMenuItem<String>(
-          value: 'about',
-          height: 52,
-          child: Row(
-            children: [
-              Icon(
-                Icons.info,
-                color: isDarkMode
-                    ? Colors.white
-                    : const Color(0xFF1D2B4A),
-                size: 22,
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'About app',
-                style: TextStyle(
-                  color: isDarkMode
-                      ? Colors.white
-                      : const Color(0xFF1D2B4A),
-                  fontSize: 16,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    ).then((value) {
-      if (!mounted) return;
-
-      switch (value) {
-        case 'how_to_use':
-          break;
-
-        case 'terms':
-          break;
-
-        case 'about':
-          break;
-      }
-    });
-  }
+  // =====================================================
+  // BUILD
+  // =====================================================
 
   @override
   Widget build(BuildContext context) {
@@ -182,10 +92,8 @@ class _HomeTabState extends State<HomeTab> {
             backgroundColor: isDarkMode
                 ? const Color(0xFF212121)
                 : Colors.white,
-
             body: StreamBuilder<DatabaseEvent>(
               stream: dbRef.child('flood').onValue,
-
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
                   return const Center(
@@ -199,46 +107,68 @@ class _HomeTabState extends State<HomeTab> {
                   );
                 }
 
-                if (!snapshot.hasData ||
-                    snapshot.data!.snapshot.value == null) {
-                  return const Center(
-                    child: CircularProgressIndicator(),
-                  );
+                // =====================================================
+                // SENSOR DATA
+                // =====================================================
+
+                Map<String, dynamic> data = {};
+
+                double waterLevel = idleWaterLevel;
+
+                bool sensorActive = false;
+
+                if (snapshot.hasData &&
+                    snapshot.data!.snapshot.value != null) {
+                  final rawValue =
+                      snapshot.data!.snapshot.value;
+
+                  if (rawValue is Map) {
+                    final rawData =
+                        rawValue as Map<dynamic, dynamic>;
+
+                    data = rawData.map(
+                      (key, value) =>
+                          MapEntry(key.toString(), value),
+                    );
+
+                    // =================================================
+                    // DISTANCE FROM ULTRASONIC SENSOR
+                    // =================================================
+
+                    final dynamic distanceRaw =
+                        data['distance'];
+
+                    if (distanceRaw != null) {
+                      final double? parsedDistance =
+                          distanceRaw is num
+                              ? distanceRaw.toDouble()
+                              : double.tryParse(
+                                  distanceRaw.toString(),
+                                );
+
+                      if (parsedDistance != null &&
+                          parsedDistance.isFinite) {
+                        if (parsedDistance >= maxWaterLevel) {
+                          sensorActive = false;
+                          waterLevel = idleWaterLevel;
+                        } else {
+                          sensorActive = true;
+
+                          waterLevel = parsedDistance
+                              .clamp(
+                                0.0,
+                                maxWaterLevel,
+                              )
+                              .toDouble();
+                        }
+                      }
+                    }
+                  }
                 }
 
-                final rawValue =
-                    snapshot.data!.snapshot.value;
-
-                if (rawValue is! Map) {
-                  return const Center(
-                    child: Text(
-                      'Invalid data format',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.red,
-                      ),
-                    ),
-                  );
-                }
-
-                final rawData =
-                    rawValue as Map<dynamic, dynamic>;
-
-                final data = rawData.map(
-                  (key, value) =>
-                      MapEntry(key.toString(), value),
-                );
-
-                final dynamic distanceRaw =
-                    data['distance'];
-
-                final double waterLevel =
-                    distanceRaw is num
-                        ? distanceRaw.toDouble()
-                        : double.tryParse(
-                              distanceRaw?.toString() ?? '',
-                            ) ??
-                            0;
+                // =====================================================
+                // HUMIDITY
+                // =====================================================
 
                 final dynamic humidityRaw =
                     data['humidity'];
@@ -251,11 +181,28 @@ class _HomeTabState extends State<HomeTab> {
                             ) ??
                             0;
 
+                // =====================================================
+                // SCREEN / HEADER
+                // =====================================================
+
                 final double screenHeight =
                     MediaQuery.of(context).size.height;
 
                 final double topHeight =
                     screenHeight * 0.40;
+
+                // =====================================================
+                // WATER ANIMATION
+                // =====================================================
+
+                final double animationStart =
+                    _previousWaterLevel;
+
+                final double animationEnd =
+                    waterLevel;
+
+                _previousWaterLevel =
+                    waterLevel;
 
                 return SingleChildScrollView(
                   child: Column(
@@ -263,9 +210,9 @@ class _HomeTabState extends State<HomeTab> {
                         CrossAxisAlignment.start,
                     children: [
 
-                      // =========================================
+                      // =================================================
                       // HEADER
-                      // =========================================
+                      // =================================================
 
                       Container(
                         height: topHeight,
@@ -279,48 +226,42 @@ class _HomeTabState extends State<HomeTab> {
                                 119,
                                 247,
                               ),
-
                         child: SafeArea(
                           bottom: false,
-
                           child: Padding(
                             padding:
                                 const EdgeInsets.symmetric(
                               horizontal: 16,
                               vertical: 12,
                             ),
-
                             child: Column(
                               crossAxisAlignment:
                                   CrossAxisAlignment.start,
-
                               children: [
 
-                                // =================================
+                                // =====================================
                                 // HEADER TOP ROW
-                                // =================================
+                                // =====================================
 
                                 Row(
                                   children: [
 
-                                    // LOGO
                                     GestureDetector(
                                       onDoubleTap:
                                           toggleTheme,
-
                                       child: SizedBox(
                                         width: 50,
                                         height: 50,
-
                                         child: Image.asset(
                                           "assets/icon/detect-co_logo.png",
                                         ),
                                       ),
                                     ),
 
-                                    const SizedBox(width: 8),
+                                    const SizedBox(
+                                      width: 8,
+                                    ),
 
-                                    // APP NAME
                                     const Text(
                                       'DETECT-CO',
                                       style: TextStyle(
@@ -332,152 +273,20 @@ class _HomeTabState extends State<HomeTab> {
                                     ),
 
                                     const Spacer(),
-
-                                    // =================================
-                                    // NOTIFICATION BELL + UNREAD BADGE
-                                    // =================================
-
-                                    ValueListenableBuilder<int>(
-                                      valueListenable:
-                                          unreadNotificationCount,
-
-                                      builder: (
-                                        context,
-                                        unreadCount,
-                                        child,
-                                      ) {
-                                        return Stack(
-                                          clipBehavior:
-                                              Clip.none,
-
-                                          children: [
-
-                                            IconButton(
-                                              icon: const Icon(
-                                                Icons
-                                                    .notifications_none_rounded,
-                                                color:
-                                                    Colors.white,
-                                                size: 26,
-                                              ),
-
-                                              onPressed: () {
-                                                Navigator.push(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                    builder: (_) =>
-                                                        const NotificationTab(),
-                                                  ),
-                                                );
-                                              },
-                                            ),
-
-                                            // =================================
-                                            // RED UNREAD BADGE
-                                            // =================================
-
-                                            if (unreadCount > 0)
-                                              Positioned(
-                                                right: 3,
-                                                top: 2,
-
-                                                child:
-                                                    Container(
-                                                  constraints:
-                                                      const BoxConstraints(
-                                                    minWidth: 18,
-                                                    minHeight: 18,
-                                                  ),
-
-                                                  padding:
-                                                      const EdgeInsets
-                                                          .symmetric(
-                                                    horizontal: 4,
-                                                  ),
-
-                                                  decoration:
-                                                      BoxDecoration(
-                                                    color:
-                                                        Colors.red,
-                                                    borderRadius:
-                                                        BorderRadius
-                                                            .circular(
-                                                      20,
-                                                    ),
-                                                    border:
-                                                        Border.all(
-                                                      color: Colors
-                                                          .white,
-                                                      width: 1.5,
-                                                    ),
-                                                  ),
-
-                                                  child: Text(
-                                                    unreadCount >
-                                                            99
-                                                        ? '99+'
-                                                        : unreadCount
-                                                            .toString(),
-
-                                                    textAlign:
-                                                        TextAlign
-                                                            .center,
-
-                                                    style:
-                                                        const TextStyle(
-                                                      color: Colors
-                                                          .white,
-                                                      fontSize: 10,
-                                                      fontWeight:
-                                                          FontWeight
-                                                              .bold,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                          ],
-                                        );
-                                      },
-                                    ),
-
-                                    // =================================
-                                    // MENU
-                                    // =================================
-
-                                    Builder(
-                                      builder:
-                                          (menuContext) {
-                                        return IconButton(
-                                          icon: const Icon(
-                                            Icons
-                                                .menu_rounded,
-                                            color:
-                                                Colors.white,
-                                            size: 26,
-                                          ),
-
-                                          onPressed: () {
-                                            _showMenu(
-                                              menuContext,
-                                              isDarkMode,
-                                            );
-                                          },
-                                        );
-                                      },
-                                    ),
                                   ],
                                 ),
 
-                                const SizedBox(height: 12),
+                                const SizedBox(
+                                  height: 12,
+                                ),
 
-                                // =================================
+                                // =====================================
                                 // GREETING
-                                // =================================
+                                // =====================================
 
                                 Row(
                                   crossAxisAlignment:
                                       CrossAxisAlignment.start,
-
                                   children: [
 
                                     const Expanded(
@@ -498,17 +307,21 @@ class _HomeTabState extends State<HomeTab> {
                                       style: TextStyle(
                                         fontSize: 12,
                                         color: Colors.white
-                                            .withOpacity(0.85),
+                                            .withOpacity(
+                                          0.85,
+                                        ),
                                       ),
                                     ),
                                   ],
                                 ),
 
-                                const SizedBox(height: 4),
+                                const SizedBox(
+                                  height: 4,
+                                ),
 
-                                // =================================
+                                // =====================================
                                 // LOCATION / TIME
-                                // =================================
+                                // =====================================
 
                                 Row(
                                   children: [
@@ -520,7 +333,9 @@ class _HomeTabState extends State<HomeTab> {
                                       size: 16,
                                     ),
 
-                                    const SizedBox(width: 4),
+                                    const SizedBox(
+                                      width: 4,
+                                    ),
 
                                     const Text(
                                       'Barangay Biringan',
@@ -549,33 +364,29 @@ class _HomeTabState extends State<HomeTab> {
                         ),
                       ),
 
-                      // =========================================
+                      // =================================================
                       // SENSOR CARD
-                      // =========================================
+                      // =================================================
 
                       Transform.translate(
-                        offset: const Offset(0, -100),
-
+                        offset:
+                            const Offset(0, -100),
                         child: Padding(
                           padding:
                               const EdgeInsets.symmetric(
                             horizontal: 20,
                           ),
-
                           child: Container(
                             padding:
                                 const EdgeInsets.all(20),
-
                             decoration: BoxDecoration(
                               color: isDarkMode
                                   ? const Color(0xFF2C2C2C)
                                   : Colors.white,
-
                               borderRadius:
                                   BorderRadius.circular(
                                 20,
                               ),
-
                               boxShadow: [
                                 BoxShadow(
                                   color: Colors.black
@@ -590,22 +401,18 @@ class _HomeTabState extends State<HomeTab> {
                                 ),
                               ],
                             ),
-
                             child: Column(
                               crossAxisAlignment:
                                   CrossAxisAlignment.start,
-
                               children: [
 
-                                // =================================
-                                // ROW 1
+                                // =================================================
                                 // TEMPERATURE + HOUSE
-                                // =================================
+                                // =================================================
 
                                 Row(
                                   crossAxisAlignment:
                                       CrossAxisAlignment.start,
-
                                   children: [
 
                                     Expanded(
@@ -613,12 +420,12 @@ class _HomeTabState extends State<HomeTab> {
                                         crossAxisAlignment:
                                             CrossAxisAlignment
                                                 .start,
-
                                         children: [
 
                                           Text(
                                             'Current Temperature:',
-                                            style: TextStyle(
+                                            style:
+                                                TextStyle(
                                               fontSize: 14,
                                               fontWeight:
                                                   FontWeight
@@ -650,9 +457,9 @@ class _HomeTabState extends State<HomeTab> {
                                               ),
 
                                               Flexible(
-                                                child: Text(
+                                                child:
+                                                    Text(
                                                   '${data['temperature']?.toString() ?? '--'}°C',
-
                                                   style:
                                                       TextStyle(
                                                     fontSize:
@@ -660,11 +467,12 @@ class _HomeTabState extends State<HomeTab> {
                                                     fontWeight:
                                                         FontWeight
                                                             .bold,
-                                                    color: isDarkMode
-                                                        ? Colors
-                                                            .white
-                                                        : Colors
-                                                            .black,
+                                                    color:
+                                                        isDarkMode
+                                                            ? Colors
+                                                                .white
+                                                            : Colors
+                                                                .black,
                                                   ),
                                                 ),
                                               ),
@@ -677,9 +485,10 @@ class _HomeTabState extends State<HomeTab> {
                                     Expanded(
                                       child: Align(
                                         alignment:
-                                            Alignment.topRight,
-
-                                        child: Image.asset(
+                                            Alignment
+                                                .topRight,
+                                        child:
+                                            Image.asset(
                                           'assets/icon/house.png',
                                           width: 120,
                                           height: 100,
@@ -693,41 +502,40 @@ class _HomeTabState extends State<HomeTab> {
                                   height: 24,
                                 ),
 
-                                // =================================
-                                // ROW 2
+                                // =================================================
                                 // WATER LEVEL + HUMIDITY
-                                // =================================
+                                // =================================================
 
                                 Row(
                                   crossAxisAlignment:
                                       CrossAxisAlignment.start,
-
                                   children: [
 
-                                    // =================================
+                                    // =================================================
                                     // WATER LEVEL
-                                    // =================================
+                                    // =================================================
 
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment:
                                             CrossAxisAlignment
                                                 .center,
-
                                         children: [
 
                                           Text(
                                             'Water Level',
-                                            style: TextStyle(
+                                            style:
+                                                TextStyle(
                                               fontSize: 15,
                                               fontWeight:
                                                   FontWeight
                                                       .w600,
-                                              color: isDarkMode
-                                                  ? Colors
-                                                      .white
-                                                  : Colors
-                                                      .black,
+                                              color:
+                                                  isDarkMode
+                                                      ? Colors
+                                                          .white
+                                                      : Colors
+                                                          .black,
                                             ),
                                           ),
 
@@ -736,8 +544,7 @@ class _HomeTabState extends State<HomeTab> {
                                           ),
 
                                           SizedBox(
-                                            height: 210,
-
+                                            height: 214,
                                             child:
                                                 LayoutBuilder(
                                               builder:
@@ -747,19 +554,17 @@ class _HomeTabState extends State<HomeTab> {
                                               ) {
                                                 final double
                                                     tubeCanvasWidth =
-                                                    constraints
-                                                            .maxWidth *
-                                                        0.7;
+                                                        constraints
+                                                                .maxWidth *
+                                                            0.7;
 
                                                 return Row(
                                                   mainAxisAlignment:
                                                       MainAxisAlignment
                                                           .start,
-
                                                   crossAxisAlignment:
                                                       CrossAxisAlignment
                                                           .start,
-
                                                   children: [
 
                                                     Padding(
@@ -768,56 +573,90 @@ class _HomeTabState extends State<HomeTab> {
                                                               .only(
                                                         left: 8,
                                                       ),
-
                                                       child:
                                                           Column(
                                                         crossAxisAlignment:
                                                             CrossAxisAlignment
                                                                 .center,
-
                                                         children: [
 
-                                                          Text(
-                                                            '${waterLevel.toStringAsFixed(1)} cm',
+                                                          // =================================================
+                                                          // WATER LEVEL TEXT
+                                                          // =================================================
 
-                                                            style:
-                                                                TextStyle(
-                                                              fontSize:
-                                                                  20,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .bold,
-                                                              color: isDarkMode
-                                                                  ? Colors
-                                                                      .white
-                                                                  : Colors
-                                                                      .black,
+                                                          TweenAnimationBuilder<
+                                                              double>(
+                                                            tween:
+                                                                Tween<
+                                                                    double>(
+                                                              begin:
+                                                                  animationStart,
+                                                              end:
+                                                                  animationEnd,
                                                             ),
+                                                            duration:
+                                                                const Duration(
+                                                              milliseconds:
+                                                                  800,
+                                                            ),
+                                                            curve:
+                                                                Curves.easeInOut,
+                                                            builder:
+                                                                (
+                                                              context,
+                                                              animatedLevel,
+                                                              child,
+                                                            ) {
+                                                              return Text(
+                                                                sensorActive
+                                                                    ? '${animatedLevel.toStringAsFixed(1)} cm'
+                                                                    : 'IDLE',
+                                                                style:
+                                                                    TextStyle(
+                                                                  fontSize:
+                                                                      20,
+                                                                  fontWeight:
+                                                                      FontWeight.bold,
+                                                                  color:
+                                                                      isDarkMode
+                                                                          ? Colors.white
+                                                                          : Colors.black,
+                                                                ),
+                                                              );
+                                                            },
                                                           ),
 
                                                           const SizedBox(
                                                             height: 4,
                                                           ),
 
-                                                          CustomPaint(
-                                                            size: Size(
-                                                              tubeCanvasWidth,
-                                                              180,
-                                                            ),
+                                                          // =================================================
+                                                          // WATER + DUCK
+                                                          // =================================================
 
-                                                            painter:
-                                                                _WaterBucketPainter(
-                                                              level:
-                                                                  waterLevel,
-                                                              maxLevel:
-                                                                  80,
-                                                              isDark:
-                                                                  isDarkMode,
-                                                            ),
+                                                          _WaterWithDuck(
+                                                            width:
+                                                                tubeCanvasWidth,
+                                                            height:
+                                                                180,
+                                                            animation:
+                                                                _waterAnimationController,
+                                                            animationStart:
+                                                                animationStart,
+                                                            animationEnd:
+                                                                animationEnd,
+                                                            maxWaterLevel:
+                                                                maxWaterLevel,
+                                                            isDark:
+                                                                isDarkMode,
                                                           ),
                                                         ],
                                                       ),
                                                     ),
+
+                                                    // =================================================
+                                                    // GAUGE SCALE
+                                                    // =================================================
 
                                                     Expanded(
                                                       child:
@@ -827,26 +666,22 @@ class _HomeTabState extends State<HomeTab> {
                                                                 .only(
                                                           top: 34,
                                                         ),
-
                                                         child:
                                                             SizedBox(
                                                           height:
                                                               180,
-
                                                           child:
                                                               Column(
                                                             mainAxisAlignment:
                                                                 MainAxisAlignment
                                                                     .spaceBetween,
-
                                                             crossAxisAlignment:
                                                                 CrossAxisAlignment
                                                                     .start,
-
                                                             children: [
 
                                                               Text(
-                                                                '70 cm',
+                                                                '300 cm',
                                                                 style:
                                                                     TextStyle(
                                                                   color:
@@ -859,7 +694,7 @@ class _HomeTabState extends State<HomeTab> {
                                                               ),
 
                                                               Text(
-                                                                '50 cm',
+                                                                '200 cm',
                                                                 style:
                                                                     TextStyle(
                                                                   color:
@@ -872,7 +707,7 @@ class _HomeTabState extends State<HomeTab> {
                                                               ),
 
                                                               Text(
-                                                                '30 cm',
+                                                                '100 cm',
                                                                 style:
                                                                     TextStyle(
                                                                   color:
@@ -901,30 +736,31 @@ class _HomeTabState extends State<HomeTab> {
                                       width: 12,
                                     ),
 
-                                    // =================================
+                                    // =================================================
                                     // HUMIDITY + FLOOD STATUS
-                                    // =================================
+                                    // =================================================
 
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment:
                                             CrossAxisAlignment
                                                 .center,
-
                                         children: [
 
                                           Text(
                                             'Humidity',
-                                            style: TextStyle(
+                                            style:
+                                                TextStyle(
                                               fontSize: 15,
                                               fontWeight:
                                                   FontWeight
                                                       .w600,
-                                              color: isDarkMode
-                                                  ? Colors
-                                                      .white
-                                                  : Colors
-                                                      .black,
+                                              color:
+                                                  isDarkMode
+                                                      ? Colors
+                                                          .white
+                                                      : Colors
+                                                          .black,
                                             ),
                                           ),
 
@@ -932,76 +768,103 @@ class _HomeTabState extends State<HomeTab> {
                                             height: 10,
                                           ),
 
-                                          CustomPaint(
-                                            size:
-                                                const Size(
-                                              150,
-                                              90,
-                                            ),
+                                          // =================================================
+                                          // HUMIDITY GAUGE
+                                          // =================================================
 
-                                            painter:
-                                                _HumidityGaugePainter(
-                                              percent: (humidity /
-                                                      100)
-                                                  .clamp(
-                                                    0,
-                                                    1,
-                                                  )
-                                                  .toDouble(),
-                                              isDark:
-                                                  isDarkMode,
-                                            ),
+                                          LayoutBuilder(
+                                            builder:
+                                                (
+                                              context,
+                                              constraints,
+                                            ) {
+                                              final double
+                                                  gaugeSize =
+                                                  math.min(
+                                                150,
+                                                constraints
+                                                    .maxWidth,
+                                              );
 
-                                            child: SizedBox(
-                                              width: 150,
-                                              height: 90,
-
-                                              child: Padding(
-                                                padding:
-                                                    const EdgeInsets
-                                                        .only(
-                                                  top: 26,
+                                              return CustomPaint(
+                                                size: Size(
+                                                  gaugeSize,
+                                                  gaugeSize *
+                                                      0.6,
                                                 ),
-
-                                                child: Center(
-                                                  child: Text(
-                                                    '${humidity.toStringAsFixed(0)}%',
-
-                                                    style:
-                                                        TextStyle(
-                                                      fontSize:
-                                                          24,
-                                                      fontWeight:
-                                                          FontWeight
-                                                              .bold,
-                                                      color: isDarkMode
-                                                          ? Colors
-                                                              .white
-                                                          : Colors
-                                                              .black,
+                                                painter:
+                                                    _HumidityGaugePainter(
+                                                  percent:
+                                                      (humidity /
+                                                              100)
+                                                          .clamp(
+                                                            0,
+                                                            1,
+                                                          )
+                                                          .toDouble(),
+                                                  isDark:
+                                                      isDarkMode,
+                                                ),
+                                                child:
+                                                    SizedBox(
+                                                  width:
+                                                      gaugeSize,
+                                                  height:
+                                                      gaugeSize *
+                                                          0.6,
+                                                  child:
+                                                      Padding(
+                                                    padding:
+                                                        const EdgeInsets
+                                                            .only(
+                                                      top: 26,
+                                                    ),
+                                                    child:
+                                                        Center(
+                                                      child:
+                                                          Text(
+                                                        '${humidity.toStringAsFixed(0)}%',
+                                                        style:
+                                                            TextStyle(
+                                                          fontSize:
+                                                              24,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          color:
+                                                              isDarkMode
+                                                                  ? Colors.white
+                                                                  : Colors.black,
+                                                        ),
+                                                      ),
                                                     ),
                                                   ),
                                                 ),
-                                              ),
-                                            ),
+                                              );
+                                            },
                                           ),
 
                                           const SizedBox(
                                             height: 24,
                                           ),
 
+                                          // =================================================
+                                          // FLOOD RISK STATUS
+                                          // =================================================
+
                                           Text(
                                             'Flood Risk Status',
-                                            style: TextStyle(
+                                            style:
+                                                TextStyle(
                                               fontSize: 15,
                                               fontWeight:
                                                   FontWeight
                                                       .w600,
-                                              color: isDarkMode
-                                                  ? Colors
-                                                      .white
-                                                  : Colors
-                                                      .black,
+                                              color:
+                                                  isDarkMode
+                                                      ? Colors
+                                                          .white
+                                                      : Colors
+                                                          .black,
                                             ),
                                           ),
 
@@ -1010,55 +873,71 @@ class _HomeTabState extends State<HomeTab> {
                                           ),
 
                                           Container(
+                                            constraints:
+                                                const BoxConstraints(
+                                              maxWidth:
+                                                  double.infinity,
+                                            ),
                                             padding:
                                                 const EdgeInsets
                                                     .symmetric(
                                               vertical: 10,
-                                              horizontal: 24,
+                                              horizontal: 16,
                                             ),
-
                                             decoration:
                                                 BoxDecoration(
                                               color:
-                                                  waterLevel >
-                                                          40
+                                                  !sensorActive
                                                       ? Colors
-                                                          .green
-                                                          .shade700
+                                                          .grey
+                                                          .shade600
                                                       : waterLevel >
-                                                              30
+                                                              50
                                                           ? Colors
-                                                              .orange
-                                                              .shade700
-                                                          : Colors
                                                               .red
-                                                              .shade700,
-
+                                                              .shade700
+                                                          : waterLevel >
+                                                                  30
+                                                              ? Colors
+                                                                  .orange
+                                                                  .shade700
+                                                              : Colors
+                                                                  .green
+                                                                  .shade700,
                                               borderRadius:
                                                   BorderRadius
                                                       .circular(
                                                 12,
                                               ),
                                             ),
-
-                                            child: Text(
-                                              waterLevel > 40
-                                                  ? 'SAFE'
-                                                  : waterLevel >
-                                                          30
-                                                      ? 'MEDIUM RISK'
-                                                      : 'FLOODING',
-
-                                              style:
-                                                  const TextStyle(
-                                                fontSize: 16,
-                                                fontWeight:
-                                                    FontWeight
-                                                        .w900,
-                                                color:
-                                                    Colors.white,
-                                                letterSpacing:
-                                                    0.5,
+                                            child:
+                                                FittedBox(
+                                              fit: BoxFit
+                                                  .scaleDown,
+                                              child:
+                                                  Text(
+                                                !sensorActive
+                                                    ? 'IDLE'
+                                                    : waterLevel >
+                                                            50
+                                                        ? 'FLOODING'
+                                                        : waterLevel >
+                                                                30
+                                                            ? 'MEDIUM RISK'
+                                                            : 'SAFE',
+                                                maxLines: 1,
+                                                style:
+                                                    const TextStyle(
+                                                  fontSize:
+                                                      16,
+                                                  fontWeight:
+                                                      FontWeight
+                                                          .w900,
+                                                  color:
+                                                      Colors.white,
+                                                  letterSpacing:
+                                                      0.5,
+                                                ),
                                               ),
                                             ),
                                           ),
@@ -1081,6 +960,467 @@ class _HomeTabState extends State<HomeTab> {
         );
       },
     );
+  }
+}
+
+// =====================================================
+// WATER + RUBBER DUCK
+// =====================================================
+
+class _WaterWithDuck extends StatefulWidget {
+  final double width;
+  final double height;
+  final Animation<double> animation;
+  final double animationStart;
+  final double animationEnd;
+  final double maxWaterLevel;
+  final bool isDark;
+
+  const _WaterWithDuck({
+    required this.width,
+    required this.height,
+    required this.animation,
+    required this.animationStart,
+    required this.animationEnd,
+    required this.maxWaterLevel,
+    required this.isDark,
+  });
+
+  @override
+  State<_WaterWithDuck> createState() =>
+      _WaterWithDuckState();
+}
+
+class _WaterWithDuckState extends State<_WaterWithDuck>
+    with SingleTickerProviderStateMixin {
+
+  // =====================================================
+  // DUCK ANIMATION
+  // =====================================================
+
+  late final AnimationController _duckController;
+
+  Timer? _duckTimer;
+
+  bool _showDuck = false;
+
+  final math.Random _random = math.Random();
+
+  // =====================================================
+  // DUCK SIZE
+  // =====================================================
+
+  static const double duckWidth = 34.2;
+  static const double duckHeight = 34.2;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _duckController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 10),
+    );
+
+    _scheduleDuck();
+  }
+
+  // =====================================================
+  // RANDOM DUCK APPEARANCE
+  // =====================================================
+
+  void _scheduleDuck() {
+    _duckTimer?.cancel();
+
+    final int delaySeconds =
+        8 + _random.nextInt(11);
+
+    _duckTimer = Timer(
+      Duration(seconds: delaySeconds),
+      _startDuck,
+    );
+  }
+
+  // =====================================================
+  // START DUCK
+  // =====================================================
+
+  void _startDuck() {
+    if (!mounted) return;
+
+    setState(() {
+      _showDuck = true;
+    });
+
+    _duckController.forward(from: 0).then(
+      (_) {
+        if (!mounted) return;
+
+        setState(() {
+          _showDuck = false;
+        });
+
+        _scheduleDuck();
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _duckTimer?.cancel();
+    _duckController.dispose();
+    super.dispose();
+  }
+
+  // =====================================================
+  // BUILD
+  // =====================================================
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: Listenable.merge([
+        widget.animation,
+        _duckController,
+      ]),
+      builder: (context, child) {
+        return SizedBox(
+          width: widget.width,
+          height: widget.height,
+          child: Stack(
+            clipBehavior: Clip.hardEdge,
+            children: [
+
+              // =================================================
+              // WATER
+              // =================================================
+
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _WaterBucketPainter(
+                    level: widget.animationEnd,
+                    maxLevel: widget.maxWaterLevel,
+                    isDark: widget.isDark,
+                    wavePhase:
+                        widget.animation.value *
+                            math.pi *
+                            2,
+                  ),
+                ),
+              ),
+
+              // =================================================
+              // DUCK
+              // =================================================
+
+              if (_showDuck)
+                ClipPath(
+                  clipper: _TubeInteriorClipper(),
+                  child: _buildDuck(),
+                ),
+
+              // =================================================
+              // BLUE TUBE OUTLINE
+              // =================================================
+
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: CustomPaint(
+                    painter: _TubeOutlinePainter(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // =====================================================
+  // BUILD DUCK
+  // =====================================================
+
+  Widget _buildDuck() {
+    // =====================================================
+    // TUBE DIMENSIONS
+    // =====================================================
+
+    final double tubeWidth =
+        widget.width * 0.9;
+
+    final double left =
+        (widget.width - tubeWidth) / 2;
+
+    final double right =
+        left + tubeWidth;
+
+    const double top = 4;
+
+    final double bottom =
+        widget.height - 4;
+
+    // =====================================================
+    // DUCK MOVEMENT
+    // =====================================================
+
+    final double startX =
+        right - duckWidth * 0.35;
+
+    final double endX =
+        left - duckWidth * 0.65;
+
+    final double curvedProgress =
+        Curves.easeInOut.transform(
+      _duckController.value,
+    );
+
+    final double duckX =
+        startX +
+            (endX - startX) *
+                curvedProgress;
+
+    // =====================================================
+    // CURRENT WATER LEVEL
+    // =====================================================
+
+    final double currentLevel =
+        widget.animationStart +
+            (widget.animationEnd -
+                    widget.animationStart) *
+                Curves.easeInOut.transform(
+                  widget.animation.value,
+                );
+
+    final double percent =
+        (currentLevel /
+                widget.maxWaterLevel)
+            .clamp(0, 1)
+            .toDouble();
+
+    // =====================================================
+    // WATER LEVEL POSITION
+    // =====================================================
+
+    final double fillHeight =
+        (bottom - top) * percent;
+
+    final double fillTop =
+        bottom - fillHeight;
+
+    // =====================================================
+    // DUCK CENTER
+    // =====================================================
+
+    final double duckCenterX =
+        duckX + duckWidth / 2;
+
+    // =====================================================
+    // WAVE POSITION
+    // =====================================================
+
+    final double normalizedX =
+        ((duckCenterX - left) /
+                tubeWidth)
+            .clamp(0.0, 1.0);
+
+    const double waveHeight = 3.5;
+
+    final double wave =
+        math.sin(
+              normalizedX *
+                      math.pi *
+                      2 *
+                      1.5 +
+                  widget.animation.value *
+                      math.pi *
+                      2,
+            ) *
+            waveHeight;
+
+    // =====================================================
+    // SLOW FLOATING / BOBBING
+    // =====================================================
+
+    final double bob =
+        math.sin(
+              _duckController.value *
+                  math.pi *
+                  2,
+            ) *
+            1.5;
+
+    // =====================================================
+    // DUCK VERTICAL POSITION
+    // =====================================================
+
+    final double duckY =
+        fillTop +
+            wave +
+            bob -
+            duckHeight +
+            5;
+
+    // =====================================================
+    // DUCK
+    // =====================================================
+
+    return SizedBox(
+      width: widget.width,
+      height: widget.height,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: duckX,
+            top: duckY,
+            width: duckWidth,
+            height: duckHeight,
+            child: IgnorePointer(
+              child: Image.asset(
+                'assets/images/rubber-duck.png',
+                width: duckWidth,
+                height: duckHeight,
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// =====================================================
+// TUBE INTERIOR CLIPPER
+// =====================================================
+
+class _TubeInteriorClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final double tubeWidth =
+        size.width * 0.9;
+
+    final double left =
+        (size.width - tubeWidth) / 2;
+
+    final double right =
+        left + tubeWidth;
+
+    const double top = 4;
+
+    final double bottom =
+        size.height - 4;
+
+    const double cornerRadius = 14;
+
+    return Path()
+      ..moveTo(left, top)
+      ..lineTo(
+        left,
+        bottom - cornerRadius,
+      )
+      ..quadraticBezierTo(
+        left,
+        bottom,
+        left + cornerRadius,
+        bottom,
+      )
+      ..lineTo(
+        right - cornerRadius,
+        bottom,
+      )
+      ..quadraticBezierTo(
+        right,
+        bottom,
+        right,
+        bottom - cornerRadius,
+      )
+      ..lineTo(
+        right,
+        top,
+      )
+      ..close();
+  }
+
+  @override
+  bool shouldReclip(
+    covariant _TubeInteriorClipper oldClipper,
+  ) {
+    return false;
+  }
+}
+
+// =====================================================
+// TUBE OUTLINE PAINTER
+// =====================================================
+
+class _TubeOutlinePainter extends CustomPainter {
+  @override
+  void paint(
+    Canvas canvas,
+    Size size,
+  ) {
+    final double tubeWidth =
+        size.width * 0.9;
+
+    final double left =
+        (size.width - tubeWidth) / 2;
+
+    final double right =
+        left + tubeWidth;
+
+    const double top = 4;
+
+    final double bottom =
+        size.height - 4;
+
+    const double cornerRadius = 14;
+
+    final outlinePaint = Paint()
+      ..color = Colors.blue.shade600
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4
+      ..strokeCap = StrokeCap.round;
+
+    final tubePath = Path()
+      ..moveTo(left, top)
+      ..lineTo(
+        left,
+        bottom - cornerRadius,
+      )
+      ..quadraticBezierTo(
+        left,
+        bottom,
+        left + cornerRadius,
+        bottom,
+      )
+      ..lineTo(
+        right - cornerRadius,
+        bottom,
+      )
+      ..quadraticBezierTo(
+        right,
+        bottom,
+        right,
+        bottom - cornerRadius,
+      )
+      ..lineTo(
+        right,
+        top,
+      );
+
+    canvas.drawPath(
+      tubePath,
+      outlinePaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(
+    covariant _TubeOutlinePainter oldDelegate,
+  ) {
+    return false;
   }
 }
 
@@ -1113,15 +1453,15 @@ class SensorCard extends StatelessWidget {
 
     final level = waterLevel!;
 
-    if (level > 40) {
-      return Colors.green.shade700;
+    if (level > 50) {
+      return Colors.red.shade700;
     }
 
     if (level > 30) {
       return Colors.orange.shade700;
     }
 
-    return Colors.red.shade700;
+    return Colors.green.shade700;
   }
 
   @override
@@ -1129,27 +1469,21 @@ class SensorCard extends StatelessWidget {
     return AnimatedContainer(
       duration:
           const Duration(milliseconds: 400),
-
       width: double.infinity,
-
       padding:
           const EdgeInsets.symmetric(
         vertical: 12,
         horizontal: 8,
       ),
-
       decoration: BoxDecoration(
         color: _getCardColor(),
-
         borderRadius:
             BorderRadius.circular(12),
-
         border: Border.all(
           color: isDark
               ? Colors.grey.shade800
               : Colors.grey.shade300,
         ),
-
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(
@@ -1160,11 +1494,9 @@ class SensorCard extends StatelessWidget {
           ),
         ],
       ),
-
       child: Column(
         crossAxisAlignment:
             CrossAxisAlignment.center,
-
         children: [
 
           Text(
@@ -1184,13 +1516,10 @@ class SensorCard extends StatelessWidget {
           Row(
             mainAxisAlignment:
                 MainAxisAlignment.center,
-
             crossAxisAlignment:
                 CrossAxisAlignment.baseline,
-
             textBaseline:
                 TextBaseline.alphabetic,
-
             children: [
 
               Text(
@@ -1239,25 +1568,20 @@ class WarningCard extends StatelessWidget {
   });
 
   String get statusText {
-    if (waterLevel > 40) {
-      return 'Safe';
+    if (waterLevel > 50) {
+      return 'Flooding!';
     }
 
     if (waterLevel > 30) {
       return 'Medium Risk';
     }
 
-    return 'Flooding!';
+    return 'Safe';
   }
 
   Color get statusColor {
-    if (waterLevel > 40) {
-      return const Color.fromRGBO(
-        76,
-        175,
-        80,
-        1,
-      );
+    if (waterLevel > 50) {
+      return Colors.red;
     }
 
     if (waterLevel > 30) {
@@ -1265,9 +1589,9 @@ class WarningCard extends StatelessWidget {
     }
 
     return const Color.fromRGBO(
-      244,
-      67,
-      54,
+      76,
+      175,
+      80,
       1,
     );
   }
@@ -1277,23 +1601,18 @@ class WarningCard extends StatelessWidget {
     return AnimatedContainer(
       duration:
           const Duration(milliseconds: 400),
-
       width: double.infinity,
-
       padding:
           const EdgeInsets.symmetric(
         vertical: 16,
         horizontal: 12,
       ),
-
       decoration: BoxDecoration(
         color: isDark
             ? const Color(0xFF2C2C2C)
             : statusColor,
-
         borderRadius:
             BorderRadius.circular(12),
-
         boxShadow: [
           BoxShadow(
             color: statusColor.withOpacity(0.3),
@@ -1302,11 +1621,9 @@ class WarningCard extends StatelessWidget {
           ),
         ],
       ),
-
       child: Column(
         crossAxisAlignment:
             CrossAxisAlignment.center,
-
         children: [
 
           const Text(
@@ -1342,15 +1659,16 @@ class WarningCard extends StatelessWidget {
 
 class _WaterBucketPainter
     extends CustomPainter {
-
   final double level;
   final double maxLevel;
   final bool isDark;
+  final double wavePhase;
 
   _WaterBucketPainter({
     required this.level,
     required this.maxLevel,
     required this.isDark,
+    required this.wavePhase,
   });
 
   @override
@@ -1374,6 +1692,10 @@ class _WaterBucketPainter
 
     final double cornerRadius =
         14;
+
+    // =====================================================
+    // TUBE OUTLINE
+    // =====================================================
 
     final outlinePaint = Paint()
       ..color = Colors.blue.shade600
@@ -1410,6 +1732,10 @@ class _WaterBucketPainter
         top,
       );
 
+    // =====================================================
+    // WATER LEVEL
+    // =====================================================
+
     final double percent =
         (level / maxLevel)
             .clamp(0, 1)
@@ -1428,6 +1754,10 @@ class _WaterBucketPainter
           : Colors.blue.shade100;
 
     canvas.save();
+
+    // =====================================================
+    // CLIP WATER INSIDE TUBE
+    // =====================================================
 
     canvas.clipPath(
       Path()
@@ -1459,17 +1789,114 @@ class _WaterBucketPainter
         ..close(),
     );
 
-    canvas.drawRect(
-      Rect.fromLTRB(
-        left,
-        fillTop,
+    // =====================================================
+    // WATER BODY
+    // =====================================================
+
+    final waterPath = Path();
+
+    final double waveHeight = 3.5;
+    final double waveLength = tubeWidth;
+
+    waterPath.moveTo(
+      left,
+      fillTop,
+    );
+
+    for (
+      double x = left;
+      x <= right;
+      x += 2
+    ) {
+      final double normalizedX =
+          (x - left) / waveLength;
+
+      final double wave =
+          math.sin(
+                normalizedX *
+                        math.pi *
+                        2 *
+                        1.5 +
+                    wavePhase,
+              ) *
+              waveHeight;
+
+      waterPath.lineTo(
+        x,
+        fillTop + wave,
+      );
+    }
+
+    waterPath
+      ..lineTo(
         right,
         bottom,
-      ),
+      )
+      ..lineTo(
+        left,
+        bottom,
+      )
+      ..close();
+
+    canvas.drawPath(
+      waterPath,
       fillPaint,
     );
 
+    // =====================================================
+    // WATER HIGHLIGHT
+    // =====================================================
+
+    final highlightPaint = Paint()
+      ..color = Colors.blue.shade400
+          .withOpacity(0.35)
+      ..style =
+          PaintingStyle.stroke
+      ..strokeWidth = 2;
+
+    final highlightPath = Path();
+
+    for (
+      double x = left;
+      x <= right;
+      x += 2
+    ) {
+      final double normalizedX =
+          (x - left) / waveLength;
+
+      final double wave =
+          math.sin(
+                normalizedX *
+                        math.pi *
+                        2 *
+                        1.5 +
+                    wavePhase,
+              ) *
+              waveHeight;
+
+      if (x == left) {
+        highlightPath.moveTo(
+          x,
+          fillTop + wave,
+        );
+      } else {
+        highlightPath.lineTo(
+          x,
+          fillTop + wave,
+        );
+      }
+    }
+
+    canvas.drawPath(
+      highlightPath,
+      highlightPaint,
+    );
+
     canvas.restore();
+
+    // =====================================================
+    // TUBE OUTLINE
+    // =====================================================
 
     canvas.drawPath(
       tubePath,
@@ -1482,7 +1909,9 @@ class _WaterBucketPainter
     covariant _WaterBucketPainter oldDelegate,
   ) =>
       oldDelegate.level != level ||
-      oldDelegate.isDark != isDark;
+      oldDelegate.maxLevel != maxLevel ||
+      oldDelegate.isDark != isDark ||
+      oldDelegate.wavePhase != wavePhase;
 }
 
 // =====================================================
@@ -1491,7 +1920,6 @@ class _WaterBucketPainter
 
 class _HumidityGaugePainter
     extends CustomPainter {
-
   final double percent;
   final bool isDark;
 

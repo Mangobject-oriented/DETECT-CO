@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:detectco/main.dart'; // for isDarkModeNotifier
 import 'package:detectco/pages/survival_kit_prep.dart';
 import 'package:detectco/pages/during_after_flood.dart';
-import 'package:detectco/pages/notification.dart';
 
 class EvacuateTab extends StatelessWidget {
   const EvacuateTab({super.key});
@@ -637,60 +636,13 @@ class EvacuateTab extends StatelessWidget {
                         // =================================================
 
                         const Text(
-                          'DETECT-CO',
+                          'Evacuate',
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight:
                                 FontWeight.bold,
                             color: Colors.white,
                           ),
-                        ),
-
-                        const Spacer(),
-
-                        // =================================================
-                        // NOTIFICATION
-                        // =================================================
-
-                        IconButton(
-                          icon: const Icon(
-                            Icons.notifications_none,
-                            color: Colors.white,
-                            size: 26,
-                          ),
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    const NotificationTab(),
-                              ),
-                            );
-                          },
-                        ),
-
-                        // =================================================
-                        // BURGER MENU
-                        // =================================================
-
-                        Builder(
-                          builder: (
-                            menuContext,
-                          ) {
-                            return IconButton(
-                              icon: const Icon(
-                                Icons.menu,
-                                color: Colors.white,
-                                size: 26,
-                              ),
-                              onPressed: () {
-                                _showMenu(
-                                  menuContext,
-                                  isDarkMode,
-                                );
-                              },
-                            );
-                          },
                         ),
                       ],
                     ),

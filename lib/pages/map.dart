@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -6,7 +5,6 @@ import 'package:geolocator/geolocator.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:detectco/pages/notification.dart';
 
 // Firebase Realtime Database
 import 'package:firebase_database/firebase_database.dart';
@@ -471,146 +469,6 @@ class _MapTabState extends State<MapTab> {
   }
 
   // =====================================================
-  // BURGER MENU
-  // =====================================================
-
-  void _showMenu(
-    BuildContext menuContext,
-    bool isDarkMode,
-  ) {
-    final RenderBox button =
-        menuContext.findRenderObject() as RenderBox;
-
-    final RenderBox overlay =
-        Overlay.of(menuContext)
-            .context
-            .findRenderObject() as RenderBox;
-
-    final Offset position =
-        button.localToGlobal(
-      Offset.zero,
-      ancestor: overlay,
-    );
-
-    showMenu<String>(
-      context: menuContext,
-      position: RelativeRect.fromLTRB(
-        position.dx - 155,
-        position.dy + 48,
-        overlay.size.width -
-            position.dx -
-            button.size.width,
-        0,
-      ),
-      color: isDarkMode
-          ? const Color(0xFF303030)
-          : Colors.white,
-      elevation: 8,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      items: [
-        PopupMenuItem<String>(
-          value: 'how_to_use',
-          height: 52,
-          child: Row(
-            children: [
-              Icon(
-                Icons.help,
-                color: isDarkMode
-                    ? Colors.white
-                    : const Color(0xFF1D2B4A),
-                size: 22,
-              ),
-
-              const SizedBox(width: 12),
-
-              Text(
-                'How to Use',
-                style: TextStyle(
-                  color: isDarkMode
-                      ? Colors.white
-                      : const Color(0xFF1D2B4A),
-                  fontSize: 16,
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        PopupMenuItem<String>(
-          value: 'terms',
-          height: 52,
-          child: Row(
-            children: [
-              Icon(
-                Icons.description,
-                color: isDarkMode
-                    ? Colors.white
-                    : const Color(0xFF1D2B4A),
-                size: 22,
-              ),
-
-              const SizedBox(width: 12),
-
-              Text(
-                'Terms of Service',
-                style: TextStyle(
-                  color: isDarkMode
-                      ? Colors.white
-                      : const Color(0xFF1D2B4A),
-                  fontSize: 16,
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        PopupMenuItem<String>(
-          value: 'about',
-          height: 52,
-          child: Row(
-            children: [
-              Icon(
-                Icons.info,
-                color: isDarkMode
-                    ? Colors.white
-                    : const Color(0xFF1D2B4A),
-                size: 22,
-              ),
-
-              const SizedBox(width: 12),
-
-              Text(
-                'About app',
-                style: TextStyle(
-                  color: isDarkMode
-                      ? Colors.white
-                      : const Color(0xFF1D2B4A),
-                  fontSize: 16,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    ).then((value) {
-      if (!mounted) return;
-
-      switch (value) {
-        case 'how_to_use':
-          break;
-
-        case 'terms':
-          break;
-
-        case 'about':
-          break;
-      }
-    });
-  }
-
-  // =====================================================
   // BUILD
   // =====================================================
 
@@ -674,53 +532,12 @@ class _MapTabState extends State<MapTab> {
                         // APP NAME
 
                         const Text(
-                          'DETECT-CO',
+                          'Map',
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
                           ),
-                        ),
-
-                        const Spacer(),
-
-                        // NOTIFICATION
-
-                        IconButton(
-                          icon: const Icon(
-                            Icons.notifications_none_rounded,
-                            color: Colors.white,
-                            size: 26,
-                          ),
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    const NotificationTab(),
-                              ),
-                            );
-                          },
-                        ),
-
-                        // BURGER MENU
-
-                        Builder(
-                          builder: (menuContext) {
-                            return IconButton(
-                              icon: const Icon(
-                                Icons.menu_rounded,
-                                color: Colors.white,
-                                size: 26,
-                              ),
-                              onPressed: () {
-                                _showMenu(
-                                  menuContext,
-                                  isDarkMode,
-                                );
-                              },
-                            );
-                          },
                         ),
                       ],
                     ),

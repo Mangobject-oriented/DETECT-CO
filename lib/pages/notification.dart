@@ -760,7 +760,7 @@ class _NotificationTabState extends State<NotificationTab>
                         const SizedBox(width: 8),
 
                         const Text(
-                          'DETECT-CO',
+                          'Notification',
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight:

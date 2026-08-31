@@ -9,6 +9,7 @@ import 'package:detectco/pages/home.dart';
 import 'package:detectco/pages/map.dart';
 import 'package:detectco/pages/evacuate.dart';
 import 'package:detectco/pages/notification.dart';
+import 'package:detectco/pages/menu.dart';
 
 // =====================================================
 // LOCAL NOTIFICATIONS
@@ -16,6 +17,18 @@ import 'package:detectco/pages/notification.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
+
+// =====================================================
+// NOTIFICATION CHANNEL IDs
+//
+// IMPORTANT:
+// Android notification channel settings are persistent.
+// Using a new ID makes sure the custom sound is applied.
+// =====================================================
+
+const String classNotificationChannelId = 'class_alerts';
+
+const String testNotificationChannelId = 'test_alerts_v2';
 
 // =====================================================
 // UNREAD NOTIFICATION COUNT
@@ -26,11 +39,6 @@ final ValueNotifier<int> unreadNotificationCount =
 
 // =====================================================
 // REFRESH UNREAD NOTIFICATION COUNT
-// =====================================================
-//
-// This can be called from notification.dart whenever
-// notifications are deleted or marked as read.
-//
 // =====================================================
 
 Future<void> refreshUnreadNotificationCount() async {
@@ -55,48 +63,260 @@ Future<void> refreshUnreadNotificationCount() async {
 }
 
 // =====================================================
+// INITIALIZE LOCAL NOTIFICATIONS
+//
+// This function is used by BOTH:
+// - foreground
+// - background isolate
+//
+// This is important because the background handler runs
+// separately from the normal Flutter UI isolate.
+// =====================================================
+
+Future<void> initializeLocalNotifications() async {
+  const AndroidInitializationSettings androidSettings =
+      AndroidInitializationSettings('@mipmap/ic_launcher');
+
+  const InitializationSettings initializationSettings =
+      InitializationSettings(
+    android: androidSettings,
+  );
+
+  await flutterLocalNotificationsPlugin.initialize(
+    settings: initializationSettings,
+  );
+
+  final AndroidFlutterLocalNotificationsPlugin? androidPlugin =
+      flutterLocalNotificationsPlugin
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
+
+  if (androidPlugin == null) {
+    print('ANDROID LOCAL NOTIFICATIONS PLUGIN NOT AVAILABLE');
+    return;
+  }
+
+  // ===================================================
+  // CLASS ALERT CHANNEL
+  // ===================================================
+
+  const AndroidNotificationChannel classChannel =
+      AndroidNotificationChannel(
+    classNotificationChannelId,
+    'Class Alerts',
+    description:
+        'Notifications for class suspension announcements.',
+    importance: Importance.max,
+    playSound: true,
+  );
+
+  await androidPlugin.createNotificationChannel(
+    classChannel,
+  );
+
+  // ===================================================
+  // TEST ALERT CHANNEL
+  //
+  // NEW CHANNEL ID:
+  // test_alerts_v2
+  //
+  // This is intentional because Android remembers the
+  // settings of old notification channels.
+  // ===================================================
+
+  const AndroidNotificationChannel testChannel =
+      AndroidNotificationChannel(
+    testNotificationChannelId,
+    'Test Alerts',
+    description:
+        'Custom sound notifications for DETECT-CO testing.',
+    importance: Importance.max,
+    playSound: true,
+    sound: RawResourceAndroidNotificationSound(
+      'test_alert',
+    ),
+  );
+
+  await androidPlugin.createNotificationChannel(
+    testChannel,
+  );
+
+  print('LOCAL NOTIFICATIONS INITIALIZED');
+  print(
+    'Test notification channel: $testNotificationChannelId',
+  );
+  print('Test notification sound: test_alert');
+}
+
+// =====================================================
+// SHOW LOCAL NOTIFICATION
+// =====================================================
+
+Future<void> showLocalNotification({
+  required int id,
+  required String title,
+  required String body,
+  required bool isTestNotification,
+}) async {
+  final String channelId =
+      isTestNotification
+          ? testNotificationChannelId
+          : classNotificationChannelId;
+
+  final String channelName =
+      isTestNotification
+          ? 'Test Alerts'
+          : 'Class Alerts';
+
+  final String channelDescription =
+      isTestNotification
+          ? 'Custom sound notifications for DETECT-CO testing.'
+          : 'Notifications for class suspension announcements.';
+
+  print('--------------------------------');
+  print('SHOWING LOCAL NOTIFICATION');
+  print('Channel ID: $channelId');
+  print('Channel Name: $channelName');
+  print(
+    'Custom Sound: '
+    '${isTestNotification ? 'test_alert' : 'default'}',
+  );
+  print('--------------------------------');
+
+  await flutterLocalNotificationsPlugin.show(
+    id: id,
+    title: title,
+    body: body,
+    notificationDetails: NotificationDetails(
+      android: AndroidNotificationDetails(
+        channelId,
+        channelName,
+        channelDescription: channelDescription,
+
+        importance: Importance.max,
+        priority: Priority.high,
+
+        playSound: true,
+
+        // =================================================
+        // CUSTOM SOUND ONLY FOR TEST NOTIFICATIONS
+        // =================================================
+
+        sound: isTestNotification
+            ? const RawResourceAndroidNotificationSound(
+                'test_alert',
+              )
+            : null,
+
+        enableVibration: true,
+      ),
+    ),
+  );
+}
+
+// =====================================================
 // BACKGROUND FCM HANDLER
 // =====================================================
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(
     RemoteMessage message) async {
+  print('================================');
+  print('BACKGROUND FCM MESSAGE');
+  print('================================');
+
   await Firebase.initializeApp();
 
+  // ===================================================
+  // INITIALIZE LOCAL NOTIFICATIONS IN BACKGROUND
+  // ===================================================
+
+  await initializeLocalNotifications();
+
   print('Background notification received!');
+  print('Message ID: ${message.messageId}');
   print('Title: ${message.notification?.title}');
   print('Body: ${message.notification?.body}');
   print('Type: ${message.data['type']}');
 
-  // =================================================
+  // ===================================================
+  // DETERMINE TYPE
+  // ===================================================
+
+  final bool isTestNotification =
+      message.data['type'] == 'test';
+
+  final String notificationType =
+      message.data['type'] == 'alert'
+          ? 'alert'
+          : 'announcement';
+
+  // ===================================================
   // SAVE NOTIFICATION TO LOCAL HISTORY
-  // =================================================
+  // ===================================================
 
   final RemoteNotification? notification =
       message.notification;
 
-  if (notification != null) {
-    final String type =
-        message.data['type'] == 'alert'
-            ? 'alert'
-            : 'announcement';
+  final String title =
+      notification?.title ??
+      message.data['title'] ??
+      'DETECT-CO';
 
-    await NotificationStorage.saveNotification(
-      AppNotification(
-        id: message.messageId ??
-            DateTime.now()
-                .millisecondsSinceEpoch
-                .toString(),
-        title: notification.title ?? 'DETECT-CO',
-        body: notification.body ?? '',
-        type: type,
-        timestamp: DateTime.now(),
-        isRead: false,
-      ),
+  final String body =
+      notification?.body ??
+      message.data['body'] ??
+      '';
+
+  await NotificationStorage.saveNotification(
+    AppNotification(
+      id: message.messageId ??
+          DateTime.now()
+              .millisecondsSinceEpoch
+              .toString(),
+      title: title,
+      body: body,
+      type: notificationType,
+      timestamp: DateTime.now(),
+      isRead: false,
+    ),
+  );
+
+  print('Background notification saved to history!');
+
+  // ===================================================
+  // IMPORTANT
+  //
+  // Only show a local notification here when the FCM
+  // message does NOT contain a notification payload.
+  //
+  // This prevents duplicate notifications.
+  //
+  // Your test-notification.js should therefore send
+  // the TEST notification as DATA-ONLY.
+  // ===================================================
+
+  if (notification == null) {
+    await showLocalNotification(
+      id: DateTime.now().millisecondsSinceEpoch,
+      title: title,
+      body: body,
+      isTestNotification: isTestNotification,
     );
 
-    print('Background notification saved to history!');
+    print(
+      isTestNotification
+          ? 'BACKGROUND TEST -> CUSTOM SOUND'
+          : 'BACKGROUND CLASS -> NORMAL SOUND',
+    );
+  } else {
+    print(
+      'FCM notification payload detected.'
+      ' Android may display it automatically.',
+    );
   }
+
+  print('================================');
 }
 
 // =====================================================
@@ -113,13 +333,7 @@ void main() async {
   await Firebase.initializeApp();
 
   // ===================================================
-  // LOAD UNREAD NOTIFICATION COUNT
-  // ===================================================
-
-  await refreshUnreadNotificationCount();
-
-  // ===================================================
-  // BACKGROUND FCM
+  // REGISTER BACKGROUND HANDLER
   // ===================================================
 
   FirebaseMessaging.onBackgroundMessage(
@@ -127,71 +341,27 @@ void main() async {
   );
 
   // ===================================================
-  // LOCAL NOTIFICATION INITIALIZATION
+  // LOCAL NOTIFICATIONS
   // ===================================================
 
-  const AndroidInitializationSettings androidSettings =
-      AndroidInitializationSettings('@mipmap/ic_launcher');
-
-  const InitializationSettings initializationSettings =
-      InitializationSettings(
-    android: androidSettings,
-  );
-
-  await flutterLocalNotificationsPlugin.initialize(
-    settings: initializationSettings,
-  );
+  await initializeLocalNotifications();
 
   // ===================================================
-  // ANDROID NOTIFICATION CHANNEL
+  // LOAD UNREAD NOTIFICATION COUNT
   // ===================================================
 
-  const AndroidNotificationChannel channel =
-      AndroidNotificationChannel(
-    'class_alerts',
-    'Class Alerts',
-    description:
-        'Notifications for class suspension announcements.',
-    importance: Importance.max,
-    playSound: true,
-  );
-
-  final AndroidFlutterLocalNotificationsPlugin? androidPlugin =
-      flutterLocalNotificationsPlugin
-          .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>();
-
-  await androidPlugin?.createNotificationChannel(
-    channel,
-  );
+  await refreshUnreadNotificationCount();
 
   // ===================================================
-  // TEST NOTIFICATION CHANNEL
-  // ===================================================
-
-  const AndroidNotificationChannel testChannel =
-      AndroidNotificationChannel(
-    'test_alerts',
-    'Test Alerts',
-    description:
-        'Custom sound notifications for DETECT-CO testing.',
-    importance: Importance.max,
-    playSound: true,
-    sound: RawResourceAndroidNotificationSound(
-      'test_alert',
-    ),
-  );
-
-  await androidPlugin?.createNotificationChannel(
-    testChannel,
-  );
-
-  // ===================================================
-  // REQUEST NOTIFICATION PERMISSION
+  // FIREBASE MESSAGING
   // ===================================================
 
   final FirebaseMessaging messaging =
       FirebaseMessaging.instance;
+
+  // ===================================================
+  // REQUEST NOTIFICATION PERMISSION
+  // ===================================================
 
   final NotificationSettings settings =
       await messaging.requestPermission(
@@ -228,7 +398,8 @@ void main() async {
   print('FCM: Getting token...');
 
   try {
-    final String? token = await messaging.getToken();
+    final String? token =
+        await messaging.getToken();
 
     print('FCM: Token request completed.');
     print('FCM TOKEN: $token');
@@ -243,44 +414,74 @@ void main() async {
   FirebaseMessaging.onMessage.listen(
     (RemoteMessage message) async {
       print('================================');
-      print('NOTIFICATION RECEIVED!');
+      print('FOREGROUND FCM MESSAGE');
+      print('================================');
+
       print(
         'Title: ${message.notification?.title}',
       );
+
       print(
         'Body: ${message.notification?.body}',
       );
+
       print(
         'Type: ${message.data['type']}',
       );
-      print('================================');
+
+      print(
+        'Data: ${message.data}',
+      );
 
       final RemoteNotification? notification =
           message.notification;
 
-      if (notification == null) {
-        return;
-      }
+      // =================================================
+      // GET TITLE/BODY
+      // =================================================
+
+      final String title =
+          notification?.title ??
+          message.data['title'] ??
+          'DETECT-CO';
+
+      final String body =
+          notification?.body ??
+          message.data['body'] ??
+          '';
 
       // =================================================
-      // DETERMINE NOTIFICATION TYPE
+      // DETERMINE TEST NOTIFICATION
       // =================================================
 
       final bool isTestNotification =
           message.data['type'] == 'test';
+
+      // =================================================
+      // DETERMINE HISTORY TYPE
+      // =================================================
 
       final String notificationType =
           message.data['type'] == 'alert'
               ? 'alert'
               : 'announcement';
 
+      // =================================================
+      // DEBUG
+      // =================================================
+
       if (isTestNotification) {
-        print('TEST NOTIFICATION -> CUSTOM SOUND');
-        print('Channel: test_alerts');
+        print('--------------------------------');
+        print('TEST NOTIFICATION DETECTED');
+        print('Channel: $testNotificationChannelId');
         print('Sound: test_alert');
+        print('--------------------------------');
       } else {
-        print('CLASS NOTIFICATION -> NORMAL SOUND');
-        print('Channel: class_alerts');
+        print('--------------------------------');
+        print('CLASS NOTIFICATION DETECTED');
+        print('Channel: $classNotificationChannelId');
+        print('Sound: DEFAULT');
+        print('--------------------------------');
       }
 
       // =================================================
@@ -293,8 +494,8 @@ void main() async {
               DateTime.now()
                   .millisecondsSinceEpoch
                   .toString(),
-          title: notification.title ?? 'DETECT-CO',
-          body: notification.body ?? '',
+          title: title,
+          body: body,
           type: notificationType,
           timestamp: DateTime.now(),
           isRead: false,
@@ -318,33 +519,17 @@ void main() async {
       // SHOW LOCAL NOTIFICATION
       // =================================================
 
-      await flutterLocalNotificationsPlugin.show(
-        id: notification.hashCode,
-        title: notification.title ?? 'DETECT CO',
-        body: notification.body ?? '',
-        notificationDetails: NotificationDetails(
-          android: AndroidNotificationDetails(
-            isTestNotification
-                ? 'test_alerts'
-                : 'class_alerts',
-            isTestNotification
-                ? 'Test Alerts'
-                : 'Class Alerts',
-            channelDescription:
-                isTestNotification
-                    ? 'Custom sound notifications for DETECT-CO testing.'
-                    : 'Notifications for class suspension announcements.',
-            importance: Importance.max,
-            priority: Priority.high,
-            playSound: true,
-            sound: isTestNotification
-                ? const RawResourceAndroidNotificationSound(
-                    'test_alert',
-                  )
-                : null,
-          ),
-        ),
+      await showLocalNotification(
+        id: message.messageId?.hashCode ??
+            DateTime.now().millisecondsSinceEpoch,
+        title: title,
+        body: body,
+        isTestNotification: isTestNotification,
       );
+
+      print('Local notification displayed.');
+
+      print('================================');
     },
   );
 
@@ -373,16 +558,28 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ValueListenableBuilder<bool>(
       valueListenable: isDarkModeNotifier,
-      builder: (context, isDarkMode, child) {
+      builder: (
+        context,
+        isDarkMode,
+        child,
+      ) {
         return MaterialApp(
           title: 'DETECT CO',
           debugShowCheckedModeBanner: false,
+
+          // =================================================
+          // LIGHT THEME
+          // =================================================
 
           theme: ThemeData(
             brightness: Brightness.light,
             primarySwatch: Colors.blue,
             scaffoldBackgroundColor: Colors.white,
           ),
+
+          // =================================================
+          // DARK THEME
+          // =================================================
 
           darkTheme: ThemeData(
             brightness: Brightness.dark,
@@ -416,22 +613,48 @@ class BottomNavPage extends StatefulWidget {
 
 class _BottomNavPageState
     extends State<BottomNavPage> {
-  int _currentIndex = 0;
+
+  // ===================================================
+  // START ON HOME
+  //
+  // 0 = Evacuate
+  // 1 = Map
+  // 2 = Home
+  // 3 = Notifications
+  // 4 = Menu
+  // ===================================================
+
+  int _currentIndex = 2;
 
   final GlobalKey<CurvedNavigationBarState> _navKey =
       GlobalKey<CurvedNavigationBarState>();
 
+  // ===================================================
+  // TABS
+  // ===================================================
+
   final List<Widget> _tabs = const [
-    HomeTab(),
-    MapTab(),
     EvacuateTab(),
+    MapTab(),
+    HomeTab(),
+    NotificationTab(),
+    MenuTab(),
   ];
 
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<bool>(
       valueListenable: isDarkModeNotifier,
-      builder: (context, isDarkMode, child) {
+
+      builder: (
+        context,
+        isDarkMode,
+        child,
+      ) {
+        // =================================================
+        // NAVIGATION COLORS
+        // =================================================
+
         final Color navBackground =
             isDarkMode
                 ? const Color(0xFF212121)
@@ -442,53 +665,351 @@ class _BottomNavPageState
                 ? const Color(0xFF303030)
                 : const Color(0xFF0353A4);
 
+        // =================================================
+        // ICON COLORS
+        // =================================================
+
         final Color iconColor =
+            Colors.white;
+
+        // =================================================
+        // SELECTED BUTTON
+        // =================================================
+
+        final Color selectedButtonColor =
             isDarkMode
-                ? Colors.white70
-                : Colors.white;
+                ? const Color(0xFF424242)
+                : const Color(0xFF0353A4);
+
+        final Color selectedIconColor =
+            Colors.white;
 
         return Scaffold(
           backgroundColor: navBackground,
+
+          // =================================================
+          // CURRENT TAB
+          // =================================================
+
           body: _tabs[_currentIndex],
 
-          bottomNavigationBar:
-              CurvedNavigationBar(
-            key: _navKey,
-            index: _currentIndex,
-            height: 55,
-            backgroundColor: navBackground,
+          // =================================================
+          // BOTTOM NAVIGATION
+          // =================================================
+
+          bottomNavigationBar: Container(
+            height: 75,
             color: barColor,
-            buttonBackgroundColor: barColor,
-            animationDuration:
-                const Duration(milliseconds: 350),
-            animationCurve: Curves.easeInOut,
 
-            items: [
-              Icon(
-                Icons.home,
-                size: 26,
-                color: iconColor,
-              ),
-              Icon(
-                Icons.map,
-                size: 26,
-                color: iconColor,
-              ),
-              Icon(
-                Icons.directions_run,
-                size: 26,
-                color: iconColor,
-              ),
-            ],
+            child: Stack(
+              children: [
 
-            onTap: (index) {
-              setState(() {
-                _currentIndex = index;
-              });
-            },
+                // =================================================
+                // CURVED NAVIGATION BAR
+                // =================================================
+
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  height: 55,
+
+                  child: CurvedNavigationBar(
+                    key: _navKey,
+
+                    index: _currentIndex,
+
+                    height: 55,
+
+                    backgroundColor:
+                        navBackground,
+
+                    color:
+                        barColor,
+
+                    // =================================================
+                    // SELECTED ICON CIRCLE
+                    // =================================================
+
+                    buttonBackgroundColor:
+                        selectedButtonColor,
+
+                    // =================================================
+                    // ANIMATION
+                    // =================================================
+
+                    animationDuration:
+                        const Duration(
+                      milliseconds: 350,
+                    ),
+
+                    animationCurve:
+                        Curves.easeInOut,
+
+                    // =================================================
+                    // ICONS
+                    // =================================================
+
+                    items: [
+
+                      // =================================================
+                      // EVACUATE
+                      // =================================================
+
+                      Icon(
+                        Icons.directions_run,
+                        size: 26,
+                        color:
+                            _currentIndex == 0
+                                ? selectedIconColor
+                                : iconColor,
+                      ),
+
+                      // =================================================
+                      // MAP
+                      // =================================================
+
+                      Icon(
+                        Icons.map,
+                        size: 26,
+                        color:
+                            _currentIndex == 1
+                                ? selectedIconColor
+                                : iconColor,
+                      ),
+
+                      // =================================================
+                      // HOME
+                      // =================================================
+
+                      Icon(
+                        Icons.home,
+                        size: 26,
+                        color:
+                            _currentIndex == 2
+                                ? selectedIconColor
+                                : iconColor,
+                      ),
+
+                      // =================================================
+                      // NOTIFICATIONS
+                      // =================================================
+
+                      ValueListenableBuilder<int>(
+                        valueListenable:
+                            unreadNotificationCount,
+
+                        builder: (
+                          context,
+                          unreadCount,
+                          child,
+                        ) {
+                          return Stack(
+                            clipBehavior:
+                                Clip.none,
+
+                            children: [
+
+                              Icon(
+                                Icons
+                                    .notifications_none_rounded,
+                                size: 26,
+                                color:
+                                    _currentIndex == 3
+                                        ? selectedIconColor
+                                        : iconColor,
+                              ),
+
+                              // =================================================
+                              // RED UNREAD BADGE
+                              // =================================================
+
+                              if (unreadCount > 0)
+                                Positioned(
+                                  right: -8,
+                                  top: -8,
+
+                                  child:
+                                      Container(
+                                    constraints:
+                                        const BoxConstraints(
+                                      minWidth: 18,
+                                      minHeight: 18,
+                                    ),
+
+                                    padding:
+                                        const EdgeInsets
+                                            .symmetric(
+                                      horizontal: 4,
+                                    ),
+
+                                    decoration:
+                                        BoxDecoration(
+                                      color:
+                                          Colors.red,
+
+                                      borderRadius:
+                                          BorderRadius
+                                              .circular(
+                                        20,
+                                      ),
+
+                                      border:
+                                          Border.all(
+                                        color:
+                                            Colors.white,
+                                        width: 1.5,
+                                      ),
+                                    ),
+
+                                    child: Text(
+                                      unreadCount >
+                                              99
+                                          ? '99+'
+                                          : unreadCount
+                                              .toString(),
+
+                                      textAlign:
+                                          TextAlign.center,
+
+                                      style:
+                                          const TextStyle(
+                                        color:
+                                            Colors.white,
+                                        fontSize:
+                                            10,
+                                        fontWeight:
+                                            FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          );
+                        },
+                      ),
+
+                      // =================================================
+                      // MENU
+                      // =================================================
+
+                      Icon(
+                        Icons.menu_rounded,
+                        size: 26,
+                        color:
+                            _currentIndex == 4
+                                ? selectedIconColor
+                                : iconColor,
+                      ),
+                    ],
+
+                    // =================================================
+                    // NAVIGATION TAP
+                    // =================================================
+
+                    onTap: (index) {
+                      setState(() {
+                        _currentIndex = index;
+                      });
+                    },
+                  ),
+                ),
+
+                // =================================================
+                // LABELS
+                // =================================================
+
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 15,
+                  height: 14,
+
+                  child: Row(
+                    children: [
+
+                      Expanded(
+                        child: _buildLabel(
+                          'Evac',
+                          0,
+                        ),
+                      ),
+
+                      Expanded(
+                        child: _buildLabel(
+                          'Map',
+                          1,
+                        ),
+                      ),
+
+                      Expanded(
+                        child: _buildLabel(
+                          'Home',
+                          2,
+                        ),
+                      ),
+
+                      Expanded(
+                        child: _buildLabel(
+                          'Notifications',
+                          3,
+                        ),
+                      ),
+
+                      Expanded(
+                        child: _buildLabel(
+                          'Menu',
+                          4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },
+    );
+  }
+
+  // =====================================================
+  // NAVIGATION LABEL
+  // =====================================================
+
+  Widget _buildLabel(
+    String label,
+    int index,
+  ) {
+    final bool isSelected =
+        _currentIndex == index;
+
+    return Center(
+      child: Text(
+        label,
+
+        maxLines: 1,
+
+        overflow:
+            TextOverflow.ellipsis,
+
+        textAlign:
+            TextAlign.center,
+
+        style: TextStyle(
+          fontSize: 10,
+
+          fontWeight:
+              isSelected
+                  ? FontWeight.bold
+                  : FontWeight.w500,
+
+          color:
+              isSelected
+                  ? Colors.white
+                  : Colors.white70,
+        ),
+      ),
     );
   }
 }

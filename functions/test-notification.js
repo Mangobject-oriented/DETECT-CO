@@ -14,8 +14,8 @@ async function sendTestNotification() {
       topic: "detect_co_announcements",
 
       notification: {
-        title: "DETECT-CO ANNOUNCEMENT",
-        body: "kurt papwet",
+        title: "Mj kay peter ",
+        body: "I don't love you",
       },
 
       android: {
@@ -26,7 +26,7 @@ async function sendTestNotification() {
       },
 
       data: {
-        type: "alert",
+        type: "test",
         message: "Manual notification test",
       },
     });
