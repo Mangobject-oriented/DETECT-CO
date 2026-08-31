@@ -1,3 +1,4 @@
+
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -19,9 +20,9 @@ class _HomeTabState extends State<HomeTab>
   // WATER SETTINGS
   // =====================================================
 
-  // Maximum water level is now 3 meters = 300 cm.
+  // Maximum water level is 200 cm.
   // The value displayed to the user remains in centimeters.
-  static const double maxWaterLevel = 300.0;
+  static const double maxWaterLevel = 200.0;
 
   static const double idleWaterLevel = 40.0;
 
@@ -204,171 +205,175 @@ class _HomeTabState extends State<HomeTab>
                 _previousWaterLevel =
                     waterLevel;
 
-                return SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
-                    children: [
+                // =====================================================
+                // FIXED PAGE - NO SCROLLING
+                // =====================================================
 
-                      // =================================================
-                      // HEADER
-                      // =================================================
+                return Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: [
 
-                      Container(
-                        height: topHeight,
-                        width: double.infinity,
-                        alignment: Alignment.topCenter,
-                        color: isDarkMode
-                            ? const Color(0xFF212121)
-                            : const Color.fromARGB(
-                                255,
-                                72,
-                                119,
-                                247,
-                              ),
-                        child: SafeArea(
-                          bottom: false,
-                          child: Padding(
-                            padding:
-                                const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
+                    // =================================================
+                    // HEADER
+                    // =================================================
+
+                    Container(
+                      height: topHeight,
+                      width: double.infinity,
+                      alignment: Alignment.topCenter,
+                      color: isDarkMode
+                          ? const Color(0xFF212121)
+                          : const Color.fromARGB(
+                              255,
+                              72,
+                              119,
+                              247,
                             ),
-                            child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-                              children: [
+                      child: SafeArea(
+                        bottom: false,
+                        child: Padding(
+                          padding:
+                              const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          child: Column(
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                            children: [
 
-                                // =====================================
-                                // HEADER TOP ROW
-                                // =====================================
+                              // =====================================
+                              // HEADER TOP ROW
+                              // =====================================
 
-                                Row(
-                                  children: [
+                              Row(
+                                children: [
 
-                                    GestureDetector(
-                                      onDoubleTap:
-                                          toggleTheme,
-                                      child: SizedBox(
-                                        width: 50,
-                                        height: 50,
-                                        child: Image.asset(
-                                          "assets/icon/detect-co_logo.png",
-                                        ),
+                                  GestureDetector(
+                                    onDoubleTap:
+                                        toggleTheme,
+                                    child: SizedBox(
+                                      width: 50,
+                                      height: 50,
+                                      child: Image.asset(
+                                        "assets/icon/detect-co_logo.png",
                                       ),
                                     ),
+                                  ),
 
-                                    const SizedBox(
-                                      width: 8,
+                                  const SizedBox(
+                                    width: 8,
+                                  ),
+
+                                  const Text(
+                                    'DETECT-CO',
+                                    style: TextStyle(
+                                      fontSize: 20,
+                                      fontWeight:
+                                          FontWeight.bold,
+                                      color: Colors.white,
                                     ),
+                                  ),
 
-                                    const Text(
-                                      'DETECT-CO',
+                                  const Spacer(),
+                                ],
+                              ),
+
+                              const SizedBox(
+                                height: 12,
+                              ),
+
+                              // =====================================
+                              // GREETING
+                              // =====================================
+
+                              Row(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+
+                                  const Expanded(
+                                    child: Text(
+                                      'Hello, Mike!',
                                       style: TextStyle(
-                                        fontSize: 20,
+                                        fontSize: 18,
                                         fontWeight:
-                                            FontWeight.bold,
-                                        color: Colors.white,
+                                            FontWeight.w500,
+                                        color:
+                                            Colors.white,
                                       ),
                                     ),
+                                  ),
 
-                                    const Spacer(),
-                                  ],
-                                ),
-
-                                const SizedBox(
-                                  height: 12,
-                                ),
-
-                                // =====================================
-                                // GREETING
-                                // =====================================
-
-                                Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-
-                                    const Expanded(
-                                      child: Text(
-                                        'Hello, Mike!',
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          fontWeight:
-                                              FontWeight.w500,
-                                          color:
-                                              Colors.white,
-                                        ),
+                                  Text(
+                                    'Last Synced',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.white
+                                          .withOpacity(
+                                        0.85,
                                       ),
                                     ),
+                                  ),
+                                ],
+                              ),
 
-                                    Text(
-                                      'Last Synced',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.white
-                                            .withOpacity(
-                                          0.85,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                              const SizedBox(
+                                height: 4,
+                              ),
 
-                                const SizedBox(
-                                  height: 4,
-                                ),
+                              // =====================================
+                              // LOCATION / TIME
+                              // =====================================
 
-                                // =====================================
-                                // LOCATION / TIME
-                                // =====================================
+                              Row(
+                                children: [
 
-                                Row(
-                                  children: [
+                                  const Icon(
+                                    Icons.location_on,
+                                    color:
+                                        Colors.white70,
+                                    size: 16,
+                                  ),
 
-                                    const Icon(
-                                      Icons.location_on,
+                                  const SizedBox(
+                                    width: 4,
+                                  ),
+
+                                  const Text(
+                                    'Barangay Biringan',
+                                    style: TextStyle(
+                                      fontSize: 14,
                                       color:
                                           Colors.white70,
-                                      size: 16,
                                     ),
+                                  ),
 
-                                    const SizedBox(
-                                      width: 4,
+                                  const Spacer(),
+
+                                  const Text(
+                                    'Time Check haydol',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color:
+                                          Colors.white70,
                                     ),
-
-                                    const Text(
-                                      'Barangay Biringan',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color:
-                                            Colors.white70,
-                                      ),
-                                    ),
-
-                                    const Spacer(),
-
-                                    const Text(
-                                      'Time Check haydol',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color:
-                                            Colors.white70,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
                         ),
                       ),
+                    ),
 
-                      // =================================================
-                      // SENSOR CARD
-                      // =================================================
+                    // =================================================
+                    // SENSOR CARD
+                    // =================================================
 
-                      Transform.translate(
+                    Expanded(
+                      child: Transform.translate(
                         offset:
                             const Offset(0, -100),
                         child: Padding(
@@ -377,8 +382,9 @@ class _HomeTabState extends State<HomeTab>
                             horizontal: 20,
                           ),
                           child: Container(
+                            width: double.infinity,
                             padding:
-                                const EdgeInsets.all(20),
+                                const EdgeInsets.all(16),
                             decoration: BoxDecoration(
                               color: isDarkMode
                                   ? const Color(0xFF2C2C2C)
@@ -499,460 +505,590 @@ class _HomeTabState extends State<HomeTab>
                                 ),
 
                                 const SizedBox(
-                                  height: 24,
+                                  height: 10,
                                 ),
 
                                 // =================================================
                                 // WATER LEVEL + HUMIDITY
                                 // =================================================
 
-                                Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
+                                Expanded(
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment
+                                            .start,
+                                    children: [
 
-                                    // =================================================
-                                    // WATER LEVEL
-                                    // =================================================
+                                      // =================================================
+                                      // WIDER WATER LEVEL
+                                      // =================================================
 
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment
-                                                .center,
-                                        children: [
+                                      Expanded(
+                                        flex: 6,
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment
+                                                  .center,
+                                          children: [
 
-                                          Text(
-                                            'Water Level',
-                                            style:
-                                                TextStyle(
-                                              fontSize: 15,
-                                              fontWeight:
-                                                  FontWeight
-                                                      .w600,
-                                              color:
-                                                  isDarkMode
-                                                      ? Colors
-                                                          .white
-                                                      : Colors
-                                                          .black,
+                                            Text(
+                                              'Water Level',
+                                              style:
+                                                  TextStyle(
+                                                fontSize: 15,
+                                                fontWeight:
+                                                    FontWeight
+                                                        .w600,
+                                                color:
+                                                    isDarkMode
+                                                        ? Colors
+                                                            .white
+                                                        : Colors
+                                                            .black,
+                                              ),
                                             ),
-                                          ),
 
-                                          const SizedBox(
-                                            height: 10,
-                                          ),
+                                            const SizedBox(
+                                              height: 6,
+                                            ),
 
-                                          SizedBox(
-                                            height: 214,
-                                            child:
-                                                LayoutBuilder(
+                                            Expanded(
+                                              child:
+                                                  LayoutBuilder(
+                                                builder:
+                                                    (
+                                                  context,
+                                                  constraints,
+                                                ) {
+
+                                                  // =================================================
+                                                  // WIDER WATER CONTAINER + SCALE
+                                                  // =================================================
+
+                                                  final double
+                                                      tubeCanvasWidth =
+                                                      math.min(
+                                                    180,
+                                                    constraints
+                                                            .maxWidth *
+                                                        0.62,
+                                                  );
+
+                                                  return Row(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .center,
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    children: [
+
+                                                      // =============================================
+                                                      // WATER CONTAINER
+                                                      // =============================================
+
+                                                      SizedBox(
+                                                        width:
+                                                            tubeCanvasWidth +
+                                                                8,
+                                                        child:
+                                                            Column(
+                                                          crossAxisAlignment:
+                                                              CrossAxisAlignment
+                                                                  .center,
+                                                          children: [
+
+                                                            // =====================================
+                                                            // WATER LEVEL TEXT
+                                                            // =====================================
+
+                                                            TweenAnimationBuilder<
+                                                                double>(
+                                                              tween:
+                                                                  Tween<
+                                                                      double>(
+                                                                begin:
+                                                                    animationStart,
+                                                                end:
+                                                                    animationEnd,
+                                                              ),
+                                                              duration:
+                                                                  const Duration(
+                                                                milliseconds:
+                                                                    800,
+                                                              ),
+                                                              curve:
+                                                                  Curves.easeInOut,
+                                                              builder:
+                                                                  (
+                                                                context,
+                                                                animatedLevel,
+                                                                child,
+                                                              ) {
+                                                                return Text(
+                                                                  sensorActive
+                                                                      ? '${animatedLevel.toStringAsFixed(1)} cm'
+                                                                      : 'IDLE',
+                                                                  style:
+                                                                      TextStyle(
+                                                                    fontSize:
+                                                                        20,
+                                                                    fontWeight:
+                                                                        FontWeight.bold,
+                                                                    color:
+                                                                        isDarkMode
+                                                                            ? Colors.white
+                                                                            : Colors.black,
+                                                                  ),
+                                                                );
+                                                              },
+                                                            ),
+
+                                                            const SizedBox(
+                                                              height: 2,
+                                                            ),
+
+                                                            Expanded(
+                                                              child:
+                                                                  Center(
+                                                                child:
+                                                                    _WaterWithDuck(
+                                                                  width:
+                                                                      tubeCanvasWidth,
+                                                                  height:
+                                                                      constraints.maxHeight -
+                                                                          34,
+                                                                  animation:
+                                                                      _waterAnimationController,
+                                                                  animationStart:
+                                                                      animationStart,
+                                                                  animationEnd:
+                                                                      animationEnd,
+                                                                  maxWaterLevel:
+                                                                      maxWaterLevel,
+                                                                  isDark:
+                                                                      isDarkMode,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+
+                                                      const SizedBox(
+                                                        width: 8,
+                                                      ),
+
+                                                      // =============================================
+                                                      // GAUGE SCALE
+                                                      // =============================================
+
+                                                      Expanded(
+                                                        child:
+                                                            Padding(
+                                                          padding:
+                                                              const EdgeInsets
+                                                                  .only(
+                                                            top: 34,
+                                                            left: 0,
+                                                          ),
+                                                          child:
+                                                              SizedBox(
+                                                            height:
+                                                                constraints.maxHeight -
+                                                                    34,
+                                                            child:
+                                                                Column(
+                                                              mainAxisAlignment:
+                                                                  MainAxisAlignment
+                                                                      .spaceBetween,
+                                                              crossAxisAlignment:
+                                                                  CrossAxisAlignment
+                                                                      .start,
+                                                              children: [
+
+                                                                Text(
+                                                                  '200 cm',
+                                                                  style:
+                                                                      TextStyle(
+                                                                    color:
+                                                                        Colors.red.shade400,
+                                                                    fontWeight:
+                                                                        FontWeight.bold,
+                                                                    fontSize:
+                                                                        10,
+                                                                  ),
+                                                                ),
+
+                                                                Text(
+                                                                  '180 cm',
+                                                                  style:
+                                                                      TextStyle(
+                                                                    color:
+                                                                        Colors.red.shade400,
+                                                                    fontWeight:
+                                                                        FontWeight.bold,
+                                                                    fontSize:
+                                                                        10,
+                                                                  ),
+                                                                ),
+
+                                                                Text(
+                                                                  '160 cm',
+                                                                  style:
+                                                                      TextStyle(
+                                                                    color:
+                                                                        Colors.red.shade400,
+                                                                    fontWeight:
+                                                                        FontWeight.bold,
+                                                                    fontSize:
+                                                                        10,
+                                                                  ),
+                                                                ),
+
+                                                                Text(
+                                                                  '140 cm',
+                                                                  style:
+                                                                      TextStyle(
+                                                                    color:
+                                                                        Colors.orange.shade700,
+                                                                    fontWeight:
+                                                                        FontWeight.bold,
+                                                                    fontSize:
+                                                                        10,
+                                                                  ),
+                                                                ),
+
+                                                                Text(
+                                                                  '120 cm',
+                                                                  style:
+                                                                      TextStyle(
+                                                                    color:
+                                                                        Colors.orange.shade700,
+                                                                    fontWeight:
+                                                                        FontWeight.bold,
+                                                                    fontSize:
+                                                                        10,
+                                                                  ),
+                                                                ),
+
+                                                                Text(
+                                                                  '100 cm',
+                                                                  style:
+                                                                      TextStyle(
+                                                                    color:
+                                                                        Colors.orange.shade700,
+                                                                    fontWeight:
+                                                                        FontWeight.bold,
+                                                                    fontSize:
+                                                                        10,
+                                                                  ),
+                                                                ),
+
+                                                                Text(
+                                                                  '80 cm',
+                                                                  style:
+                                                                      TextStyle(
+                                                                    color:
+                                                                        Colors.orange.shade300,
+                                                                    fontWeight:
+                                                                        FontWeight.bold,
+                                                                    fontSize:
+                                                                        10,
+                                                                  ),
+                                                                ),
+
+                                                                Text(
+                                                                  '60 cm',
+                                                                  style:
+                                                                      TextStyle(
+                                                                    color:
+                                                                        Colors.orange.shade300,
+                                                                    fontWeight:
+                                                                        FontWeight.bold,
+                                                                    fontSize:
+                                                                        10,
+                                                                  ),
+                                                                ),
+
+                                                                Text(
+                                                                  '40 cm',
+                                                                  style:
+                                                                      TextStyle(
+                                                                    color:
+                                                                        Colors.orange.shade300,
+                                                                    fontWeight:
+                                                                        FontWeight.bold,
+                                                                    fontSize:
+                                                                        10,
+                                                                  ),
+                                                                ),
+
+                                                                Text(
+                                                                  '20 cm',
+                                                                  style:
+                                                                      TextStyle(
+                                                                    color:
+                                                                        Colors.green.shade600,
+                                                                    fontWeight:
+                                                                        FontWeight.bold,
+                                                                    fontSize:
+                                                                        10,
+                                                                  ),
+                                                                ),
+
+                                                                Text(
+                                                                  '0 cm',
+                                                                  style:
+                                                                      TextStyle(
+                                                                    color:
+                                                                        Colors.green.shade600,
+                                                                    fontWeight:
+                                                                        FontWeight.bold,
+                                                                    fontSize:
+                                                                        10,
+                                                                  ),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  );
+                                                },
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+
+                                      const SizedBox(
+                                        width: 12,
+                                      ),
+
+                                      // =================================================
+                                      // HUMIDITY + FLOOD STATUS
+                                      // =================================================
+
+                                      Expanded(
+                                        flex: 4,
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment
+                                                  .center,
+                                          children: [
+
+                                            Text(
+                                              'Humidity',
+                                              style:
+                                                  TextStyle(
+                                                fontSize: 15,
+                                                fontWeight:
+                                                    FontWeight
+                                                        .w600,
+                                                color:
+                                                    isDarkMode
+                                                        ? Colors
+                                                            .white
+                                                        : Colors
+                                                            .black,
+                                              ),
+                                            ),
+
+                                            const SizedBox(
+                                              height: 6,
+                                            ),
+
+                                            // =================================================
+                                            // HUMIDITY GAUGE
+                                            // =================================================
+
+                                            LayoutBuilder(
                                               builder:
                                                   (
                                                 context,
                                                 constraints,
                                               ) {
                                                 final double
-                                                    tubeCanvasWidth =
-                                                        constraints
-                                                                .maxWidth *
-                                                            0.7;
+                                                    gaugeSize =
+                                                    math.min(
+                                                  150,
+                                                  constraints
+                                                      .maxWidth,
+                                                );
 
-                                                return Row(
-                                                  mainAxisAlignment:
-                                                      MainAxisAlignment
-                                                          .start,
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment
-                                                          .start,
-                                                  children: [
-
-                                                    Padding(
+                                                return CustomPaint(
+                                                  size: Size(
+                                                    gaugeSize,
+                                                    gaugeSize *
+                                                        0.6,
+                                                  ),
+                                                  painter:
+                                                      _HumidityGaugePainter(
+                                                    percent:
+                                                        (humidity /
+                                                                100)
+                                                            .clamp(
+                                                              0,
+                                                              1,
+                                                            )
+                                                            .toDouble(),
+                                                    isDark:
+                                                        isDarkMode,
+                                                  ),
+                                                  child:
+                                                      SizedBox(
+                                                    width:
+                                                        gaugeSize,
+                                                    height:
+                                                        gaugeSize *
+                                                            0.6,
+                                                    child:
+                                                        Padding(
                                                       padding:
                                                           const EdgeInsets
                                                               .only(
-                                                        left: 8,
+                                                        top: 26,
                                                       ),
                                                       child:
-                                                          Column(
-                                                        crossAxisAlignment:
-                                                            CrossAxisAlignment
-                                                                .center,
-                                                        children: [
-
-                                                          // =================================================
-                                                          // WATER LEVEL TEXT
-                                                          // =================================================
-
-                                                          TweenAnimationBuilder<
-                                                              double>(
-                                                            tween:
-                                                                Tween<
-                                                                    double>(
-                                                              begin:
-                                                                  animationStart,
-                                                              end:
-                                                                  animationEnd,
-                                                            ),
-                                                            duration:
-                                                                const Duration(
-                                                              milliseconds:
-                                                                  800,
-                                                            ),
-                                                            curve:
-                                                                Curves.easeInOut,
-                                                            builder:
-                                                                (
-                                                              context,
-                                                              animatedLevel,
-                                                              child,
-                                                            ) {
-                                                              return Text(
-                                                                sensorActive
-                                                                    ? '${animatedLevel.toStringAsFixed(1)} cm'
-                                                                    : 'IDLE',
-                                                                style:
-                                                                    TextStyle(
-                                                                  fontSize:
-                                                                      20,
-                                                                  fontWeight:
-                                                                      FontWeight.bold,
-                                                                  color:
-                                                                      isDarkMode
-                                                                          ? Colors.white
-                                                                          : Colors.black,
-                                                                ),
-                                                              );
-                                                            },
-                                                          ),
-
-                                                          const SizedBox(
-                                                            height: 4,
-                                                          ),
-
-                                                          // =================================================
-                                                          // WATER + DUCK
-                                                          // =================================================
-
-                                                          _WaterWithDuck(
-                                                            width:
-                                                                tubeCanvasWidth,
-                                                            height:
-                                                                180,
-                                                            animation:
-                                                                _waterAnimationController,
-                                                            animationStart:
-                                                                animationStart,
-                                                            animationEnd:
-                                                                animationEnd,
-                                                            maxWaterLevel:
-                                                                maxWaterLevel,
-                                                            isDark:
-                                                                isDarkMode,
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ),
-
-                                                    // =================================================
-                                                    // GAUGE SCALE
-                                                    // =================================================
-
-                                                    Expanded(
-                                                      child:
-                                                          Padding(
-                                                        padding:
-                                                            const EdgeInsets
-                                                                .only(
-                                                          top: 34,
-                                                        ),
+                                                          Center(
                                                         child:
-                                                            SizedBox(
-                                                          height:
-                                                              180,
-                                                          child:
-                                                              Column(
-                                                            mainAxisAlignment:
-                                                                MainAxisAlignment
-                                                                    .spaceBetween,
-                                                            crossAxisAlignment:
-                                                                CrossAxisAlignment
-                                                                    .start,
-                                                            children: [
-
-                                                              Text(
-                                                                '300 cm',
-                                                                style:
-                                                                    TextStyle(
-                                                                  color:
-                                                                      Colors.red.shade400,
-                                                                  fontWeight:
-                                                                      FontWeight.bold,
-                                                                  fontSize:
-                                                                      11,
-                                                                ),
-                                                              ),
-
-                                                              Text(
-                                                                '200 cm',
-                                                                style:
-                                                                    TextStyle(
-                                                                  color:
-                                                                      Colors.orange.shade700,
-                                                                  fontWeight:
-                                                                      FontWeight.bold,
-                                                                  fontSize:
-                                                                      11,
-                                                                ),
-                                                              ),
-
-                                                              Text(
-                                                                '100 cm',
-                                                                style:
-                                                                    TextStyle(
-                                                                  color:
-                                                                      Colors.orange.shade300,
-                                                                  fontWeight:
-                                                                      FontWeight.bold,
-                                                                  fontSize:
-                                                                      11,
-                                                                ),
-                                                              ),
-                                                            ],
+                                                            Text(
+                                                          '${humidity.toStringAsFixed(0)}%',
+                                                          style:
+                                                              TextStyle(
+                                                            fontSize:
+                                                                24,
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            color:
+                                                                isDarkMode
+                                                                    ? Colors.white
+                                                                    : Colors.black,
                                                           ),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ],
-                                                );
-                                              },
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-
-                                    const SizedBox(
-                                      width: 12,
-                                    ),
-
-                                    // =================================================
-                                    // HUMIDITY + FLOOD STATUS
-                                    // =================================================
-
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment
-                                                .center,
-                                        children: [
-
-                                          Text(
-                                            'Humidity',
-                                            style:
-                                                TextStyle(
-                                              fontSize: 15,
-                                              fontWeight:
-                                                  FontWeight
-                                                      .w600,
-                                              color:
-                                                  isDarkMode
-                                                      ? Colors
-                                                          .white
-                                                      : Colors
-                                                          .black,
-                                            ),
-                                          ),
-
-                                          const SizedBox(
-                                            height: 10,
-                                          ),
-
-                                          // =================================================
-                                          // HUMIDITY GAUGE
-                                          // =================================================
-
-                                          LayoutBuilder(
-                                            builder:
-                                                (
-                                              context,
-                                              constraints,
-                                            ) {
-                                              final double
-                                                  gaugeSize =
-                                                  math.min(
-                                                150,
-                                                constraints
-                                                    .maxWidth,
-                                              );
-
-                                              return CustomPaint(
-                                                size: Size(
-                                                  gaugeSize,
-                                                  gaugeSize *
-                                                      0.6,
-                                                ),
-                                                painter:
-                                                    _HumidityGaugePainter(
-                                                  percent:
-                                                      (humidity /
-                                                              100)
-                                                          .clamp(
-                                                            0,
-                                                            1,
-                                                          )
-                                                          .toDouble(),
-                                                  isDark:
-                                                      isDarkMode,
-                                                ),
-                                                child:
-                                                    SizedBox(
-                                                  width:
-                                                      gaugeSize,
-                                                  height:
-                                                      gaugeSize *
-                                                          0.6,
-                                                  child:
-                                                      Padding(
-                                                    padding:
-                                                        const EdgeInsets
-                                                            .only(
-                                                      top: 26,
-                                                    ),
-                                                    child:
-                                                        Center(
-                                                      child:
-                                                          Text(
-                                                        '${humidity.toStringAsFixed(0)}%',
-                                                        style:
-                                                            TextStyle(
-                                                          fontSize:
-                                                              24,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          color:
-                                                              isDarkMode
-                                                                  ? Colors.white
-                                                                  : Colors.black,
                                                         ),
                                                       ),
                                                     ),
                                                   ),
-                                                ),
-                                              );
-                                            },
-                                          ),
-
-                                          const SizedBox(
-                                            height: 24,
-                                          ),
-
-                                          // =================================================
-                                          // FLOOD RISK STATUS
-                                          // =================================================
-
-                                          Text(
-                                            'Flood Risk Status',
-                                            style:
-                                                TextStyle(
-                                              fontSize: 15,
-                                              fontWeight:
-                                                  FontWeight
-                                                      .w600,
-                                              color:
-                                                  isDarkMode
-                                                      ? Colors
-                                                          .white
-                                                      : Colors
-                                                          .black,
+                                                );
+                                              },
                                             ),
-                                          ),
 
-                                          const SizedBox(
-                                            height: 10,
-                                          ),
+                                            const SizedBox(
+                                              height: 12,
+                                            ),
 
-                                          Container(
-                                            constraints:
-                                                const BoxConstraints(
-                                              maxWidth:
+                                            // =================================================
+                                            // FLOOD RISK STATUS
+                                            // =================================================
+
+                                            Text(
+                                              'Flood Risk Status',
+                                              style:
+                                                  TextStyle(
+                                                fontSize: 15,
+                                                fontWeight:
+                                                    FontWeight
+                                                        .w600,
+                                                color:
+                                                    isDarkMode
+                                                        ? Colors
+                                                            .white
+                                                        : Colors
+                                                            .black,
+                                              ),
+                                            ),
+
+                                            const SizedBox(
+                                              height: 8,
+                                            ),
+
+                                            Container(
+                                              width:
                                                   double.infinity,
-                                            ),
-                                            padding:
-                                                const EdgeInsets
-                                                    .symmetric(
-                                              vertical: 10,
-                                              horizontal: 16,
-                                            ),
-                                            decoration:
-                                                BoxDecoration(
-                                              color:
+                                              constraints:
+                                                  const BoxConstraints(
+                                                maxWidth:
+                                                    double.infinity,
+                                              ),
+                                              padding:
+                                                  const EdgeInsets
+                                                      .symmetric(
+                                                vertical: 10,
+                                                horizontal: 8,
+                                              ),
+                                              decoration:
+                                                  BoxDecoration(
+                                                color:
+                                                    !sensorActive
+                                                        ? Colors
+                                                            .grey
+                                                            .shade600
+                                                        : waterLevel >
+                                                                50
+                                                            ? Colors
+                                                                .red
+                                                                .shade700
+                                                            : waterLevel >
+                                                                    30
+                                                                ? Colors
+                                                                    .orange
+                                                                    .shade700
+                                                                : Colors
+                                                                    .green
+                                                                    .shade700,
+                                                borderRadius:
+                                                    BorderRadius
+                                                        .circular(
+                                                  12,
+                                                ),
+                                              ),
+                                              child:
+                                                  FittedBox(
+                                                fit: BoxFit
+                                                    .scaleDown,
+                                                child:
+                                                    Text(
                                                   !sensorActive
-                                                      ? Colors
-                                                          .grey
-                                                          .shade600
+                                                      ? 'IDLE'
                                                       : waterLevel >
                                                               50
-                                                          ? Colors
-                                                              .red
-                                                              .shade700
+                                                          ? 'FLOODING'
                                                           : waterLevel >
                                                                   30
-                                                              ? Colors
-                                                                  .orange
-                                                                  .shade700
-                                                              : Colors
-                                                                  .green
-                                                                  .shade700,
-                                              borderRadius:
-                                                  BorderRadius
-                                                      .circular(
-                                                12,
-                                              ),
-                                            ),
-                                            child:
-                                                FittedBox(
-                                              fit: BoxFit
-                                                  .scaleDown,
-                                              child:
-                                                  Text(
-                                                !sensorActive
-                                                    ? 'IDLE'
-                                                    : waterLevel >
-                                                            50
-                                                        ? 'FLOODING'
-                                                        : waterLevel >
-                                                                30
-                                                            ? 'MEDIUM RISK'
-                                                            : 'SAFE',
-                                                maxLines: 1,
-                                                style:
-                                                    const TextStyle(
-                                                  fontSize:
-                                                      16,
-                                                  fontWeight:
-                                                      FontWeight
-                                                          .w900,
-                                                  color:
-                                                      Colors.white,
-                                                  letterSpacing:
-                                                      0.5,
+                                                              ? 'MEDIUM RISK'
+                                                              : 'SAFE',
+                                                  maxLines: 1,
+                                                  style:
+                                                      const TextStyle(
+                                                    fontSize:
+                                                        16,
+                                                    fontWeight:
+                                                        FontWeight
+                                                            .w900,
+                                                    color:
+                                                        Colors
+                                                            .white,
+                                                    letterSpacing:
+                                                        0.5,
+                                                  ),
                                                 ),
                                               ),
                                             ),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               ],
                             ),
                           ),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 );
               },
             ),
@@ -964,7 +1100,7 @@ class _HomeTabState extends State<HomeTab>
 }
 
 // =====================================================
-// WATER + RUBBER DUCK
+// WATER + HUMAN + RUBBER DUCK
 // =====================================================
 
 class _WaterWithDuck extends StatefulWidget {
@@ -1012,6 +1148,14 @@ class _WaterWithDuckState extends State<_WaterWithDuck>
 
   static const double duckWidth = 34.2;
   static const double duckHeight = 34.2;
+
+  // =====================================================
+  // HUMAN SIZE
+  // =====================================================
+
+  // Human represents 1.59 meters = 159 cm.
+  // The water container represents 200 cm.
+  static const double humanHeightCm = 159.0;
 
   @override
   void initState() {
@@ -1092,9 +1236,22 @@ class _WaterWithDuckState extends State<_WaterWithDuck>
             children: [
 
               // =================================================
+              // HUMAN
+              // =================================================
+
+              ClipPath(
+                clipper: _TubeInteriorClipper(),
+                child: _buildHuman(),
+              ),
+
+              // =================================================
               // WATER
               // =================================================
 
+              // IMPORTANT:
+              // Water is intentionally painted AFTER the human.
+              // The water is semi-transparent so the human remains
+              // visible through the water as the level rises.
               Positioned.fill(
                 child: CustomPaint(
                   painter: _WaterBucketPainter(
@@ -1134,6 +1291,55 @@ class _WaterWithDuckState extends State<_WaterWithDuck>
           ),
         );
       },
+    );
+  }
+
+  // =====================================================
+  // BUILD HUMAN
+  // =====================================================
+
+  Widget _buildHuman() {
+    // =====================================================
+    // HUMAN SCALE
+    // =====================================================
+
+    // The complete inside of the tube represents 200 cm.
+    // The human represents 159 cm.
+    //
+    // IMPORTANT:
+    // The previous version constrained BOTH width and height.
+    // Because the PNG has its own aspect ratio, BoxFit.contain
+    // reduced the visible human to around 80 cm.
+    //
+    // The human is now scaled BY HEIGHT instead.
+    // This preserves the PNG's original proportions while making
+    // its actual height approximately 159 cm inside the 200 cm tube.
+
+    final double tubeInteriorHeight =
+        widget.height - 8;
+
+    final double humanHeight =
+        tubeInteriorHeight *
+            (humanHeightCm /
+                widget.maxWaterLevel);
+
+    return SizedBox(
+      width: widget.width,
+      height: widget.height,
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: SizedBox(
+          height: humanHeight,
+          child: IgnorePointer(
+            child: Image.asset(
+              'assets/images/body.png',
+              height: humanHeight,
+              fit: BoxFit.fitHeight,
+              alignment: Alignment.bottomCenter,
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -1747,11 +1953,16 @@ class _WaterBucketPainter
     final double fillTop =
         bottom - fillHeight;
 
+    // =====================================================
+    // SEMI-TRANSPARENT WATER
+    // =====================================================
+
     final fillPaint = Paint()
       ..color = isDark
           ? Colors.blue.shade900
-              .withOpacity(0.6)
-          : Colors.blue.shade100;
+              .withOpacity(0.45)
+          : Colors.blue.shade100
+              .withOpacity(0.45);
 
     canvas.save();
 
