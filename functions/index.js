@@ -15,7 +15,8 @@ admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
 
-const FCM_TOKEN = process.env.FCM_TOKEN;
+// FCM topic for all DETECT-CO devices
+const FCM_TOPIC = "detect_co_announcements";
 
 async function checkAnnouncements() {
   try {
@@ -56,7 +57,7 @@ async function checkAnnouncements() {
     console.log("CLASS SUSPENSION DETECTED!");
 
     await admin.messaging().send({
-      token: FCM_TOKEN,
+      topic: FCM_TOPIC,
 
       notification: {
         title: "⚠️ NO CLASSES",
@@ -69,7 +70,9 @@ async function checkAnnouncements() {
       },
     });
 
-    console.log("FCM notification sent successfully.");
+    console.log(
+      "FCM notification sent successfully to all DETECT-CO devices."
+    );
 
   } catch (error) {
     console.error("ERROR:");

@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -98,7 +99,8 @@ class _MapTabState extends State<MapTab> {
     super.initState();
 
     _firebaseSub = dbRef.onValue.listen((event) {
-      final data = event.snapshot.value as Map<dynamic, dynamic>?;
+      final data =
+          event.snapshot.value as Map<dynamic, dynamic>?;
 
       if (data == null) return;
 
@@ -166,7 +168,10 @@ class _MapTabState extends State<MapTab> {
   // =====================================================
 
   void _goToNearestEvac() {
-    if (currentPosition == null) return;
+    if (currentPosition == null) {
+      _locateMe();
+      return;
+    }
 
     final Distance distance = Distance();
 
@@ -235,7 +240,8 @@ class _MapTabState extends State<MapTab> {
       backgroundColor: Colors.transparent,
       builder: (_) {
         return Container(
-          height: MediaQuery.of(context).size.height * 0.50,
+          height:
+              MediaQuery.of(context).size.height * 0.50,
           width: double.infinity,
           decoration: const BoxDecoration(
             color: Colors.white,
@@ -245,7 +251,8 @@ class _MapTabState extends State<MapTab> {
             ),
           ),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
             children: [
               ClipRRect(
                 borderRadius: const BorderRadius.only(
@@ -259,7 +266,6 @@ class _MapTabState extends State<MapTab> {
                   fit: BoxFit.cover,
                 ),
               ),
-
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -282,12 +288,14 @@ class _MapTabState extends State<MapTab> {
                       const SizedBox(height: 12),
 
                       Container(
-                        padding: const EdgeInsets.symmetric(
+                        padding:
+                            const EdgeInsets.symmetric(
                           horizontal: 12,
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: riskColor.withOpacity(0.15),
+                          color:
+                              riskColor.withOpacity(0.15),
                           borderRadius:
                               BorderRadius.circular(20),
                           border: Border.all(
@@ -298,7 +306,8 @@ class _MapTabState extends State<MapTab> {
                           "Flood Risk: $riskText",
                           style: TextStyle(
                             color: riskColor,
-                            fontWeight: FontWeight.bold,
+                            fontWeight:
+                                FontWeight.bold,
                           ),
                         ),
                       ),
@@ -323,7 +332,9 @@ class _MapTabState extends State<MapTab> {
 
                             Navigator.pop(context);
                           },
-                          icon: const Icon(Icons.directions),
+                          icon: const Icon(
+                            Icons.directions,
+                          ),
                           label: const Text(
                             "Go to Location",
                           ),
@@ -413,7 +424,9 @@ class _MapTabState extends State<MapTab> {
           await Geolocator.isLocationServiceEnabled();
 
       if (!serviceEnabled) {
-        debugPrint('Location services are disabled.');
+        debugPrint(
+          'Location services are disabled.',
+        );
         return;
       }
 
@@ -428,7 +441,9 @@ class _MapTabState extends State<MapTab> {
       if (permission == LocationPermission.denied ||
           permission ==
               LocationPermission.deniedForever) {
-        debugPrint('Location permission denied.');
+        debugPrint(
+          'Location permission denied.',
+        );
         return;
       }
 
@@ -724,8 +739,8 @@ class _MapTabState extends State<MapTab> {
                       mapController: mapController,
 
                       options: MapOptions(
-                        center: calambaCenter,
-                        zoom: 13.5,
+                        initialCenter: calambaCenter,
+                        initialZoom: 13.5,
                         cameraConstraint:
                             CameraConstraint.contain(
                           bounds: LatLngBounds(
@@ -737,17 +752,14 @@ class _MapTabState extends State<MapTab> {
 
                       children: [
                         // =================================================
-                        // MAP TILES
+                        // OPENSTREETMAP TILES
                         // =================================================
 
                         TileLayer(
                           urlTemplate:
-                              'https://cartodb-basemaps-a.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png',
-                          subdomains: const [
-                            'a',
-                            'b',
-                            'c',
-                          ],
+                              'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                          userAgentPackageName:
+                              'com.detectco.app',
                         ),
 
                         // =================================================
@@ -769,7 +781,7 @@ class _MapTabState extends State<MapTab> {
                                       175,
                                       80,
                                       1,
-                                    ).withOpacity(0.35)
+                                    ).withOpacity(0.20)
                                   : waterLevel > 30
                                       ? Colors.orange
                                           .withOpacity(0.35)
@@ -890,6 +902,7 @@ class _MapTabState extends State<MapTab> {
                             Polyline(
                               points: routePoints,
                               strokeWidth: 4,
+                              color: const Color(0xFF4A7FF7),
                             ),
                           ],
                         ),
@@ -903,11 +916,24 @@ class _MapTabState extends State<MapTab> {
                             if (currentPosition != null)
                               Marker(
                                 point: currentPosition!,
-                                width: 40,
-                                height: 40,
-                                child: const Icon(
-                                  Icons.my_location,
-                                  color: Colors.blue,
+                                width: 28,
+                                height: 28,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: const Color(0xFF4A7FF7),
+                                    border: Border.all(
+                                      color: Colors.white,
+                                      width: 4,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black26,
+                                        blurRadius: 4,
+                                        spreadRadius: 1,
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
 

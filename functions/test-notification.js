@@ -26,7 +26,7 @@ async function sendTestNotification() {
       },
 
       data: {
-        type: "test",
+        type: "alert",
         message: "Manual notification test",
       },
     });

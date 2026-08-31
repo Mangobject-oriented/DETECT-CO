@@ -1,22 +1,68 @@
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'package:detectco/main.dart'; // for isDarkModeNotifier
 import 'package:detectco/pages/survival_kit_prep.dart';
 import 'package:detectco/pages/during_after_flood.dart';
 import 'package:detectco/pages/notification.dart';
+
 class EvacuateTab extends StatelessWidget {
   const EvacuateTab({super.key});
+
+  // =====================================================
+  // COPY TO CLIPBOARD
+  // =====================================================
+
+  void _copyToClipboard(
+    BuildContext context,
+    String text,
+    String message,
+  ) {
+    Clipboard.setData(
+      ClipboardData(text: text),
+    );
+
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(
+              Icons.check_circle,
+              color: Colors.white,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(message),
+            ),
+          ],
+        ),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+    );
+  }
 
   // =====================================================
   // FLOATING BURGER MENU
   // =====================================================
 
-  void _showMenu(BuildContext menuContext, bool isDarkMode) {
+  void _showMenu(
+    BuildContext menuContext,
+    bool isDarkMode,
+  ) {
     final RenderBox button =
         menuContext.findRenderObject() as RenderBox;
 
     final RenderBox overlay =
-        Overlay.of(menuContext).context.findRenderObject() as RenderBox;
+        Overlay.of(menuContext)
+            .context
+            .findRenderObject() as RenderBox;
 
     final Offset position = button.localToGlobal(
       Offset.zero,
@@ -28,10 +74,14 @@ class EvacuateTab extends StatelessWidget {
       position: RelativeRect.fromLTRB(
         position.dx - 155,
         position.dy + 48,
-        overlay.size.width - position.dx - button.size.width,
+        overlay.size.width -
+            position.dx -
+            button.size.width,
         0,
       ),
-      color: isDarkMode ? const Color(0xFF303030) : Colors.white,
+      color: isDarkMode
+          ? const Color(0xFF303030)
+          : Colors.white,
       elevation: 8,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
@@ -161,69 +211,127 @@ class EvacuateTab extends StatelessWidget {
   // =====================================================
 
   Widget _evacuationCard(
+    BuildContext context,
     String name,
+    String address,
     String distance,
     bool isDarkMode,
   ) {
-    return Container(
-      height: 72,
-      margin: const EdgeInsets.only(bottom: 14),
-      decoration: BoxDecoration(
-        color: isDarkMode
-            ? const Color(0xFF303030)
-            : Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.20),
-            blurRadius: 8,
-            offset: const Offset(4, 5),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          // GREEN LOCATION BOX
-          Container(
-            width: 50,
-            height: double.infinity,
-            color: Colors.green,
-            child: const Icon(
-              Icons.location_on,
-              color: Colors.white,
-              size: 30,
+    return GestureDetector(
+      onTap: () {
+        _copyToClipboard(
+          context,
+          address,
+          'Address copied to clipboard',
+        );
+      },
+      child: Container(
+        height: 78,
+        margin: const EdgeInsets.only(bottom: 14),
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: isDarkMode
+              ? const Color(0xFF303030)
+              : Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.20),
+              blurRadius: 8,
+              offset: const Offset(4, 5),
             ),
-          ),
+          ],
+        ),
+        child: Row(
+          children: [
+            // =================================================
+            // GREEN LOCATION BOX
+            // =================================================
 
-          const SizedBox(width: 14),
-
-          // CENTER NAME
-          Expanded(
-            child: Text(
-              name,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
-                color: isDarkMode
-                    ? Colors.white
-                    : const Color(0xFF1D2B4A),
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-
-          // DISTANCE
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: Text(
-              distance,
-              style: const TextStyle(
-                fontSize: 13,
-                color: Color(0xFF8194BB),
+            Container(
+              width: 58,
+              height: double.infinity,
+              color: Colors.green,
+              child: const Icon(
+                Icons.location_on,
+                color: Colors.white,
+                size: 30,
               ),
             ),
-          ),
-        ],
+
+            const SizedBox(width: 14),
+
+            // =================================================
+            // CENTER NAME
+            // =================================================
+
+            Expanded(
+              child: Column(
+                mainAxisAlignment:
+                    MainAxisAlignment.center,
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: isDarkMode
+                          ? Colors.white
+                          : const Color(0xFF1D2B4A),
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+
+                  const SizedBox(height: 3),
+
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.copy_rounded,
+                        size: 12,
+                        color: isDarkMode
+                            ? Colors.grey[400]
+                            : const Color(0xFF8194BB),
+                      ),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          'Tap to copy address',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isDarkMode
+                                ? Colors.grey[400]
+                                : const Color(0xFF8194BB),
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            // =================================================
+            // DISTANCE
+            // =================================================
+
+            Padding(
+              padding:
+                  const EdgeInsets.only(right: 16),
+              child: Text(
+                distance,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFF8194BB),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -233,67 +341,140 @@ class EvacuateTab extends StatelessWidget {
   // =====================================================
 
   Widget _emergencyCard(
+    BuildContext context,
     String number,
     String description,
     bool isDarkMode,
   ) {
-    return Container(
-      height: 72,
-      margin: const EdgeInsets.only(bottom: 14),
-      decoration: BoxDecoration(
-        color: isDarkMode
-            ? const Color(0xFF303030)
-            : Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.20),
-            blurRadius: 8,
-            offset: const Offset(4, 5),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          // RED PHONE BOX
-          Container(
-            width: 50,
-            height: double.infinity,
-            color: const Color(0xFFFF3035),
-            child: const Icon(
-              Icons.phone,
-              color: Colors.white,
-              size: 30,
+    return GestureDetector(
+      onTap: () {
+        _copyToClipboard(
+          context,
+          number,
+          'Emergency number copied to clipboard',
+        );
+      },
+      child: Container(
+        height: 78,
+        margin: const EdgeInsets.only(bottom: 14),
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: isDarkMode
+              ? const Color(0xFF303030)
+              : Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.20),
+              blurRadius: 8,
+              offset: const Offset(4, 5),
             ),
-          ),
+          ],
+        ),
+        child: Row(
+          children: [
+            // =================================================
+            // RED PHONE BOX
+            // =================================================
 
-          const SizedBox(width: 14),
-
-          // PHONE NUMBER
-          Expanded(
-            child: Text(
-              number,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
-                color: isDarkMode
-                    ? Colors.white
-                    : const Color(0xFF1D2B4A),
+            Container(
+              width: 58,
+              height: double.infinity,
+              color: const Color(0xFFFF3035),
+              child: const Icon(
+                Icons.phone,
+                color: Colors.white,
+                size: 30,
               ),
             ),
-          ),
 
-          // DESCRIPTION
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: Text(
-              description,
-              style: const TextStyle(
-                fontSize: 13,
-                color: Color(0xFF8194BB),
+            const SizedBox(width: 14),
+
+            // =================================================
+            // PHONE NUMBER + DESCRIPTION
+            // =================================================
+
+            Expanded(
+              child: Column(
+                mainAxisAlignment:
+                    MainAxisAlignment.center,
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    number,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: isDarkMode
+                          ? Colors.white
+                          : const Color(0xFF1D2B4A),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+
+                  const SizedBox(height: 3),
+
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.copy_rounded,
+                        size: 12,
+                        color: isDarkMode
+                            ? Colors.grey[400]
+                            : const Color(0xFF8194BB),
+                      ),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          'Tap to copy number',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isDarkMode
+                                ? Colors.grey[400]
+                                : const Color(0xFF8194BB),
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
-          ),
-        ],
+
+            // =================================================
+            // DESCRIPTION
+            // =================================================
+
+            Flexible(
+              flex: 0,
+              child: Padding(
+                padding:
+                    const EdgeInsets.only(
+                  left: 8,
+                  right: 16,
+                ),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: 110,
+                  ),
+                  child: Text(
+                    description,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF8194BB),
+                    ),
+                    textAlign: TextAlign.right,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -312,10 +493,12 @@ class EvacuateTab extends StatelessWidget {
       child: Container(
         height: 72,
         margin: const EdgeInsets.only(bottom: 14),
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: isDarkMode
               ? const Color(0xFF303030)
               : Colors.white,
+          borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.20),
@@ -326,9 +509,12 @@ class EvacuateTab extends StatelessWidget {
         ),
         child: Row(
           children: [
+            // =================================================
             // BLUE ICON BOX
+            // =================================================
+
             Container(
-              width: 50,
+              width: 58,
               height: double.infinity,
               color: const Color(0xFF2867F5),
               child: const Icon(
@@ -340,7 +526,10 @@ class EvacuateTab extends StatelessWidget {
 
             const SizedBox(width: 14),
 
+            // =================================================
             // TITLE
+            // =================================================
+
             Expanded(
               child: Text(
                 title,
@@ -351,12 +540,18 @@ class EvacuateTab extends StatelessWidget {
                       ? Colors.white
                       : const Color(0xFF1D2B4A),
                 ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
 
+            // =================================================
             // READ
+            // =================================================
+
             const Padding(
-              padding: EdgeInsets.only(right: 16),
+              padding:
+                  EdgeInsets.only(right: 16),
               child: Text(
                 'Read »',
                 style: TextStyle(
@@ -379,10 +574,15 @@ class EvacuateTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return ValueListenableBuilder<bool>(
       valueListenable: isDarkModeNotifier,
-      builder: (context, isDarkMode, child) {
+      builder: (
+        context,
+        isDarkMode,
+        child,
+      ) {
         return Scaffold(
-          backgroundColor:
-              isDarkMode ? const Color(0xFF212121) : Colors.white,
+          backgroundColor: isDarkMode
+              ? const Color(0xFF212121)
+              : Colors.white,
 
           body: Column(
             children: [
@@ -394,21 +594,32 @@ class EvacuateTab extends StatelessWidget {
                 width: double.infinity,
                 color: isDarkMode
                     ? const Color(0xFF212121)
-                    : const Color.fromARGB(255, 72, 119, 247),
+                    : const Color.fromARGB(
+                        255,
+                        72,
+                        119,
+                        247,
+                      ),
                 child: SafeArea(
                   bottom: false,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(
+                    padding:
+                        const EdgeInsets.symmetric(
                       horizontal: 16,
                       vertical: 12,
                     ),
                     child: Row(
                       children: [
+                        // =================================================
                         // LOGO
+                        // =================================================
+
                         GestureDetector(
                           onDoubleTap: () {
-                            isDarkModeNotifier.value =
-                                !isDarkModeNotifier.value;
+                            isDarkModeNotifier
+                                    .value =
+                                !isDarkModeNotifier
+                                    .value;
                           },
                           child: SizedBox(
                             width: 50,
@@ -421,19 +632,26 @@ class EvacuateTab extends StatelessWidget {
 
                         const SizedBox(width: 8),
 
+                        // =================================================
                         // APP NAME
+                        // =================================================
+
                         const Text(
                           'DETECT-CO',
                           style: TextStyle(
                             fontSize: 20,
-                            fontWeight: FontWeight.bold,
+                            fontWeight:
+                                FontWeight.bold,
                             color: Colors.white,
                           ),
                         ),
 
                         const Spacer(),
 
+                        // =================================================
                         // NOTIFICATION
+                        // =================================================
+
                         IconButton(
                           icon: const Icon(
                             Icons.notifications_none,
@@ -441,16 +659,24 @@ class EvacuateTab extends StatelessWidget {
                             size: 26,
                           ),
                           onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(builder: (_) => const NotificationTab()),
-                                    );
-                                  },
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    const NotificationTab(),
+                              ),
+                            );
+                          },
                         ),
 
+                        // =================================================
                         // BURGER MENU
+                        // =================================================
+
                         Builder(
-                          builder: (menuContext) {
+                          builder: (
+                            menuContext,
+                          ) {
                             return IconButton(
                               icon: const Icon(
                                 Icons.menu,
@@ -478,7 +704,8 @@ class EvacuateTab extends StatelessWidget {
 
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(
+                  padding:
+                      const EdgeInsets.symmetric(
                     horizontal: 40,
                     vertical: 8,
                   ),
@@ -494,19 +721,25 @@ class EvacuateTab extends StatelessWidget {
                       ),
 
                       _evacuationCard(
+                        context,
                         'Lingga Elementary School',
+                        'Lingga, Calamba City, Laguna',
                         '-- km',
                         isDarkMode,
                       ),
 
                       _evacuationCard(
+                        context,
                         'Uwisan Barangay Hall',
+                        'Barangay Uwisan, Calamba City, Laguna',
                         '-- km',
                         isDarkMode,
                       ),
 
                       _evacuationCard(
+                        context,
                         'Palingon Elementary School',
+                        'Barangay Palingon, Calamba City, Laguna',
                         '-- km',
                         isDarkMode,
                       ),
@@ -521,18 +754,21 @@ class EvacuateTab extends StatelessWidget {
                       ),
 
                       _emergencyCard(
+                        context,
                         '911',
                         'Emergency Hotline',
                         isDarkMode,
                       ),
 
                       _emergencyCard(
+                        context,
                         '09xx-xxx-xxxx',
                         'Calamba CDRRMO',
                         isDarkMode,
                       ),
 
                       _emergencyCard(
+                        context,
                         '09xx-xxx-xxxx',
                         'Uwisan Health Center',
                         isDarkMode,
@@ -547,7 +783,10 @@ class EvacuateTab extends StatelessWidget {
                         isDarkMode,
                       ),
 
+                      // =================================================
                       // SURVIVAL KIT PREPARATION
+                      // =================================================
+
                       _guideCard(
                         'Survival Kit Preparation',
                         isDarkMode,
@@ -562,7 +801,10 @@ class EvacuateTab extends StatelessWidget {
                         },
                       ),
 
+                      // =================================================
                       // DURING AND AFTER FLOOD
+                      // =================================================
+
                       _guideCard(
                         'During and After Flood',
                         isDarkMode,
@@ -570,7 +812,8 @@ class EvacuateTab extends StatelessWidget {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => const DuringAfterFlood(),
+                              builder: (context) =>
+                                  const DuringAfterFlood(),
                             ),
                           );
                         },

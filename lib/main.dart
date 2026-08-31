@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:curved_navigation_bar/curved_navigation_bar.dart';
@@ -7,6 +8,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:detectco/pages/home.dart';
 import 'package:detectco/pages/map.dart';
 import 'package:detectco/pages/evacuate.dart';
+import 'package:detectco/pages/notification.dart';
 
 // =====================================================
 // LOCAL NOTIFICATIONS
@@ -14,6 +16,43 @@ import 'package:detectco/pages/evacuate.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
+
+// =====================================================
+// UNREAD NOTIFICATION COUNT
+// =====================================================
+
+final ValueNotifier<int> unreadNotificationCount =
+    ValueNotifier<int>(0);
+
+// =====================================================
+// REFRESH UNREAD NOTIFICATION COUNT
+// =====================================================
+//
+// This can be called from notification.dart whenever
+// notifications are deleted or marked as read.
+//
+// =====================================================
+
+Future<void> refreshUnreadNotificationCount() async {
+  try {
+    final notifications =
+        await NotificationStorage.getNotifications();
+
+    final int unreadCount = notifications
+        .where((notification) => !notification.isRead)
+        .length;
+
+    unreadNotificationCount.value = unreadCount;
+
+    print(
+      'Unread notification count refreshed: $unreadCount',
+    );
+  } catch (e) {
+    print(
+      'ERROR REFRESHING UNREAD NOTIFICATION COUNT: $e',
+    );
+  }
+}
 
 // =====================================================
 // BACKGROUND FCM HANDLER
@@ -27,6 +66,37 @@ Future<void> firebaseMessagingBackgroundHandler(
   print('Background notification received!');
   print('Title: ${message.notification?.title}');
   print('Body: ${message.notification?.body}');
+  print('Type: ${message.data['type']}');
+
+  // =================================================
+  // SAVE NOTIFICATION TO LOCAL HISTORY
+  // =================================================
+
+  final RemoteNotification? notification =
+      message.notification;
+
+  if (notification != null) {
+    final String type =
+        message.data['type'] == 'alert'
+            ? 'alert'
+            : 'announcement';
+
+    await NotificationStorage.saveNotification(
+      AppNotification(
+        id: message.messageId ??
+            DateTime.now()
+                .millisecondsSinceEpoch
+                .toString(),
+        title: notification.title ?? 'DETECT-CO',
+        body: notification.body ?? '',
+        type: type,
+        timestamp: DateTime.now(),
+        isRead: false,
+      ),
+    );
+
+    print('Background notification saved to history!');
+  }
 }
 
 // =====================================================
@@ -41,6 +111,12 @@ void main() async {
   // ===================================================
 
   await Firebase.initializeApp();
+
+  // ===================================================
+  // LOAD UNREAD NOTIFICATION COUNT
+  // ===================================================
+
+  await refreshUnreadNotificationCount();
 
   // ===================================================
   // BACKGROUND FCM
@@ -193,6 +269,11 @@ void main() async {
       final bool isTestNotification =
           message.data['type'] == 'test';
 
+      final String notificationType =
+          message.data['type'] == 'alert'
+              ? 'alert'
+              : 'announcement';
+
       if (isTestNotification) {
         print('TEST NOTIFICATION -> CUSTOM SOUND');
         print('Channel: test_alerts');
@@ -201,6 +282,37 @@ void main() async {
         print('CLASS NOTIFICATION -> NORMAL SOUND');
         print('Channel: class_alerts');
       }
+
+      // =================================================
+      // SAVE NOTIFICATION TO LOCAL HISTORY
+      // =================================================
+
+      await NotificationStorage.saveNotification(
+        AppNotification(
+          id: message.messageId ??
+              DateTime.now()
+                  .millisecondsSinceEpoch
+                  .toString(),
+          title: notification.title ?? 'DETECT-CO',
+          body: notification.body ?? '',
+          type: notificationType,
+          timestamp: DateTime.now(),
+          isRead: false,
+        ),
+      );
+
+      // =================================================
+      // UPDATE UNREAD COUNT
+      // =================================================
+
+      await refreshUnreadNotificationCount();
+
+      print(
+        'Unread notification count: '
+        '${unreadNotificationCount.value}',
+      );
+
+      print('Notification saved to history!');
 
       // =================================================
       // SHOW LOCAL NOTIFICATION
