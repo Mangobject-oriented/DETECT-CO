@@ -248,7 +248,7 @@ class EvacuateTab extends StatelessWidget {
             // =================================================
 
             Container(
-              width: 58,
+              width: 50,
               height: double.infinity,
               color: Colors.green,
               child: const Icon(
@@ -377,7 +377,7 @@ class EvacuateTab extends StatelessWidget {
             // =================================================
 
             Container(
-              width: 58,
+              width: 50,
               height: double.infinity,
               color: const Color(0xFFFF3035),
               child: const Icon(
@@ -462,7 +462,7 @@ class EvacuateTab extends StatelessWidget {
                   child: Text(
                     description,
                     style: const TextStyle(
-                      fontSize: 13,
+                      fontSize: 11,
                       color: Color(0xFF8194BB),
                     ),
                     textAlign: TextAlign.right,
@@ -513,7 +513,7 @@ class EvacuateTab extends StatelessWidget {
             // =================================================
 
             Container(
-              width: 58,
+              width: 50,
               height: double.infinity,
               color: const Color(0xFF2867F5),
               child: const Icon(
@@ -675,7 +675,7 @@ class EvacuateTab extends StatelessWidget {
                       _evacuationCard(
                         context,
                         'Lingga Elementary School',
-                        'Lingga, Calamba City, Laguna',
+                        '658J+7WC, Dany, Calamba, 4027 Laguna',
                         '-- km',
                         isDarkMode,
                       ),
@@ -683,7 +683,7 @@ class EvacuateTab extends StatelessWidget {
                       _evacuationCard(
                         context,
                         'Uwisan Barangay Hall',
-                        'Barangay Uwisan, Calamba City, Laguna',
+                        '65PF+Q9Q Uwisan, Calamba, 4027 Laguna',
                         '-- km',
                         isDarkMode,
                       ),
@@ -691,7 +691,7 @@ class EvacuateTab extends StatelessWidget {
                       _evacuationCard(
                         context,
                         'Palingon Elementary School',
-                        'Barangay Palingon, Calamba City, Laguna',
+                        '658P+425, 202 Caballero St, Real, Calamba, 4027 Laguna',
                         '-- km',
                         isDarkMode,
                       ),
@@ -714,14 +714,14 @@ class EvacuateTab extends StatelessWidget {
 
                       _emergencyCard(
                         context,
-                        '09xx-xxx-xxxx',
+                        '0917 148 9813',
                         'Calamba CDRRMO',
                         isDarkMode,
                       ),
 
                       _emergencyCard(
                         context,
-                        '09xx-xxx-xxxx',
+                        '(+63) 992 377 5096',
                         'Uwisan Health Center',
                         isDarkMode,
                       ),

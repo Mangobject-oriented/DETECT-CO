@@ -8,13 +8,13 @@ environment:
 
 flutter_native_splash:
   color: "#ffffff"
-  image: assets/icon/logo.png
+  image: assets/icon/splash.png
   android: true
   ios: true
   fullscreen: true
 
   android_12:
-    image: assets/icon/logo.png
+    image: assets/icon/splash.png
     icon_background_color: "#ffffff"
 
 dependencies:

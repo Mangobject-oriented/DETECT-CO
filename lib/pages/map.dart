@@ -32,6 +32,22 @@ class EvacSite {
   });
 }
 
+// =====================================================
+// HOSPITAL MODEL
+// =====================================================
+
+class Hospital {
+  final String name;
+  final String description;
+  final LatLng location;
+
+  Hospital({
+    required this.name,
+    required this.description,
+    required this.location,
+  });
+}
+
 class _MapTabState extends State<MapTab> {
   final mapController = MapController();
 
@@ -39,6 +55,7 @@ class _MapTabState extends State<MapTab> {
 
   List<LatLng> routePoints = [];
   EvacSite? selectedSite;
+  Hospital? selectedHospital;
 
   final LatLng swCorner =
       LatLng(14.13466576727542, 121.00698800147504);
@@ -78,6 +95,39 @@ class _MapTabState extends State<MapTab> {
       location: LatLng(
         14.215617735789499,
         121.1861596967596,
+      ),
+    ),
+  ];
+
+  // =====================================================
+  // HOSPITALS
+  // =====================================================
+  // TODO: replace name/description with the real hospital's
+  // details, and add more entries as needed.
+
+  final List<Hospital> hospitals = [
+    Hospital(
+      name: "Calamba Doctors' Hospital",
+      description: "Calamba City, Laguna",
+      location: LatLng(
+        14.217318179834948,
+        121.14191295757401,
+      ),
+    ),
+    Hospital(
+      name: "Calamba Medical Center",
+      description: "Calamba City, Laguna",
+      location: LatLng(
+        14.206166437115906,
+        121.15238771423762
+      ),
+    ),
+    Hospital(
+      name: "Gamez Hospital",
+      description: "Calamba City, Laguna",
+      location: LatLng(
+        14.213035200419394,
+        121.16425984193856
       ),
     ),
   ];
@@ -201,6 +251,48 @@ class _MapTabState extends State<MapTab> {
     );
 
     _showEvacPanel(nearest);
+  }
+
+  // =====================================================
+  // GO TO NEAREST HOSPITAL
+  // =====================================================
+
+  void _goToNearestHospital() {
+    if (currentPosition == null) {
+      _locateMe();
+      return;
+    }
+
+    final Distance distance = Distance();
+
+    Hospital nearest = hospitals[0];
+    double minDist = double.infinity;
+
+    for (final hospital in hospitals) {
+      final dist = distance.as(
+        LengthUnit.Meter,
+        currentPosition!,
+        hospital.location,
+      );
+
+      if (dist < minDist) {
+        minDist = dist;
+        nearest = hospital;
+      }
+    }
+
+    setState(() {
+      selectedHospital = nearest;
+    });
+
+    mapController.move(nearest.location, 16);
+
+    getRoute(
+      currentPosition!,
+      nearest.location,
+    );
+
+    _showHospitalPanel(nearest, minDist);
   }
 
   // =====================================================
@@ -369,6 +461,112 @@ class _MapTabState extends State<MapTab> {
                       ),
                     ],
                   ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // =====================================================
+  // HOSPITAL PANEL
+  // =====================================================
+
+  void _showHospitalPanel(Hospital hospital, double distanceMeters) {
+    final String distanceLabel = distanceMeters >= 1000
+        ? '${(distanceMeters / 1000).toStringAsFixed(1)} km away'
+        : '${distanceMeters.toStringAsFixed(0)} m away';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) {
+        return Container(
+          padding: const EdgeInsets.all(20),
+          width: double.infinity,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(20),
+              topRight: Radius.circular(20),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF3035).withOpacity(0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.local_hospital,
+                      color: Color(0xFFFF3035),
+                      size: 26,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          hospital.name,
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          hospital.description,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.blue),
+                ),
+                child: Text(
+                  distanceLabel,
+                  style: const TextStyle(
+                    color: Colors.blue,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    if (currentPosition != null) {
+                      getRoute(currentPosition!, hospital.location);
+                    }
+                    mapController.move(hospital.location, 16);
+                    Navigator.pop(context);
+                  },
+                  icon: const Icon(Icons.directions),
+                  label: const Text("Go to Hospital"),
                 ),
               ),
             ],
@@ -767,6 +965,42 @@ class _MapTabState extends State<MapTab> {
                                   ),
                                 ),
                               ),
+
+                            // ===== HOSPITAL MARKERS =====
+                            for (final hospital in hospitals)
+                              Marker(
+                                point: hospital.location,
+                                width: 44,
+                                height: 44,
+                                child: GestureDetector(
+                                  onTap: () {
+                                    final Distance distance = Distance();
+                                    final double dist = currentPosition != null
+                                        ? distance.as(
+                                            LengthUnit.Meter,
+                                            currentPosition!,
+                                            hospital.location,
+                                          )
+                                        : 0;
+                                    _showHospitalPanel(hospital, dist);
+                                  },
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFF3035),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: Colors.white, width: 2),
+                                      boxShadow: const [
+                                        BoxShadow(color: Colors.black26, blurRadius: 4),
+                                      ],
+                                    ),
+                                    child: const Icon(
+                                      Icons.local_hospital,
+                                      color: Colors.white,
+                                      size: 22,
+                                    ),
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                       ],
@@ -814,6 +1048,20 @@ class _MapTabState extends State<MapTab> {
                                 _goToNearestEvac,
                             child: const Icon(
                               Icons.place,
+                              color: Colors.white,
+                            ),
+                          ),
+
+                          const SizedBox(height: 10),
+
+                          // ===== NEAREST HOSPITAL BUTTON =====
+                          FloatingActionButton(
+                            heroTag: 'nearest_hospital',
+                            mini: true,
+                            backgroundColor: const Color(0xFFFF3035),
+                            onPressed: _goToNearestHospital,
+                            child: const Icon(
+                              Icons.local_hospital,
                               color: Colors.white,
                             ),
                           ),
