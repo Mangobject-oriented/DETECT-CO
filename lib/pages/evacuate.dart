@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -6,8 +5,25 @@ import 'package:detectco/main.dart'; // for isDarkModeNotifier
 import 'package:detectco/pages/survival_kit_prep.dart';
 import 'package:detectco/pages/during_after_flood.dart';
 
-class EvacuateTab extends StatelessWidget {
+class EvacuateTab extends StatefulWidget {
   const EvacuateTab({super.key});
+
+  @override
+  State<EvacuateTab> createState() => _EvacuateTabState();
+}
+
+class _EvacuateTabState extends State<EvacuateTab> {
+  // 0 = Evacuation Centers, 1 = Emergency Numbers, 2 = Flood Prep Guides
+  int _selectedSection = 0;
+
+  late final PageController _pageController =
+      PageController(initialPage: _selectedSection);
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
 
   // =====================================================
   // COPY TO CLIPBOARD
@@ -48,133 +64,66 @@ class EvacuateTab extends StatelessWidget {
   }
 
   // =====================================================
-  // FLOATING BURGER MENU
+  // SEGMENTED SECTION TABS
   // =====================================================
 
-  void _showMenu(
-    BuildContext menuContext,
-    bool isDarkMode,
-  ) {
-    final RenderBox button =
-        menuContext.findRenderObject() as RenderBox;
+  Widget _sectionTabs(bool isDarkMode) {
+    final labels = ['Evacuation', 'Emergency', 'Guides'];
 
-    final RenderBox overlay =
-        Overlay.of(menuContext)
-            .context
-            .findRenderObject() as RenderBox;
+    return Container(
+      margin: const EdgeInsets.only(top: 16, bottom: 8),
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: isDarkMode
+            ? const Color(0xFF303030)
+            : const Color(0xFFF0F2F5),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: List.generate(labels.length, (index) {
+          final bool isSelected = _selectedSection == index;
 
-    final Offset position = button.localToGlobal(
-      Offset.zero,
-      ancestor: overlay,
+          return Expanded(
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _selectedSection = index;
+                });
+
+                _pageController.animateToPage(
+                  index,
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                );
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? const Color.fromARGB(255, 72, 119, 247)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  labels[index],
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: isSelected
+                        ? Colors.white
+                        : (isDarkMode
+                            ? Colors.grey[400]
+                            : Colors.grey[600]),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
     );
-
-    showMenu<String>(
-      context: menuContext,
-      position: RelativeRect.fromLTRB(
-        position.dx - 155,
-        position.dy + 48,
-        overlay.size.width -
-            position.dx -
-            button.size.width,
-        0,
-      ),
-      color: isDarkMode
-          ? const Color(0xFF303030)
-          : Colors.white,
-      elevation: 8,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      items: [
-        PopupMenuItem<String>(
-          value: 'how_to_use',
-          height: 52,
-          child: Row(
-            children: [
-              Icon(
-                Icons.help,
-                color: isDarkMode
-                    ? Colors.white
-                    : const Color(0xFF1D2B4A),
-                size: 22,
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'How to Use',
-                style: TextStyle(
-                  color: isDarkMode
-                      ? Colors.white
-                      : const Color(0xFF1D2B4A),
-                  fontSize: 16,
-                ),
-              ),
-            ],
-          ),
-        ),
-        PopupMenuItem<String>(
-          value: 'terms',
-          height: 52,
-          child: Row(
-            children: [
-              Icon(
-                Icons.description,
-                color: isDarkMode
-                    ? Colors.white
-                    : const Color(0xFF1D2B4A),
-                size: 22,
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'Terms of Service',
-                style: TextStyle(
-                  color: isDarkMode
-                      ? Colors.white
-                      : const Color(0xFF1D2B4A),
-                  fontSize: 16,
-                ),
-              ),
-            ],
-          ),
-        ),
-        PopupMenuItem<String>(
-          value: 'about',
-          height: 52,
-          child: Row(
-            children: [
-              Icon(
-                Icons.info,
-                color: isDarkMode
-                    ? Colors.white
-                    : const Color(0xFF1D2B4A),
-                size: 22,
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'About app',
-                style: TextStyle(
-                  color: isDarkMode
-                      ? Colors.white
-                      : const Color(0xFF1D2B4A),
-                  fontSize: 16,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    ).then((value) {
-      if (value == 'how_to_use') {
-        // TODO
-      }
-
-      if (value == 'terms') {
-        // TODO
-      }
-
-      if (value == 'about') {
-        // TODO
-      }
-    });
   }
 
   // =====================================================
@@ -187,7 +136,7 @@ class EvacuateTab extends StatelessWidget {
   ) {
     return Padding(
       padding: const EdgeInsets.only(
-        top: 28,
+        top: 12,
         bottom: 18,
       ),
       child: Center(
@@ -243,10 +192,6 @@ class EvacuateTab extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // =================================================
-            // GREEN LOCATION BOX
-            // =================================================
-
             Container(
               width: 50,
               height: double.infinity,
@@ -257,19 +202,11 @@ class EvacuateTab extends StatelessWidget {
                 size: 30,
               ),
             ),
-
             const SizedBox(width: 14),
-
-            // =================================================
-            // CENTER NAME
-            // =================================================
-
             Expanded(
               child: Column(
-                mainAxisAlignment:
-                    MainAxisAlignment.center,
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     name,
@@ -283,9 +220,7 @@ class EvacuateTab extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-
                   const SizedBox(height: 3),
-
                   Row(
                     children: [
                       Icon(
@@ -313,14 +248,8 @@ class EvacuateTab extends StatelessWidget {
                 ],
               ),
             ),
-
-            // =================================================
-            // DISTANCE
-            // =================================================
-
             Padding(
-              padding:
-                  const EdgeInsets.only(right: 16),
+              padding: const EdgeInsets.only(right: 16),
               child: Text(
                 distance,
                 style: const TextStyle(
@@ -372,10 +301,6 @@ class EvacuateTab extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // =================================================
-            // RED PHONE BOX
-            // =================================================
-
             Container(
               width: 50,
               height: double.infinity,
@@ -386,19 +311,11 @@ class EvacuateTab extends StatelessWidget {
                 size: 30,
               ),
             ),
-
             const SizedBox(width: 14),
-
-            // =================================================
-            // PHONE NUMBER + DESCRIPTION
-            // =================================================
-
             Expanded(
               child: Column(
-                mainAxisAlignment:
-                    MainAxisAlignment.center,
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     number,
@@ -412,9 +329,7 @@ class EvacuateTab extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-
                   const SizedBox(height: 3),
-
                   Row(
                     children: [
                       Icon(
@@ -442,16 +357,10 @@ class EvacuateTab extends StatelessWidget {
                 ],
               ),
             ),
-
-            // =================================================
-            // DESCRIPTION
-            // =================================================
-
             Flexible(
               flex: 0,
               child: Padding(
-                padding:
-                    const EdgeInsets.only(
+                padding: const EdgeInsets.only(
                   left: 8,
                   right: 16,
                 ),
@@ -508,10 +417,6 @@ class EvacuateTab extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // =================================================
-            // BLUE ICON BOX
-            // =================================================
-
             Container(
               width: 50,
               height: double.infinity,
@@ -522,13 +427,7 @@ class EvacuateTab extends StatelessWidget {
                 size: 30,
               ),
             ),
-
             const SizedBox(width: 14),
-
-            // =================================================
-            // TITLE
-            // =================================================
-
             Expanded(
               child: Text(
                 title,
@@ -543,14 +442,8 @@ class EvacuateTab extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-
-            // =================================================
-            // READ
-            // =================================================
-
             const Padding(
-              padding:
-                  EdgeInsets.only(right: 16),
+              padding: EdgeInsets.only(right: 16),
               child: Text(
                 'Read »',
                 style: TextStyle(
@@ -563,6 +456,111 @@ class EvacuateTab extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  // =====================================================
+  // SECTION CONTENT
+  // =====================================================
+
+  List<Widget> _evacuationSection(
+    BuildContext context,
+    bool isDarkMode,
+  ) {
+    return [
+      _sectionTitle(
+        'EVACUATION CENTERS',
+        isDarkMode,
+      ),
+      _evacuationCard(
+        context,
+        'Lingga Elementary School',
+        '658J+7WC, Dany, Calamba, 4027 Laguna',
+        '-- km',
+        isDarkMode,
+      ),
+      _evacuationCard(
+        context,
+        'Uwisan Barangay Hall',
+        '65PF+Q9Q Uwisan, Calamba, 4027 Laguna',
+        '-- km',
+        isDarkMode,
+      ),
+      _evacuationCard(
+        context,
+        'Palingon Elementary School',
+        '658P+425, 202 Caballero St, Real, Calamba, 4027 Laguna',
+        '-- km',
+        isDarkMode,
+      ),
+    ];
+  }
+
+  List<Widget> _emergencySection(
+    BuildContext context,
+    bool isDarkMode,
+  ) {
+    return [
+      _sectionTitle(
+        'EMERGENCY NUMBERS',
+        isDarkMode,
+      ),
+      _emergencyCard(
+        context,
+        '911',
+        'Emergency Hotline',
+        isDarkMode,
+      ),
+      _emergencyCard(
+        context,
+        '0917 148 9813',
+        'Calamba CDRRMO',
+        isDarkMode,
+      ),
+      _emergencyCard(
+        context,
+        '(+63) 992 377 5096',
+        'Uwisan Health Center',
+        isDarkMode,
+      ),
+    ];
+  }
+
+  List<Widget> _guidesSection(
+    BuildContext context,
+    bool isDarkMode,
+  ) {
+    return [
+      _sectionTitle(
+        'FLOOD PREPARATION GUIDES',
+        isDarkMode,
+      ),
+      _guideCard(
+        'Survival Kit Preparation',
+        isDarkMode,
+        () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) =>
+                  const SurvivalKitPreparation(),
+            ),
+          );
+        },
+      ),
+      _guideCard(
+        'During and After Flood',
+        isDarkMode,
+        () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) =>
+                  const DuringAfterFlood(),
+            ),
+          );
+        },
+      ),
+    ];
   }
 
   // =====================================================
@@ -602,23 +600,16 @@ class EvacuateTab extends StatelessWidget {
                 child: SafeArea(
                   bottom: false,
                   child: Padding(
-                    padding:
-                        const EdgeInsets.symmetric(
+                    padding: const EdgeInsets.symmetric(
                       horizontal: 16,
                       vertical: 12,
                     ),
                     child: Row(
                       children: [
-                        // =================================================
-                        // LOGO
-                        // =================================================
-
                         GestureDetector(
                           onDoubleTap: () {
-                            isDarkModeNotifier
-                                    .value =
-                                !isDarkModeNotifier
-                                    .value;
+                            isDarkModeNotifier.value =
+                                !isDarkModeNotifier.value;
                           },
                           child: SizedBox(
                             width: 50,
@@ -628,19 +619,12 @@ class EvacuateTab extends StatelessWidget {
                             ),
                           ),
                         ),
-
                         const SizedBox(width: 8),
-
-                        // =================================================
-                        // APP NAME
-                        // =================================================
-
                         const Text(
                           'Evacuate',
                           style: TextStyle(
                             fontSize: 20,
-                            fontWeight:
-                                FontWeight.bold,
+                            fontWeight: FontWeight.bold,
                             color: Colors.white,
                           ),
                         ),
@@ -651,129 +635,75 @@ class EvacuateTab extends StatelessWidget {
               ),
 
               // =================================================
-              // PAGE CONTENT
+              // SEGMENTED TABS
+              // =================================================
+
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 40,
+                ),
+                child: _sectionTabs(isDarkMode),
+              ),
+
+              // =================================================
+              // PAGE CONTENT — SWIPEABLE SECTIONS
               // =================================================
 
               Expanded(
-                child: SingleChildScrollView(
-                  padding:
-                      const EdgeInsets.symmetric(
-                    horizontal: 40,
-                    vertical: 8,
-                  ),
-                  child: Column(
-                    children: [
-                      // =================================================
-                      // EVACUATION CENTERS
-                      // =================================================
-
-                      _sectionTitle(
-                        'EVACUATION CENTERS',
-                        isDarkMode,
+                child: PageView(
+                  controller: _pageController,
+                  onPageChanged: (index) {
+                    setState(() {
+                      _selectedSection = index;
+                    });
+                  },
+                  children: [
+                    SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 40,
+                        vertical: 8,
                       ),
-
-                      _evacuationCard(
-                        context,
-                        'Lingga Elementary School',
-                        '658J+7WC, Dany, Calamba, 4027 Laguna',
-                        '-- km',
-                        isDarkMode,
-                      ),
-
-                      _evacuationCard(
-                        context,
-                        'Uwisan Barangay Hall',
-                        '65PF+Q9Q Uwisan, Calamba, 4027 Laguna',
-                        '-- km',
-                        isDarkMode,
-                      ),
-
-                      _evacuationCard(
-                        context,
-                        'Palingon Elementary School',
-                        '658P+425, 202 Caballero St, Real, Calamba, 4027 Laguna',
-                        '-- km',
-                        isDarkMode,
-                      ),
-
-                      // =================================================
-                      // EMERGENCY NUMBERS
-                      // =================================================
-
-                      _sectionTitle(
-                        'EMERGENCY NUMBERS',
-                        isDarkMode,
-                      ),
-
-                      _emergencyCard(
-                        context,
-                        '911',
-                        'Emergency Hotline',
-                        isDarkMode,
-                      ),
-
-                      _emergencyCard(
-                        context,
-                        '0917 148 9813',
-                        'Calamba CDRRMO',
-                        isDarkMode,
-                      ),
-
-                      _emergencyCard(
-                        context,
-                        '(+63) 992 377 5096',
-                        'Uwisan Health Center',
-                        isDarkMode,
-                      ),
-
-                      // =================================================
-                      // FLOOD PREPARATION GUIDES
-                      // =================================================
-
-                      _sectionTitle(
-                        'FLOOD PREPARATION GUIDES',
-                        isDarkMode,
-                      ),
-
-                      // =================================================
-                      // SURVIVAL KIT PREPARATION
-                      // =================================================
-
-                      _guideCard(
-                        'Survival Kit Preparation',
-                        isDarkMode,
-                        () {
-                          Navigator.push(
+                      child: Column(
+                        children: [
+                          ..._evacuationSection(
                             context,
-                            MaterialPageRoute(
-                              builder: (context) =>
-                                  const SurvivalKitPreparation(),
-                            ),
-                          );
-                        },
+                            isDarkMode,
+                          ),
+                          const SizedBox(height: 20),
+                        ],
                       ),
-
-                      // =================================================
-                      // DURING AND AFTER FLOOD
-                      // =================================================
-
-                      _guideCard(
-                        'During and After Flood',
-                        isDarkMode,
-                        () {
-                          Navigator.push(
+                    ),
+                    SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 40,
+                        vertical: 8,
+                      ),
+                      child: Column(
+                        children: [
+                          ..._emergencySection(
                             context,
-                            MaterialPageRoute(
-                              builder: (context) =>
-                                  const DuringAfterFlood(),
-                            ),
-                          );
-                        },
+                            isDarkMode,
+                          ),
+                          const SizedBox(height: 20),
+                        ],
                       ),
-
-                      const SizedBox(height: 20),
-                    ],
-                  ),
+                    ),
+                    SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 40,
+                        vertical: 8,
+                      ),
+                      child: Column(
+                        children: [
+                          ..._guidesSection(
+                            context,
+                            isDarkMode,
+                          ),
+                          const SizedBox(height: 20),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
