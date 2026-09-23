@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:curved_navigation_bar/curved_navigation_bar.dart';
@@ -320,37 +319,43 @@ Future<void> firebaseMessagingBackgroundHandler(
 }
 
 // =====================================================
-// MAIN
+// INITIALIZE FCM SERVICES
+//
+// IMPORTANT:
+// This is intentionally started AFTER runApp().
+//
+// Network-dependent operations such as:
+// - notification permission
+// - topic subscription
+// - FCM token
+//
+// should NOT prevent the application from opening
+// when there is no Wi-Fi or mobile data.
 // =====================================================
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  // ===================================================
-  // FIREBASE
-  // ===================================================
-
-  await Firebase.initializeApp();
-
-  // ===================================================
-  // REGISTER BACKGROUND HANDLER
-  // ===================================================
-
-  FirebaseMessaging.onBackgroundMessage(
-    firebaseMessagingBackgroundHandler,
-  );
-
+Future<void> initializeFirebaseMessagingServices() async {
   // ===================================================
   // LOCAL NOTIFICATIONS
   // ===================================================
 
-  await initializeLocalNotifications();
+  try {
+    await initializeLocalNotifications();
+  } catch (e) {
+    print('LOCAL NOTIFICATIONS ERROR: $e');
+  }
 
   // ===================================================
   // LOAD UNREAD NOTIFICATION COUNT
+  //
+  // This uses local notification storage and does not
+  // need internet access.
   // ===================================================
 
-  await refreshUnreadNotificationCount();
+  try {
+    await refreshUnreadNotificationCount();
+  } catch (e) {
+    print('UNREAD COUNT ERROR: $e');
+  }
 
   // ===================================================
   // FIREBASE MESSAGING
@@ -363,17 +368,21 @@ void main() async {
   // REQUEST NOTIFICATION PERMISSION
   // ===================================================
 
-  final NotificationSettings settings =
-      await messaging.requestPermission(
-    alert: true,
-    badge: true,
-    sound: true,
-  );
+  try {
+    final NotificationSettings settings =
+        await messaging.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
 
-  print(
-    'Notification permission: '
-    '${settings.authorizationStatus}',
-  );
+    print(
+      'Notification permission: '
+      '${settings.authorizationStatus}',
+    );
+  } catch (e) {
+    print('FCM PERMISSION ERROR: $e');
+  }
 
   // ===================================================
   // SUBSCRIBE TO DETECT-CO ANNOUNCEMENT TOPIC
@@ -532,12 +541,56 @@ void main() async {
       print('================================');
     },
   );
+}
+
+// =====================================================
+// MAIN
+// =====================================================
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // ===================================================
+  // FIREBASE
+  //
+  // Firebase initialization is kept before runApp()
+  // because the application pages use Firebase.
+  // Firebase initialization itself does not require an
+  // active internet connection.
+  // ===================================================
+
+  await Firebase.initializeApp();
+
+  // ===================================================
+  // REGISTER BACKGROUND HANDLER
+  // ===================================================
+
+  FirebaseMessaging.onBackgroundMessage(
+    firebaseMessagingBackgroundHandler,
+  );
 
   // ===================================================
   // START APP
+  //
+  // IMPORTANT:
+  // The app starts BEFORE notification permission,
+  // FCM topic subscription, and FCM token retrieval.
+  //
+  // This prevents the splash screen from being held
+  // when there is no Wi-Fi or mobile data.
   // ===================================================
 
   runApp(const MyApp());
+
+  // ===================================================
+  // INITIALIZE FCM SERVICES AFTER APP START
+  //
+  // These operations are intentionally not awaited.
+  // They can continue in the background while the
+  // application UI is already running.
+  // ===================================================
+
+  initializeFirebaseMessagingServices();
 }
 
 // =====================================================
@@ -689,12 +742,16 @@ class _BottomNavPageState
 
           // =================================================
           // CURRENT TAB
+          //
+          // IndexedStack keeps all tabs alive instead of
+          // destroying HomeTab when another tab is selected.
           // =================================================
 
           body: IndexedStack(
             index: _currentIndex,
             children: _tabs,
           ),
+
           // =================================================
           // BOTTOM NAVIGATION
           // =================================================
