@@ -16,6 +16,8 @@ class HomeTab extends StatefulWidget {
 
 class _HomeTabState extends State<HomeTab>
     with SingleTickerProviderStateMixin {
+      Timer? _manilaTimeTimer;
+      DateTime _manilaTime = DateTime.now().toUtc().add(const Duration(hours: 8));
   // =====================================================
   // WATER SETTINGS
   // =====================================================
@@ -119,6 +121,21 @@ class _HomeTabState extends State<HomeTab>
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat();
+    // =====================================================
+    // MANILA TIME
+    // =====================================================
+
+    _manilaTimeTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) {
+        if (!mounted) return;
+
+        setState(() {
+          _manilaTime =
+              DateTime.now().toUtc().add(const Duration(hours: 8));
+        });
+      },
+    );
 
     // =====================================================
     // START ML PREDICTION
@@ -153,6 +170,7 @@ class _HomeTabState extends State<HomeTab>
   void dispose() {
     _mlPredictionTimer?.cancel();
     _esp32StatusTimer?.cancel();
+    _manilaTimeTimer?.cancel();
     _waterAnimationController.dispose();
     super.dispose();
   }
@@ -1322,12 +1340,11 @@ class _HomeTabState extends State<HomeTab>
 
                                   const Spacer(),
 
-                                  const Text(
-                                    'Time Check haydol',
-                                    style: TextStyle(
+                                  Text(
+                                    '${((_manilaTime.hour % 12) == 0 ? 12 : (_manilaTime.hour % 12)).toString().padLeft(2, '0')}:${_manilaTime.minute.toString().padLeft(2, '0')}:${_manilaTime.second.toString().padLeft(2, '0')} ${_manilaTime.hour >= 12 ? 'PM' : 'AM'}',
+                                    style: const TextStyle(
                                       fontSize: 14,
-                                      color:
-                                          Colors.white70,
+                                      color: Colors.white70,
                                     ),
                                   ),
                                 ],

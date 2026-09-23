@@ -691,8 +691,10 @@ class _BottomNavPageState
           // CURRENT TAB
           // =================================================
 
-          body: _tabs[_currentIndex],
-
+          body: IndexedStack(
+            index: _currentIndex,
+            children: _tabs,
+          ),
           // =================================================
           // BOTTOM NAVIGATION
           // =================================================
