@@ -3,6 +3,7 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  torch_flashlight
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST

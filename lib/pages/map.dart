@@ -985,7 +985,6 @@ class _MapTabState extends State<MapTab> {
         121.14916166968749,
       ),
     ),
-  
   ];
 
   // =====================================================
@@ -1192,23 +1191,23 @@ class _MapTabState extends State<MapTab> {
     String riskText;
     Color riskColor;
 
-    if (waterLevel > 40) {
-      riskText = "SAFE";
-      riskColor = const Color.fromRGBO(
-        76,
-        175,
-        80,
-        1,
-      );
-    } else if (waterLevel > 30) {
-      riskText = "MEDIUM RISK";
-      riskColor = Colors.orange;
-    } else {
+    if (waterLevel >= 40) {
       riskText = "FLOODING";
       riskColor = const Color.fromRGBO(
         244,
         67,
         54,
+        1,
+      );
+    } else if (waterLevel >= 20 && waterLevel < 40) {
+      riskText = "MEDIUM RISK";
+      riskColor = Colors.orange;
+    } else {
+      riskText = "SAFE";
+      riskColor = const Color.fromRGBO(
+        76,
+        175,
+        80,
         1,
       );
     }
@@ -1679,30 +1678,21 @@ class _MapTabState extends State<MapTab> {
                               ),
                               radius: 600,
                               useRadiusInMeter: true,
-                              color: waterLevel > 40
-                                  ? const Color.fromRGBO(
-                                      76,
-                                      175,
-                                      80,
-                                      1,
-                                    ).withOpacity(0.20)
-                                  : waterLevel > 30
-                                      ? Colors.orange
-                                          .withOpacity(0.35)
+                              color: waterLevel <= 0
+                                  ? Colors.green.withOpacity(0.35)
+                                  : waterLevel >= 20 &&
+                                          waterLevel < 40
+                                      ? Colors.orange.withOpacity(0.35)
                                       : const Color.fromRGBO(
                                           244,
                                           67,
                                           54,
                                           1,
                                         ).withOpacity(0.35),
-                              borderColor: waterLevel > 40
-                                  ? const Color.fromRGBO(
-                                      76,
-                                      175,
-                                      80,
-                                      1,
-                                    )
-                                  : waterLevel > 30
+                              borderColor: waterLevel <= 0
+                                  ? Colors.green
+                                  : waterLevel >= 20 &&
+                                          waterLevel < 40
                                       ? Colors.orange
                                       : const Color.fromRGBO(
                                           244,
@@ -1720,30 +1710,21 @@ class _MapTabState extends State<MapTab> {
                               ),
                               radius: 600,
                               useRadiusInMeter: true,
-                              color: waterLevel > 40
-                                  ? const Color.fromRGBO(
-                                      76,
-                                      175,
-                                      80,
-                                      1,
-                                    ).withOpacity(0.35)
-                                  : waterLevel > 30
-                                      ? Colors.orange
-                                          .withOpacity(0.35)
+                              color: waterLevel <= 0
+                                  ? Colors.green.withOpacity(0.35)
+                                  : waterLevel >= 20 &&
+                                          waterLevel < 40
+                                      ? Colors.orange.withOpacity(0.35)
                                       : const Color.fromRGBO(
                                           244,
                                           67,
                                           54,
                                           1,
                                         ).withOpacity(0.35),
-                              borderColor: waterLevel > 40
-                                  ? const Color.fromRGBO(
-                                      76,
-                                      175,
-                                      80,
-                                      1,
-                                    )
-                                  : waterLevel > 30
+                              borderColor: waterLevel <= 0
+                                  ? Colors.green
+                                  : waterLevel >= 20 &&
+                                          waterLevel < 40
                                       ? Colors.orange
                                       : const Color.fromRGBO(
                                           244,
@@ -1761,30 +1742,21 @@ class _MapTabState extends State<MapTab> {
                               ),
                               radius: 600,
                               useRadiusInMeter: true,
-                              color: waterLevel > 40
-                                  ? const Color.fromRGBO(
-                                      76,
-                                      175,
-                                      80,
-                                      1,
-                                    ).withOpacity(0.35)
-                                  : waterLevel > 30
-                                      ? Colors.orange
-                                          .withOpacity(0.35)
+                              color: waterLevel <= 0
+                                  ? Colors.green.withOpacity(0.35)
+                                  : waterLevel >= 20 &&
+                                          waterLevel < 40
+                                      ? Colors.orange.withOpacity(0.35)
                                       : const Color.fromRGBO(
                                           244,
                                           67,
                                           54,
                                           1,
                                         ).withOpacity(0.35),
-                              borderColor: waterLevel > 40
-                                  ? const Color.fromRGBO(
-                                      76,
-                                      175,
-                                      80,
-                                      1,
-                                    )
-                                  : waterLevel > 30
+                              borderColor: waterLevel <= 0
+                                  ? Colors.green
+                                  : waterLevel >= 20 &&
+                                          waterLevel < 40
                                       ? Colors.orange
                                       : const Color.fromRGBO(
                                           244,
@@ -1895,66 +1867,89 @@ class _MapTabState extends State<MapTab> {
                       ],
                     ),
 
-                    // =================================================
+                    // =====================================================
                     // GPS + NEAREST BUTTONS
-                    // =================================================
+                    // =====================================================
 
+                    // TOP-RIGHT: EVACUATION + HOSPITAL BUTTONS
                     Positioned(
                       top: 16,
                       right: 16,
                       child: Column(
                         children: [
-                          FloatingActionButton(
-                            heroTag: 'gps',
-                            mini: true,
-                            backgroundColor:
-                                const Color.fromARGB(
-                              255,
-                              245,
-                              245,
-                              245,
-                            ),
-                            onPressed: _locateMe,
-                            child: const Icon(
-                              Icons.my_location,
-                              color: Colors.blue,
-                            ),
-                          ),
-
-                          const SizedBox(height: 10),
-
-                          FloatingActionButton(
-                            heroTag: 'nearest',
-                            mini: true,
-                            backgroundColor:
-                                const Color.fromARGB(
-                              255,
-                              129,
-                              160,
-                              247,
-                            ),
-                            onPressed:
-                                _goToNearestEvac,
-                            child: const Icon(
-                              Icons.place,
-                              color: Colors.white,
+                          // ===== NEAREST EVACUATION CENTER BUTTON =====
+                          SizedBox(
+                            width: 150,
+                            height: 48,
+                            child: FloatingActionButton.extended(
+                              heroTag: 'nearest',
+                              backgroundColor: const Color.fromARGB(
+                                255,
+                                129,
+                                160,
+                                247,
+                              ),
+                              onPressed: _goToNearestEvac,
+                              icon: const Icon(
+                                Icons.place,
+                                color: Colors.white,
+                              ),
+                              label: const Text(
+                                'Evacuation Center',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             ),
                           ),
 
                           const SizedBox(height: 10),
 
                           // ===== NEAREST HOSPITAL BUTTON =====
-                          FloatingActionButton(
-                            heroTag: 'nearest_hospital',
-                            mini: true,
-                            backgroundColor: const Color(0xFFFF3035),
-                            onPressed: _goToNearestHospital,
-                            child: const Icon(
-                              Icons.local_hospital,
-                              color: Colors.white,
+                          SizedBox(
+                            width: 150,
+                            height: 48,
+                            child: FloatingActionButton.extended(
+                              heroTag: 'nearest_hospital',
+                              backgroundColor: const Color(0xFFFF3035),
+                              onPressed: _goToNearestHospital,
+                              icon: const Icon(
+                                Icons.local_hospital,
+                                color: Colors.white,
+                              ),
+                              label: const Text(
+                                'Hospital',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             ),
                           ),
                         ],
+                      ),
+                    ),
+
+                    // BOTTOM-RIGHT: LOCATE ME
+                    Positioned(
+                      bottom: 16,
+                      right: 16,
+                      child: FloatingActionButton(
+                        heroTag: 'gps',
+                        backgroundColor: const Color.fromARGB(
+                          255,
+                          245,
+                          245,
+                          245,
+                        ),
+                        onPressed: _locateMe,
+                        child: const Icon(
+                          Icons.my_location,
+                          color: Colors.blue,
+                        ),
                       ),
                     ),
 
@@ -1976,7 +1971,7 @@ class _MapTabState extends State<MapTab> {
                                   .withOpacity(0.92),
                           borderRadius:
                               BorderRadius.circular(14),
-                          boxShadow: [        
+                          boxShadow: [
                             BoxShadow(
                               color: isDarkMode
                                   ? Colors.black54

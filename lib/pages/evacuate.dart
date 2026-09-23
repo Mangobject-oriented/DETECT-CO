@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:torch_flashlight/torch_flashlight.dart';
 
 import 'package:detectco/main.dart'; // for isDarkModeNotifier
 import 'package:detectco/pages/survival_kit_prep.dart';
@@ -19,8 +20,76 @@ class _EvacuateTabState extends State<EvacuateTab> {
   late final PageController _pageController =
       PageController(initialPage: _selectedSection);
 
+  // =====================================================
+  // SOS FLASHLIGHT
+  // =====================================================
+
+  bool _isSosActive = false;
+
+  Future<void> _startSosFlashlight() async {
+    try {
+      final bool isAvailable =
+          await TorchFlashlight.isTorchFlashlightAvailable();
+
+      if (!isAvailable) {
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Flashlight is not available on this device.',
+            ),
+          ),
+        );
+
+        return;
+      }
+
+      await TorchFlashlight.startSOS();
+
+      if (!mounted) return;
+
+      setState(() {
+        _isSosActive = true;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Unable to start SOS flashlight.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _stopSosFlashlight() async {
+    try {
+      await TorchFlashlight.stopSOS();
+
+      if (!mounted) return;
+
+      setState(() {
+        _isSosActive = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Unable to stop SOS flashlight.',
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   void dispose() {
+    TorchFlashlight.stopSOS();
     _pageController.dispose();
     super.dispose();
   }
@@ -459,6 +528,115 @@ class _EvacuateTabState extends State<EvacuateTab> {
   }
 
   // =====================================================
+  // SOS FLASHLIGHT CARD
+  // =====================================================
+
+  Widget _sosFlashlightCard(bool isDarkMode) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDarkMode
+            ? const Color(0xFF303030)
+            : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.20),
+            blurRadius: 8,
+            offset: const Offset(4, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: _isSosActive
+                      ? const Color(0xFFFF3035)
+                      : const Color(0xFF2867F5),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.flashlight_on,
+                  color: Colors.white,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'SOS Flashlight',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: isDarkMode
+                            ? Colors.white
+                            : const Color(0xFF1D2B4A),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _isSosActive
+                          ? 'SOS signal is active'
+                          : 'Use your flashlight to signal for help',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDarkMode
+                            ? Colors.grey[400]
+                            : const Color(0xFF8194BB),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton.icon(
+              onPressed: _isSosActive
+                  ? _stopSosFlashlight
+                  : _startSosFlashlight,
+              icon: Icon(
+                _isSosActive
+                    ? Icons.stop_circle
+                    : Icons.sos,
+              ),
+              label: Text(
+                _isSosActive
+                    ? 'STOP SOS'
+                    : 'START SOS FLASHLIGHT',
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _isSosActive
+                    ? const Color(0xFFFF3035)
+                    : const Color(0xFF2867F5),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // =====================================================
   // SECTION CONTENT
   // =====================================================
 
@@ -534,6 +712,13 @@ class _EvacuateTabState extends State<EvacuateTab> {
         'FLOOD PREPARATION GUIDES',
         isDarkMode,
       ),
+
+      // =====================================================
+      // SOS FLASHLIGHT
+      // =====================================================
+
+      _sosFlashlightCard(isDarkMode),
+
       _guideCard(
         'Survival Kit Preparation',
         isDarkMode,
