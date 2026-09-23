@@ -930,7 +930,7 @@ class _BottomNavPageState
 
                       Expanded(
                         child: _buildLabel(
-                          'Evac',
+                          'Tools',
                           0,
                         ),
                       ),

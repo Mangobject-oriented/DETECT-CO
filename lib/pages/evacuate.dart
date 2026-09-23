@@ -621,7 +621,7 @@ class _EvacuateTabState extends State<EvacuateTab> {
                         ),
                         const SizedBox(width: 8),
                         const Text(
-                          'Evacuate',
+                          'Tools',
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
