@@ -45,3 +45,10 @@ app.*.map.json
 /android/app/release
 
 checker/serviceAccountKey.json
+
+.venv/
+DETECT-CO-ML/.venv/
+venv/
+DETECT-CO-ML/venv/
+__pycache__/
+DETECT-CO-ML/__pycache__/

@@ -1,0 +1,8 @@
+import pandas as pd
+from dbfread import DBF
+
+table = DBF('/home/miguel/DETECT-CO-ML/data/PH043400000_FH_5yr.dbf')
+df = pd.DataFrame(iter(table))
+
+print(df.head())
+df.to_csv('/home/miguel/DETECT-CO-ML/data/PH043400000_FH_5yr.csv', index=False)

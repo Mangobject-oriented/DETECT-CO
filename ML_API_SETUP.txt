@@ -1,0 +1,147 @@
+# DETECT-CO ML API
+
+This folder contains the trained ML models and FastAPI server used by DETECT-CO.
+
+## REQUIREMENTS
+
+Python 3
+Internet connection
+Open-Meteo API access
+
+The API uses Open-Meteo to get updated weather data for the ML predictions.
+
+1. OPEN THE ML FOLDER
+
+---
+
+Open a terminal in the DETECT-CO project folder and run:
+
+cd DETECT-CO/DETECT-CO-ML
+
+2. CREATE THE PYTHON VIRTUAL ENVIRONMENT
+
+---
+
+Run:
+
+python3 -m venv .venv
+
+3. ACTIVATE THE VIRTUAL ENVIRONMENT
+
+---
+
+Linux / Pop!_OS / Ubuntu:
+
+source .venv/bin/activate
+
+Windows:
+
+.venv\Scripts\activate
+
+4. INSTALL THE REQUIRED PYTHON PACKAGES
+
+---
+
+Run:
+
+pip install -r requirements.txt
+
+5. START THE FASTAPI SERVER
+
+---
+
+Run:
+
+uvicorn api:app --host 0.0.0.0 --port 8000
+
+If successful, the terminal should show that the server is running on:
+
+http://0.0.0.0:8000
+
+6. FIND THE COMPUTER'S IP ADDRESS
+
+---
+
+The Flutter app connects to the computer running the ML API.
+
+On Linux:
+
+hostname -I
+
+Example:
+
+192.168.18.14
+
+Then make sure the Flutter app's ML API URL uses:
+
+http://YOUR_COMPUTER_IP:8000/predict
+
+Example:
+
+http://192.168.18.14:8000/predict
+
+7. IMPORTANT
+
+---
+
+The phone/tablet running DETECT-CO and the computer running the FastAPI server must be connected to the same Wi-Fi network.
+
+Keep the FastAPI terminal running while using the Flutter app.
+
+The API automatically gets new weather data from Open-Meteo when /predict is called.
+
+The Flutter app currently requests a new ML prediction every 5 minutes.
+
+8. TEST THE API
+
+---
+
+With the FastAPI server running, open another terminal and run:
+
+curl -X POST http://127.0.0.1:8000/predict 
+-H "Content-Type: application/json" 
+-d '{"latitude":14.15,"longitude":121.05}'
+
+If the API is working, it will return the ML rainfall predictions for:
+
+1 hour
+3 hours
+6 hours
+12 hours
+24 hours
+
+9. START FLUTTER
+
+---
+
+In another terminal, go back to the DETECT-CO project:
+
+cd DETECT-CO
+
+Then run:
+
+flutter pub get
+
+flutter run
+
+## PIPELINE
+
+Flutter
+↓
+FastAPI
+↓
+Open-Meteo
+↓
+LSTM + XGBoost + Random Forest
+↓
+Rainfall Prediction
+↓
+Flutter
+
+## NOTE
+
+The ML models are already trained.
+
+Running the FastAPI server does NOT retrain the models.
+
+It loads the existing trained models and uses newly retrieved Open-Meteo weather data to generate predictions.

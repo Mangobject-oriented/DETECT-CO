@@ -97,6 +97,895 @@ class _MapTabState extends State<MapTab> {
         121.1861596967596,
       ),
     ),
+
+    // =====================================================
+    // ADDITIONAL EVACUATION CENTERS FROM YOUR LIST
+    // =====================================================
+
+    EvacSite(
+      name: "Evacuation Center 0",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.231580655616623,
+        121.13694004166739,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 1",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.201319556660879,
+        121.1320245730881,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 2",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.174504490904946,
+        121.1087250140898,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 3",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.172963720486747,
+        121.10557921410229,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 4",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.172113482744315,
+        121.10432174218926,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 5",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.173410443862354,
+        121.10617123123323,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 6",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.191485471680968,
+        121.16396746679861,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 7",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.158661827191356,
+        121.0630947146171,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 8",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.1606442315348,
+        121.08255004753215,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 9",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.156989529900981,
+        121.06391365513119,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 10",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.16775961272474,
+        121.09698479793742,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 11",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.160582754167905,
+        121.09950677838401,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 12",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.15923043180585,
+        121.15055525970166,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 13",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.21619675699334,
+        121.10831864742113,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 14",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.19776321566352,
+        121.16026673606467,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 15",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.165501500947597,
+        121.06344732444332,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 16",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.165737720981518,
+        121.06336680143697,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 17",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.171235841465467,
+        121.06845088677825,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 18",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.16468392333159,
+        121.11166297009778,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 19",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.15841935848526,
+        121.10292031938356,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 20",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.163877304381243,
+        121.1193921217405,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 21",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.163682990151303,
+        121.11221407903564,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 22",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.242245636596444,
+        121.16112224477644,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 23",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.164067163693884,
+        121.12022194425536,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 24",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.163974321171965,
+        121.11967628696898,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 25",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.173841778034774,
+        121.08997796950078,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 26",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.173532087184581,
+        121.09044519284902,
+      ),
+    ),
+
+    EvacSite(
+      name: "Lamesa Elementary School",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.181175581767723,
+        121.15693980811848,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 28",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.18134448099071,
+        121.15551189061159,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 29",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.18116634694325,
+        121.15527879277391,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 30",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.210171931261318,
+        121.15006689273368,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 31",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.206790199579396,
+        121.14534787891243,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 32",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.20831709925985,
+        121.14122115513742,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 33",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.203316989780198,
+        121.16152022776481,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 34",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.20293501289848,
+        121.16351836432413,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 35",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.215706295566287,
+        121.18229250422738,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 36",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.21500465075427,
+        121.18263593884583,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 37",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.226867070119598,
+        121.1791843408803,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 38",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.223606762143497,
+        121.17913294369943,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 39",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.227311567599813,
+        121.17801168719132,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 40",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.22685715333503,
+        121.17931162113375,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 41",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.157609591385897,
+        121.03890866929824,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 42",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.157611381431051,
+        121.03837803346556,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 43",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.1577328195214,
+        121.03865463924586,
+      ),
+    ),
+
+    // #44 was not supplied
+
+    EvacSite(
+      name: "Evacuation Center 45",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.194772931406085,
+        121.10653185321075,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 46",
+      description: "Di sure",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.194675033800195,
+        121.10681863228403,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 47",
+      description: "Di sure wala picture",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.217662466254062,
+        121.13031072145374,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 48",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.233286279876454,
+        121.12109842224699,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 49",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.182311694818134,
+        121.20046646919435,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 50",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.185232705776796,
+        121.20302471896639,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 51",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.169150712852536,
+        121.15392803071943,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 52",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.181345254262697,
+        121.15550795406192,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 53",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.18117897378228,
+        121.15693691953852,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 54",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.17255822267577,
+        121.15257389020832,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 55",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.21128116910972,
+        121.12683229027006,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 56",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.211349627395691,
+        121.1274426826303,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 57",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.209635996811041,
+        121.12946405931996,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 58",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.215181115082732,
+        121.11838198577026,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 59",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.175734135330105,
+        121.13707385200775,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 60",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.168667146420542,
+        121.13890417103521,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 61",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.16942375060053,
+        121.13784077220092,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 62",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.218842490643722,
+        121.1338802227567,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 63",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.216682570976168,
+        121.13684346719909,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 64",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.21561644928434,
+        121.18616123969663,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 65",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.215038052466918,
+        121.18625506138429,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 66",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.214198517822128,
+        121.18481769796186,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 67",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.184056579877563,
+        121.10727284773436,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 68",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.185505636435487,
+        121.10514984241068,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 69",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.183889286377417,
+        121.10469900997737,
+      ),
+    ),
+
+    // #70 = Di mahanap, so no marker is added
+
+    EvacSite(
+      name: "Evacuation Center 71",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.180415280449884,
+        121.17911049698672,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 72",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.179814627414459,
+        121.1788240508865,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 73",
+      description: "Di sure",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.181286443258058,
+        121.18891086343608,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 74",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.180055211653634,
+        121.18543688551486,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 75",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.179378280325913,
+        121.183893714503,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 76",
+      description: "Duplicate coordinate from supplied list",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.179378280325913,
+        121.183893714503,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 77",
+      description: "Duplicate coordinate from supplied list",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.179378280325913,
+        121.183893714503,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 78",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.21515499619268,
+        121.15170035378777,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 79",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.200979717555436,
+        121.14041785088628,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 80",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.198048393372924,
+        121.14038347822171,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 81",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.195537976854325,
+        121.13676690730857,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 82",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.176778883054167,
+        121.11816022580918,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 83",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.177911835403494,
+        121.12109504450672,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 84",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.177816095642763,
+        121.12040321215873,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 85",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.178159590514435,
+        121.12114980633409,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 86",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.152360080307764,
+        121.16213341703335,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 87",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.15250353343479,
+        121.16224046555969,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 88",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.152406304744268,
+        121.16264892494013,
+      ),
+    ),
+
+    EvacSite(
+      name: "Evacuation Center 89",
+      description: "Supplied coordinate",
+      image: "assets/images/evac1.png",
+      location: LatLng(
+        14.198555932678811,
+        121.14916166968749,
+      ),
+    ),
+  
   ];
 
   // =====================================================
@@ -1087,7 +1976,7 @@ class _MapTabState extends State<MapTab> {
                                   .withOpacity(0.92),
                           borderRadius:
                               BorderRadius.circular(14),
-                          boxShadow: [
+                          boxShadow: [        
                             BoxShadow(
                               color: isDarkMode
                                   ? Colors.black54

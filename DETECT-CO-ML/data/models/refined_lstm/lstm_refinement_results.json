@@ -1,0 +1,26 @@
+[
+    {
+        "model": "lstm_refined_3",
+        "val_loss": 0.00010981682135025039,
+        "val_mae": 0.005116523243486881,
+        "val_rmse": 0.014820042066276073,
+        "best_epoch": 17,
+        "training_minutes": 9.737883838017781
+    },
+    {
+        "model": "lstm_refined_2",
+        "val_loss": 0.00011066711158491671,
+        "val_mae": 0.005041859578341246,
+        "val_rmse": 0.01487730536609888,
+        "best_epoch": 17,
+        "training_minutes": 14.139663322766621
+    },
+    {
+        "model": "lstm_refined_1",
+        "val_loss": 0.00011153492232551798,
+        "val_mae": 0.005166389048099518,
+        "val_rmse": 0.014935523271560669,
+        "best_epoch": 17,
+        "training_minutes": 10.487340517838796
+    }
+]
