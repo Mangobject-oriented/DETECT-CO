@@ -31,6 +31,43 @@ class _HomeTabState extends State<HomeTab>
   double _previousWaterLevel = idleWaterLevel;
 
   // =====================================================
+  // ESP32 SENSOR CONNECTION
+  // =====================================================
+
+  // The ESP32 sends a Firebase server timestamp every second.
+  // If no recent timestamp is received, the ESP32 is considered
+  // offline and Open-Meteo is used as the weather fallback.
+  static const int esp32TimeoutSeconds = 30;
+
+  bool _esp32Online = false;
+
+  // Stores the latest Firebase timestamp received from ESP32.
+  // IMPORTANT:
+  // This allows the local timer to detect when Firebase stops
+  // receiving updates even though Firebase itself sends no new event.
+  int? _latestEsp32Timestamp;
+
+  // Lets us know that Firebase has provided at least one reading.
+  bool _hasReceivedFirebaseData = false;
+
+  // Checks the timestamp independently of Firebase onValue events.
+  Timer? _esp32StatusTimer;
+
+  // =====================================================
+  // OPEN-METEO FALLBACK WEATHER
+  // =====================================================
+
+  double? _fallbackTemperature;
+  double? _fallbackHumidity;
+
+  bool _fallbackWeatherLoading = false;
+  String? _fallbackWeatherError;
+
+  // Prevent repeated Open-Meteo requests while Firebase
+  // continues rebuilding the StreamBuilder.
+  bool _fallbackWeatherRequestScheduled = false;
+
+  // =====================================================
   // ML FLOOD PREDICTION API
   // =====================================================
 
@@ -46,7 +83,30 @@ class _HomeTabState extends State<HomeTab>
   bool _mlLoading = false;
   String? _mlError;
 
+  // True when the ML forecast is idle, unavailable,
+  // missing, or the ML server cannot be reached.
+  bool _mlForecastIdle = false;
+
   Timer? _mlPredictionTimer;
+
+  // =====================================================
+  // OPEN-METEO RAINFALL FALLBACK
+  // =====================================================
+
+  double? _openMeteoCurrentRainfall;
+  double? _openMeteoRainfall1h;
+  double? _openMeteoRainfall3h;
+  double? _openMeteoRainfall6h;
+  double? _openMeteoRainfall12h;
+  double? _openMeteoRainfall24h;
+  double? _openMeteoRainProbability;
+
+  bool _openMeteoRainLoading = false;
+  String? _openMeteoRainError;
+
+  // =====================================================
+  // INIT STATE
+  // =====================================================
 
   @override
   void initState() {
@@ -70,13 +130,98 @@ class _HomeTabState extends State<HomeTab>
       const Duration(minutes: 5),
       (_) => _fetchMLPrediction(),
     );
+
+    // =====================================================
+    // START ESP32 CONNECTION CHECK
+    // =====================================================
+    //
+    // Firebase only emits onValue when data changes.
+    // When ESP32 is turned off, Firebase keeps the old data
+    // and does NOT automatically emit another event.
+    //
+    // Therefore this timer checks the age of the last ESP32
+    // timestamp independently every 2 seconds.
+    //
+
+    _esp32StatusTimer = Timer.periodic(
+      const Duration(seconds: 2),
+      (_) => _checkEsp32Connection(),
+    );
   }
 
   @override
   void dispose() {
     _mlPredictionTimer?.cancel();
+    _esp32StatusTimer?.cancel();
     _waterAnimationController.dispose();
     super.dispose();
+  }
+
+  // =====================================================
+  // CHECK ESP32 CONNECTION
+  // =====================================================
+
+  void _checkEsp32Connection() {
+    if (!mounted) return;
+
+    bool newOnlineStatus = false;
+
+    if (_latestEsp32Timestamp != null) {
+      final int now =
+          DateTime.now().millisecondsSinceEpoch;
+
+      final int age =
+          now - _latestEsp32Timestamp!;
+
+      newOnlineStatus =
+          age >= 0 &&
+          age <=
+              const Duration(
+                seconds: esp32TimeoutSeconds,
+              ).inMilliseconds;
+    }
+
+    // If Firebase has not provided any ESP32 data yet,
+    // keep the current startup state for now.
+    if (!_hasReceivedFirebaseData) {
+      return;
+    }
+
+    if (_esp32Online != newOnlineStatus) {
+      setState(() {
+        _esp32Online = newOnlineStatus;
+      });
+
+      // =================================================
+      // ESP32 JUST WENT OFFLINE
+      // =================================================
+
+      if (!newOnlineStatus) {
+        _scheduleFallbackWeather();
+      }
+    } else {
+      // IMPORTANT:
+      // Force the StreamBuilder UI to rebuild even when
+      // Firebase itself is no longer sending events.
+      //
+      // This is what allows the old/stale ESP32 reading
+      // to stop being displayed after 30 seconds.
+      setState(() {});
+    }
+  }
+
+  // =====================================================
+  // PARSE DOUBLE
+  // =====================================================
+
+  double? _parseDouble(dynamic value) {
+    if (value is num) {
+      return value.toDouble();
+    }
+
+    return double.tryParse(
+      value?.toString() ?? '',
+    );
   }
 
   // =====================================================
@@ -118,34 +263,129 @@ class _HomeTabState extends State<HomeTab>
       final Map<String, dynamic> result =
           jsonDecode(response.body);
 
+      // =================================================
+      // CHECK IF ML IS IDLE
+      // =================================================
+
+      final String mlStatus =
+          result['status']?.toString().toLowerCase() ?? '';
+
+      if (mlStatus == 'idle') {
+        if (!mounted) return;
+
+        setState(() {
+          _mlForecastIdle = true;
+          _mlError = null;
+          _mlRainfall1h = null;
+          _mlRainfall3h = null;
+          _mlRainfall6h = null;
+          _mlRainfall12h = null;
+          _mlRainfall24h = null;
+        });
+
+        _fetchOpenMeteoRainfall();
+        return;
+      }
+
+      // =================================================
+      // GET ML PREDICTIONS
+      // =================================================
+
+      final dynamic rawPredictions =
+          result['predictions'];
+
+      if (rawPredictions is! Map) {
+        if (!mounted) return;
+
+        setState(() {
+          _mlForecastIdle = true;
+          _mlError = null;
+          _mlRainfall1h = null;
+          _mlRainfall3h = null;
+          _mlRainfall6h = null;
+          _mlRainfall12h = null;
+          _mlRainfall24h = null;
+        });
+
+        _fetchOpenMeteoRainfall();
+        return;
+      }
+
       final Map<String, dynamic> predictions =
-          result['predictions']
-              as Map<String, dynamic>;
+          Map<String, dynamic>.from(
+        rawPredictions,
+      );
+
+      final double? rainfall1h =
+          _parseDouble(
+        predictions['rainfall_1h_mm'],
+      );
+
+      final double? rainfall3h =
+          _parseDouble(
+        predictions['rainfall_3h_mm'],
+      );
+
+      final double? rainfall6h =
+          _parseDouble(
+        predictions['rainfall_6h_mm'],
+      );
+
+      final double? rainfall12h =
+          _parseDouble(
+        predictions['rainfall_12h_mm'],
+      );
+
+      final double? rainfall24h =
+          _parseDouble(
+        predictions['rainfall_24h_mm'],
+      );
+
+      // =================================================
+      // CHECK FOR COMPLETELY MISSING ML FORECAST
+      // =================================================
+      //
+      // IMPORTANT:
+      // Zero is a valid rainfall prediction.
+      // Therefore 0.00 is NOT treated as idle.
+      //
+
+      if (rainfall1h == null &&
+          rainfall3h == null &&
+          rainfall6h == null &&
+          rainfall12h == null &&
+          rainfall24h == null) {
+        if (!mounted) return;
+
+        setState(() {
+          _mlForecastIdle = true;
+          _mlError = null;
+          _mlRainfall1h = null;
+          _mlRainfall3h = null;
+          _mlRainfall6h = null;
+          _mlRainfall12h = null;
+          _mlRainfall24h = null;
+        });
+
+        _fetchOpenMeteoRainfall();
+        return;
+      }
+
+      // =================================================
+      // VALID ML FORECAST
+      // =================================================
 
       if (!mounted) return;
 
       setState(() {
-        _mlRainfall1h =
-            (predictions['rainfall_1h_mm'] as num?)
-                ?.toDouble();
-
-        _mlRainfall3h =
-            (predictions['rainfall_3h_mm'] as num?)
-                ?.toDouble();
-
-        _mlRainfall6h =
-            (predictions['rainfall_6h_mm'] as num?)
-                ?.toDouble();
-
-        _mlRainfall12h =
-            (predictions['rainfall_12h_mm'] as num?)
-                ?.toDouble();
-
-        _mlRainfall24h =
-            (predictions['rainfall_24h_mm'] as num?)
-                ?.toDouble();
+        _mlRainfall1h = rainfall1h;
+        _mlRainfall3h = rainfall3h;
+        _mlRainfall6h = rainfall6h;
+        _mlRainfall12h = rainfall12h;
+        _mlRainfall24h = rainfall24h;
 
         _mlError = null;
+        _mlForecastIdle = false;
       });
     } catch (e) {
       if (!mounted) return;
@@ -153,7 +393,21 @@ class _HomeTabState extends State<HomeTab>
       setState(() {
         _mlError =
             'Unable to connect to ML server';
+
+        _mlForecastIdle = true;
+
+        _mlRainfall1h = null;
+        _mlRainfall3h = null;
+        _mlRainfall6h = null;
+        _mlRainfall12h = null;
+        _mlRainfall24h = null;
       });
+
+      // =================================================
+      // ML ERROR -> OPEN-METEO FALLBACK
+      // =================================================
+
+      _fetchOpenMeteoRainfall();
     } finally {
       if (!mounted) return;
 
@@ -161,6 +415,493 @@ class _HomeTabState extends State<HomeTab>
         _mlLoading = false;
       });
     }
+  }
+
+  // =====================================================
+  // OPEN-METEO FALLBACK WEATHER
+  // =====================================================
+
+  Future<void> _fetchFallbackWeather() async {
+    if (_fallbackWeatherLoading) return;
+
+    if (mounted) {
+      setState(() {
+        _fallbackWeatherLoading = true;
+        _fallbackWeatherError = null;
+      });
+    }
+
+    try {
+      final uri = Uri.parse(
+        'https://api.open-meteo.com/v1/forecast'
+        '?latitude=14.15'
+        '&longitude=121.05'
+        '&current=temperature_2m,relative_humidity_2m,rain,precipitation,precipitation_probability'
+        '&hourly=precipitation,rain,precipitation_probability'
+        '&forecast_hours=24'
+        '&timezone=Asia%2FManila',
+      );
+
+      final response = await http
+          .get(uri)
+          .timeout(
+        const Duration(seconds: 15),
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception(
+          'Open-Meteo returned HTTP ${response.statusCode}',
+        );
+      }
+
+      final Map<String, dynamic> result =
+          jsonDecode(response.body);
+
+      final Map<String, dynamic>? current =
+          result['current'] is Map
+              ? Map<String, dynamic>.from(
+                  result['current'] as Map,
+                )
+              : null;
+
+      if (current == null) {
+        throw Exception(
+          'Open-Meteo current weather data missing',
+        );
+      }
+
+      final dynamic temperatureRaw =
+          current['temperature_2m'];
+
+      final dynamic humidityRaw =
+          current['relative_humidity_2m'];
+
+      final double? temperature =
+          _parseDouble(temperatureRaw);
+
+      final double? humidity =
+          _parseDouble(humidityRaw);
+
+      if (temperature == null || humidity == null) {
+        throw Exception(
+          'Invalid Open-Meteo weather values',
+        );
+      }
+
+      // =================================================
+      // ALSO READ RAINFALL DATA
+      // =================================================
+
+      final double? currentRain =
+          _parseDouble(current['rain']);
+
+      final double? currentPrecipitation =
+          _parseDouble(current['precipitation']);
+
+      final double? currentProbability =
+          _parseDouble(
+        current['precipitation_probability'],
+      );
+
+      final Map<String, dynamic>? hourly =
+          result['hourly'] is Map
+              ? Map<String, dynamic>.from(
+                  result['hourly'] as Map,
+                )
+              : null;
+
+      double rainfall1h = 0;
+      double rainfall3h = 0;
+      double rainfall6h = 0;
+      double rainfall12h = 0;
+      double rainfall24h = 0;
+
+      double probability1h = 0;
+      double probability3h = 0;
+      double probability6h = 0;
+      double probability12h = 0;
+      double probability24h = 0;
+
+      if (hourly != null) {
+        final List<dynamic> precipitationValues =
+            hourly['precipitation'] is List
+                ? hourly['precipitation'] as List
+                : [];
+
+        final List<dynamic> probabilityValues =
+            hourly['precipitation_probability'] is List
+                ? hourly['precipitation_probability'] as List
+                : [];
+
+        double sumRainfall(int count) {
+          final int limit =
+              math.min(
+            count,
+            precipitationValues.length,
+          );
+
+          double total = 0;
+
+          for (int i = 0; i < limit; i++) {
+            total +=
+                _parseDouble(
+                      precipitationValues[i],
+                    ) ??
+                    0;
+          }
+
+          return total;
+        }
+
+        double averageProbability(int count) {
+          final int limit =
+              math.min(
+            count,
+            probabilityValues.length,
+          );
+
+          if (limit == 0) {
+            return 0;
+          }
+
+          double total = 0;
+
+          for (int i = 0; i < limit; i++) {
+            total +=
+                _parseDouble(
+                      probabilityValues[i],
+                    ) ??
+                    0;
+          }
+
+          return total / limit;
+        }
+
+        rainfall1h = sumRainfall(1);
+        rainfall3h = sumRainfall(3);
+        rainfall6h = sumRainfall(6);
+        rainfall12h = sumRainfall(12);
+        rainfall24h = sumRainfall(24);
+
+        probability1h =
+            averageProbability(1);
+
+        probability3h =
+            averageProbability(3);
+
+        probability6h =
+            averageProbability(6);
+
+        probability12h =
+            averageProbability(12);
+
+        probability24h =
+            averageProbability(24);
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _fallbackTemperature = temperature;
+        _fallbackHumidity = humidity;
+
+        _fallbackWeatherError = null;
+
+        // =================================================
+        // OPEN-METEO RAINFALL DATA
+        // =================================================
+
+        _openMeteoCurrentRainfall =
+            currentRain ??
+                currentPrecipitation;
+
+        _openMeteoRainfall1h =
+            rainfall1h;
+
+        _openMeteoRainfall3h =
+            rainfall3h;
+
+        _openMeteoRainfall6h =
+            rainfall6h;
+
+        _openMeteoRainfall12h =
+            rainfall12h;
+
+        _openMeteoRainfall24h =
+            rainfall24h;
+
+        _openMeteoRainProbability =
+            currentProbability ??
+                probability1h;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _fallbackWeatherError =
+            'Unable to load Open-Meteo weather';
+      });
+    } finally {
+      if (!mounted) return;
+
+      setState(() {
+        _fallbackWeatherLoading = false;
+      });
+    }
+  }
+
+  // =====================================================
+  // OPEN-METEO RAINFALL FALLBACK
+  // =====================================================
+
+  Future<void> _fetchOpenMeteoRainfall() async {
+    if (_openMeteoRainLoading) return;
+
+    if (mounted) {
+      setState(() {
+        _openMeteoRainLoading = true;
+        _openMeteoRainError = null;
+      });
+    }
+
+    try {
+      final uri = Uri.parse(
+        'https://api.open-meteo.com/v1/forecast'
+        '?latitude=14.15'
+        '&longitude=121.05'
+        '&current=rain,precipitation,precipitation_probability'
+        '&hourly=precipitation,rain,precipitation_probability'
+        '&forecast_hours=24'
+        '&timezone=Asia%2FManila',
+      );
+
+      final response = await http
+          .get(uri)
+          .timeout(
+        const Duration(seconds: 15),
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception(
+          'Open-Meteo returned HTTP ${response.statusCode}',
+        );
+      }
+
+      final Map<String, dynamic> result =
+          jsonDecode(response.body);
+
+      final Map<String, dynamic>? current =
+          result['current'] is Map
+              ? Map<String, dynamic>.from(
+                  result['current'] as Map,
+                )
+              : null;
+
+      if (current == null) {
+        throw Exception(
+          'Open-Meteo current rainfall data missing',
+        );
+      }
+
+      final double? currentRain =
+          _parseDouble(current['rain']);
+
+      final double? currentPrecipitation =
+          _parseDouble(current['precipitation']);
+
+      final double? currentProbability =
+          _parseDouble(
+        current['precipitation_probability'],
+      );
+
+      final Map<String, dynamic>? hourly =
+          result['hourly'] is Map
+              ? Map<String, dynamic>.from(
+                  result['hourly'] as Map,
+                )
+              : null;
+
+      double rainfall1h = 0;
+      double rainfall3h = 0;
+      double rainfall6h = 0;
+      double rainfall12h = 0;
+      double rainfall24h = 0;
+
+      double probability1h = 0;
+
+      if (hourly != null) {
+        final List<dynamic> precipitationValues =
+            hourly['precipitation'] is List
+                ? hourly['precipitation'] as List
+                : [];
+
+        final List<dynamic> probabilityValues =
+            hourly['precipitation_probability'] is List
+                ? hourly['precipitation_probability'] as List
+                : [];
+
+        double sumRainfall(int count) {
+          final int limit =
+              math.min(
+            count,
+            precipitationValues.length,
+          );
+
+          double total = 0;
+
+          for (int i = 0; i < limit; i++) {
+            total +=
+                _parseDouble(
+                      precipitationValues[i],
+                    ) ??
+                    0;
+          }
+
+          return total;
+        }
+
+        double averageProbability(int count) {
+          final int limit =
+              math.min(
+            count,
+            probabilityValues.length,
+          );
+
+          if (limit == 0) {
+            return 0;
+          }
+
+          double total = 0;
+
+          for (int i = 0; i < limit; i++) {
+            total +=
+                _parseDouble(
+                      probabilityValues[i],
+                    ) ??
+                    0;
+          }
+
+          return total / limit;
+        }
+
+        rainfall1h = sumRainfall(1);
+        rainfall3h = sumRainfall(3);
+        rainfall6h = sumRainfall(6);
+        rainfall12h = sumRainfall(12);
+        rainfall24h = sumRainfall(24);
+
+        probability1h =
+            averageProbability(1);
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _openMeteoCurrentRainfall =
+            currentRain ??
+                currentPrecipitation;
+
+        _openMeteoRainfall1h =
+            rainfall1h;
+
+        _openMeteoRainfall3h =
+            rainfall3h;
+
+        _openMeteoRainfall6h =
+            rainfall6h;
+
+        _openMeteoRainfall12h =
+            rainfall12h;
+
+        _openMeteoRainfall24h =
+            rainfall24h;
+
+        _openMeteoRainProbability =
+            currentProbability ??
+                probability1h;
+
+        _openMeteoRainError = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _openMeteoRainError =
+            'Unable to load Open-Meteo rainfall';
+      });
+    } finally {
+      if (!mounted) return;
+
+      setState(() {
+        _openMeteoRainLoading = false;
+      });
+    }
+  }
+
+  // =====================================================
+  // SCHEDULE OPEN-METEO FALLBACK
+  // =====================================================
+
+  void _scheduleFallbackWeather() {
+    if (_fallbackWeatherRequestScheduled) return;
+
+    _fallbackWeatherRequestScheduled = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fallbackWeatherRequestScheduled = false;
+
+      if (!mounted) return;
+
+      if (!_esp32Online) {
+        _fetchFallbackWeather();
+      }
+    });
+  }
+
+  // =====================================================
+  // CHECK ESP32 TIMESTAMP
+  // =====================================================
+
+  bool _isEsp32TimestampRecent(dynamic timestampRaw) {
+    if (timestampRaw == null) {
+      return false;
+    }
+
+    double? timestamp;
+
+    if (timestampRaw is num) {
+      timestamp = timestampRaw.toDouble();
+    } else {
+      timestamp = double.tryParse(
+        timestampRaw.toString(),
+      );
+    }
+
+    if (timestamp == null || !timestamp.isFinite) {
+      return false;
+    }
+
+    // Firebase server timestamps are milliseconds.
+    // This also safely handles seconds if they are ever used.
+    if (timestamp < 100000000000) {
+      timestamp *= 1000;
+    }
+
+    final int now =
+        DateTime.now().millisecondsSinceEpoch;
+
+    final int timestampMilliseconds =
+        timestamp.round();
+
+    final int age =
+        now - timestampMilliseconds;
+
+    // Future timestamps are also treated as valid within
+    // the timeout range to tolerate a small clock difference.
+    return age <=
+        const Duration(
+          seconds: esp32TimeoutSeconds,
+        ).inMilliseconds;
   }
 
   // =====================================================
@@ -179,7 +920,8 @@ class _HomeTabState extends State<HomeTab>
   void toggleTheme() async {
     final prefs = await SharedPreferences.getInstance();
 
-    isDarkModeNotifier.value = !isDarkModeNotifier.value;
+    isDarkModeNotifier.value =
+        !isDarkModeNotifier.value;
 
     await prefs.setBool(
       'darkMode',
@@ -228,9 +970,12 @@ class _HomeTabState extends State<HomeTab>
 
                 Map<String, dynamic> data = {};
 
-                double waterLevel = idleWaterLevel;
+                double waterLevel =
+                    idleWaterLevel;
 
                 bool sensorActive = false;
+
+                bool esp32Online = _esp32Online;
 
                 if (snapshot.hasData &&
                     snapshot.data!.snapshot.value != null) {
@@ -243,43 +988,148 @@ class _HomeTabState extends State<HomeTab>
 
                     data = rawData.map(
                       (key, value) =>
-                          MapEntry(key.toString(), value),
+                          MapEntry(
+                        key.toString(),
+                        value,
+                      ),
                     );
 
                     // =================================================
-                    // DISTANCE FROM ULTRASONIC SENSOR
+                    // ESP32 TIMESTAMP
                     // =================================================
 
-                    final dynamic distanceRaw =
-                        data['distance'];
+                    final dynamic timestampRaw =
+                        data['timestamp'];
 
-                    if (distanceRaw != null) {
-                      final double? parsedDistance =
-                          distanceRaw is num
-                              ? distanceRaw.toDouble()
-                              : double.tryParse(
-                                  distanceRaw.toString(),
-                                );
+                    // Store the latest Firebase timestamp.
+                    //
+                    // This value will continue to be checked by
+                    // _esp32StatusTimer even after the ESP32 stops
+                    // sending Firebase updates.
+                    double? parsedTimestamp;
 
-                      if (parsedDistance != null &&
-                          parsedDistance.isFinite) {
-                        if (parsedDistance >= maxWaterLevel) {
-                          sensorActive = false;
-                          waterLevel = idleWaterLevel;
-                        } else {
-                          sensorActive = true;
+                    if (timestampRaw is num) {
+                      parsedTimestamp =
+                          timestampRaw.toDouble();
+                    } else {
+                      parsedTimestamp =
+                          double.tryParse(
+                        timestampRaw?.toString() ?? '',
+                      );
+                    }
 
-                          waterLevel = parsedDistance
-                              .clamp(
-                                0.0,
-                                maxWaterLevel,
-                              )
-                              .toDouble();
-                        }
+                    if (parsedTimestamp != null &&
+                        parsedTimestamp.isFinite) {
+                      if (parsedTimestamp <
+                          100000000000) {
+                        parsedTimestamp *= 1000;
+                      }
+
+                      _latestEsp32Timestamp =
+                          parsedTimestamp.round();
+
+                      _hasReceivedFirebaseData = true;
+                    }
+
+                    // Use the timestamp immediately for the current
+                    // Firebase rebuild.
+                    esp32Online =
+                        _isEsp32TimestampRecent(
+                      timestampRaw,
+                    );
+
+                    _esp32Online = esp32Online;
+                  }
+                }
+
+                // =====================================================
+                // OPEN-METEO FALLBACK
+                // =====================================================
+
+                if (!esp32Online) {
+                  _scheduleFallbackWeather();
+                }
+
+                // =================================================
+                // DISTANCE FROM ULTRASONIC SENSOR
+                // =================================================
+
+                if (esp32Online) {
+                  final dynamic distanceRaw =
+                      data['distance'];
+
+                  if (distanceRaw != null) {
+                    final double? parsedDistance =
+                        distanceRaw is num
+                            ? distanceRaw.toDouble()
+                            : double.tryParse(
+                                distanceRaw.toString(),
+                              );
+
+                    if (parsedDistance != null &&
+                        parsedDistance.isFinite) {
+                      if (parsedDistance >=
+                          maxWaterLevel) {
+                        sensorActive = false;
+                        waterLevel =
+                            idleWaterLevel;
+                      } else if (parsedDistance >= 0) {
+                        sensorActive = true;
+
+                        waterLevel =
+                            parsedDistance
+                                .clamp(
+                                  0.0,
+                                  maxWaterLevel,
+                                )
+                                .toDouble();
+                      } else {
+                        // Keep the ESP32 online but do not
+                        // treat an ultrasonic out-of-range
+                        // reading as a real water level.
+                        sensorActive = false;
+                        waterLevel =
+                            idleWaterLevel;
                       }
                     }
                   }
+                } else {
+                  // =================================================
+                  // ESP32 OFFLINE
+                  // =================================================
+                  //
+                  // Do NOT use stale distance data.
+                  // Do NOT display 0 as the water level.
+                  //
+                  // Open-Meteo does not provide the physical
+                  // ultrasonic water level, so the water section
+                  // remains IDLE until the ESP32 reconnects.
+
+                  sensorActive = false;
+                  waterLevel =
+                      idleWaterLevel;
                 }
+
+                // =====================================================
+                // TEMPERATURE
+                // =====================================================
+
+                final dynamic temperatureRaw =
+                    data['temperature'];
+
+                final double? sensorTemperature =
+                    temperatureRaw is num
+                        ? temperatureRaw.toDouble()
+                        : double.tryParse(
+                            temperatureRaw
+                                    ?.toString() ??
+                                '',
+                          );
+
+                final double? displayedTemperature =
+                    esp32Online
+                        ? sensorTemperature
+                        : _fallbackTemperature;
 
                 // =====================================================
                 // HUMIDITY
@@ -288,13 +1138,19 @@ class _HomeTabState extends State<HomeTab>
                 final dynamic humidityRaw =
                     data['humidity'];
 
-                final double humidity =
+                final double? sensorHumidity =
                     humidityRaw is num
                         ? humidityRaw.toDouble()
                         : double.tryParse(
-                              humidityRaw?.toString() ?? '',
-                            ) ??
-                            0;
+                            humidityRaw?.toString() ??
+                                '',
+                          );
+
+                final double humidity =
+                    (esp32Online
+                            ? sensorHumidity
+                            : _fallbackHumidity) ??
+                        0;
 
                 // =====================================================
                 // SCREEN / HEADER
@@ -579,7 +1435,10 @@ class _HomeTabState extends State<HomeTab>
                                               Flexible(
                                                 child:
                                                     Text(
-                                                  '${data['temperature']?.toString() ?? '--'}°C',
+                                                  displayedTemperature !=
+                                                          null
+                                                      ? '${displayedTemperature.toStringAsFixed(1)}°C'
+                                                      : '--°C',
                                                   style:
                                                       TextStyle(
                                                     fontSize:
@@ -602,24 +1461,12 @@ class _HomeTabState extends State<HomeTab>
                                       ),
                                     ),
 
-                                    Expanded(
-                                      child: Align(
-                                        alignment:
-                                            Alignment
-                                                .topRight,
-                                        child:
-                                            Image.asset(
-                                          'assets/icon/house.png',
-                                          width: 120,
-                                          height: 100,
-                                        ),
-                                      ),
-                                    ),
+
                                   ],
                                 ),
 
                                 const SizedBox(
-                                  height: 10,
+                                  height: 6,
                                 ),
 
                                 // =================================================
@@ -1069,7 +1916,11 @@ class _HomeTabState extends State<HomeTab>
                                                           Center(
                                                         child:
                                                             Text(
-                                                          '${humidity.toStringAsFixed(0)}%',
+                                                          (esp32Online ||
+                                                                  _fallbackHumidity !=
+                                                                      null)
+                                                              ? '${humidity.toStringAsFixed(0)}%'
+                                                              : '--%',
                                                           style:
                                                               TextStyle(
                                                             fontSize:
@@ -1090,7 +1941,7 @@ class _HomeTabState extends State<HomeTab>
                                             ),
 
                                             const SizedBox(
-                                              height: 12,
+                                              height: 4,
                                             ),
 
                                             // =================================================
@@ -1115,7 +1966,7 @@ class _HomeTabState extends State<HomeTab>
                                             ),
 
                                             const SizedBox(
-                                              height: 8,
+                                              height: 4,
                                             ),
 
                                             Container(
@@ -1192,11 +2043,11 @@ class _HomeTabState extends State<HomeTab>
                                             ),
 
                                             const SizedBox(
-                                              height: 10,
+                                              height: 4,
                                             ),
 
                                             // =================================================
-                                            // ML RAINFALL PREDICTION
+                                            // ML / OPEN-METEO RAINFALL PREDICTION
                                             // =================================================
 
                                             Container(
@@ -1225,8 +2076,17 @@ class _HomeTabState extends State<HomeTab>
                                               ),
                                               child: Column(
                                                 children: [
+
+                                                  // =================================================
+                                                  // FORECAST TITLE
+                                                  // =================================================
+
                                                   Text(
-                                                    'ML Rainfall Forecast',
+                                                    _mlForecastIdle ||
+                                                            _mlError !=
+                                                                null
+                                                        ? 'Rainfall Forecast'
+                                                        : 'ML Rainfall Forecast',
                                                     textAlign:
                                                         TextAlign
                                                             .center,
@@ -1248,7 +2108,14 @@ class _HomeTabState extends State<HomeTab>
                                                     height: 4,
                                                   ),
 
-                                                  if (_mlLoading)
+                                                  // =================================================
+                                                  // MAIN RAINFALL VALUE
+                                                  // =================================================
+
+                                                  if (_mlLoading &&
+                                                      !_mlForecastIdle &&
+                                                      _mlError ==
+                                                          null)
                                                     const SizedBox(
                                                       width: 16,
                                                       height: 16,
@@ -1257,22 +2124,11 @@ class _HomeTabState extends State<HomeTab>
                                                         strokeWidth: 2,
                                                       ),
                                                     )
-                                                  else if (_mlError !=
-                                                      null)
-                                                    Text(
-                                                      _mlError!,
-                                                      textAlign:
-                                                          TextAlign
-                                                              .center,
-                                                      style:
-                                                          const TextStyle(
-                                                        fontSize: 10,
-                                                        color:
-                                                            Colors.red,
-                                                      ),
-                                                    )
-                                                  else if (_mlRainfall24h !=
-                                                      null)
+                                                  else if (!_mlForecastIdle &&
+                                                      _mlError ==
+                                                          null &&
+                                                      _mlRainfall24h !=
+                                                          null)
                                                     Text(
                                                       '24h: ${_mlRainfall24h!.toStringAsFixed(2)} mm',
                                                       textAlign:
@@ -1289,6 +2145,35 @@ class _HomeTabState extends State<HomeTab>
                                                                     .white
                                                                 : Colors
                                                                     .black,
+                                                      ),
+                                                    )
+                                                  else if (_openMeteoRainfall24h !=
+                                                      null)
+                                                    Text(
+                                                      '24h: ${_openMeteoRainfall24h!.toStringAsFixed(2)} mm',
+                                                      textAlign:
+                                                          TextAlign
+                                                              .center,
+                                                      style: TextStyle(
+                                                        fontSize: 16,
+                                                        fontWeight:
+                                                            FontWeight
+                                                                .bold,
+                                                        color:
+                                                            isDarkMode
+                                                                ? Colors
+                                                                    .white
+                                                                : Colors
+                                                                    .black,
+                                                      ),
+                                                    )
+                                                  else if (_openMeteoRainLoading)
+                                                    const SizedBox(
+                                                      width: 16,
+                                                      height: 16,
+                                                      child:
+                                                          CircularProgressIndicator(
+                                                        strokeWidth: 2,
                                                       ),
                                                     )
                                                   else
@@ -1312,7 +2197,11 @@ class _HomeTabState extends State<HomeTab>
                                                     height: 2,
                                                   ),
 
-                                                  if (!_mlLoading &&
+                                                  // =================================================
+                                                  // 1 HOUR RAINFALL
+                                                  // =================================================
+
+                                                  if (!_mlForecastIdle &&
                                                       _mlError ==
                                                           null &&
                                                       _mlRainfall1h !=
@@ -1327,11 +2216,78 @@ class _HomeTabState extends State<HomeTab>
                                                         color:
                                                             isDarkMode
                                                                 ? Colors
-                                                                    .grey[
-                                                                    300]
+                                                                    .grey[300]
                                                                 : Colors
-                                                                    .grey[
-                                                                    700],
+                                                                    .grey[700],
+                                                      ),
+                                                    )
+                                                  else if (_openMeteoRainfall1h !=
+                                                      null)
+                                                    Text(
+                                                      '1h: ${_openMeteoRainfall1h!.toStringAsFixed(2)} mm',
+                                                      textAlign:
+                                                          TextAlign
+                                                              .center,
+                                                      style: TextStyle(
+                                                        fontSize: 10,
+                                                        color:
+                                                            isDarkMode
+                                                                ? Colors
+                                                                    .grey[300]
+                                                                : Colors
+                                                                    .grey[700],
+                                                      ),
+                                                    ),
+
+                                                  // =================================================
+                                                  // CURRENT RAIN
+                                                  // =================================================
+
+                                                  if ((_mlForecastIdle ||
+                                                          _mlError !=
+                                                              null) &&
+                                                      _openMeteoCurrentRainfall !=
+                                                          null)
+                                                    Text(
+                                                      'Current rain: '
+                                                      '${_openMeteoCurrentRainfall!.toStringAsFixed(2)} mm',
+                                                      textAlign:
+                                                          TextAlign
+                                                              .center,
+                                                      style: TextStyle(
+                                                        fontSize: 10,
+                                                        color:
+                                                            isDarkMode
+                                                                ? Colors
+                                                                    .grey[300]
+                                                                : Colors
+                                                                    .grey[700],
+                                                      ),
+                                                    ),
+
+                                                  // =================================================
+                                                  // RAIN PROBABILITY
+                                                  // =================================================
+
+                                                  if ((_mlForecastIdle ||
+                                                          _mlError !=
+                                                              null) &&
+                                                      _openMeteoRainProbability !=
+                                                          null)
+                                                    Text(
+                                                      'Rain probability: '
+                                                      '${_openMeteoRainProbability!.toStringAsFixed(0)}%',
+                                                      textAlign:
+                                                          TextAlign
+                                                              .center,
+                                                      style: TextStyle(
+                                                        fontSize: 10,
+                                                        color:
+                                                            isDarkMode
+                                                                ? Colors
+                                                                    .grey[300]
+                                                                : Colors
+                                                                    .grey[700],
                                                       ),
                                                     ),
                                                 ],
