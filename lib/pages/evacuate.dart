@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:torch_flashlight/torch_flashlight.dart';
+import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 
 import 'package:detectco/main.dart'; // for isDarkModeNotifier
 import 'package:detectco/pages/survival_kit_prep.dart';
@@ -87,9 +88,64 @@ class _EvacuateTabState extends State<EvacuateTab> {
     }
   }
 
+  // =====================================================
+  // EMERGENCY ALARM
+  // =====================================================
+
+  bool _isEmergencyAlarmActive = false;
+
+  Future<void> _startEmergencyAlarm() async {
+    try {
+      await FlutterRingtonePlayer().playAlarm(
+        looping: true,
+        volume: 1.0,
+        asAlarm: true,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _isEmergencyAlarmActive = true;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Unable to start emergency alarm.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _stopEmergencyAlarm() async {
+    try {
+      await FlutterRingtonePlayer().stop();
+
+      if (!mounted) return;
+
+      setState(() {
+        _isEmergencyAlarmActive = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Unable to stop emergency alarm.',
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   void dispose() {
     TorchFlashlight.stopSOS();
+    FlutterRingtonePlayer().stop();
     _pageController.dispose();
     super.dispose();
   }
@@ -637,6 +693,115 @@ class _EvacuateTabState extends State<EvacuateTab> {
   }
 
   // =====================================================
+  // EMERGENCY ALARM CARD
+  // =====================================================
+
+  Widget _emergencyAlarmCard(bool isDarkMode) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDarkMode
+            ? const Color(0xFF303030)
+            : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.20),
+            blurRadius: 8,
+            offset: const Offset(4, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: _isEmergencyAlarmActive
+                      ? const Color(0xFFFF3035)
+                      : const Color(0xFFFF7A00),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.volume_up_rounded,
+                  color: Colors.white,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Emergency Alarm',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: isDarkMode
+                            ? Colors.white
+                            : const Color(0xFF1D2B4A),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _isEmergencyAlarmActive
+                          ? 'Emergency alarm is active'
+                          : 'Play a continuous emergency alarm',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDarkMode
+                            ? Colors.grey[400]
+                            : const Color(0xFF8194BB),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton.icon(
+              onPressed: _isEmergencyAlarmActive
+                  ? _stopEmergencyAlarm
+                  : _startEmergencyAlarm,
+              icon: Icon(
+                _isEmergencyAlarmActive
+                    ? Icons.stop_circle
+                    : Icons.campaign_rounded,
+              ),
+              label: Text(
+                _isEmergencyAlarmActive
+                    ? 'STOP EMERGENCY ALARM'
+                    : 'START EMERGENCY ALARM',
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _isEmergencyAlarmActive
+                    ? const Color(0xFFFF3035)
+                    : const Color(0xFFFF7A00),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // =====================================================
   // SECTION CONTENT
   // =====================================================
 
@@ -718,6 +883,12 @@ class _EvacuateTabState extends State<EvacuateTab> {
       // =====================================================
 
       _sosFlashlightCard(isDarkMode),
+
+      // =====================================================
+      // EMERGENCY ALARM
+      // =====================================================
+
+      _emergencyAlarmCard(isDarkMode),
 
       _guideCard(
         'Survival Kit Preparation',

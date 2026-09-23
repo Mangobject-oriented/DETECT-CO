@@ -50,6 +50,7 @@ dependencies:
 
   curved_navigation_bar: ^1.0.3
   torch_flashlight: ^0.0.3
+  flutter_ringtone_player: ^4.0.0+4
 dev_dependencies:
   flutter_test:
     sdk: flutter

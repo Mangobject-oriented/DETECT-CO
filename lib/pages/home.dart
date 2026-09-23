@@ -16,6 +16,7 @@ class HomeTab extends StatefulWidget {
 
 class _HomeTabState extends State<HomeTab>
     with SingleTickerProviderStateMixin {
+      String _selectedBarangay = 'Uwisan';
       Timer? _manilaTimeTimer;
       DateTime _manilaTime = DateTime.now().toUtc().add(const Duration(hours: 8));
   // =====================================================
@@ -1283,7 +1284,7 @@ class _HomeTabState extends State<HomeTab>
 
                                   const Expanded(
                                     child: Text(
-                                      'Hello, Mike!',
+                                      'Hello!',
                                       style: TextStyle(
                                         fontSize: 18,
                                         fontWeight:
@@ -1329,12 +1330,63 @@ class _HomeTabState extends State<HomeTab>
                                     width: 4,
                                   ),
 
-                                  const Text(
-                                    'Barangay Biringan',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color:
-                                          Colors.white70,
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: isDarkMode
+                                          ? const Color(0xFF303030)
+                                          : const Color(0xFF4877F7),
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: isDarkMode
+                                            ? Colors.white.withOpacity(0.12)
+                                            : Colors.white.withOpacity(0.20),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: DropdownButtonHideUnderline(
+                                      child: DropdownButton<String>(
+                                        value: _selectedBarangay,
+                                        isDense: true,
+                                        borderRadius: BorderRadius.circular(16),
+                                        dropdownColor: isDarkMode
+                                            ? const Color(0xFF303030)
+                                            : const Color(0xFF4877F7),
+                                        icon: const Icon(
+                                          Icons.keyboard_arrow_down_rounded,
+                                          color: Colors.white70,
+                                          size: 20,
+                                        ),
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                        items: const [
+                                          DropdownMenuItem(
+                                            value: 'Uwisan',
+                                            child: Text('Barangay Uwisan'),
+                                          ),
+                                          DropdownMenuItem(
+                                            value: 'Palingon',
+                                            child: Text('Barangay Palingon'),
+                                          ),
+                                          DropdownMenuItem(
+                                            value: 'Lingga',
+                                            child: Text('Barangay Lingga'),
+                                          ),
+                                        ],
+                                        onChanged: (value) {
+                                          if (value == null) return;
+
+                                          setState(() {
+                                            _selectedBarangay = value;
+                                          });
+                                        },
+                                      ),
                                     ),
                                   ),
 
