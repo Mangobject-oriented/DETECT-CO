@@ -183,6 +183,150 @@ class MenuTab extends StatelessWidget {
                         const SizedBox(height: 14),
 
                         // =================================================
+                        // DARK MODE
+                        // =================================================
+
+                        Material(
+                          color: Colors.transparent,
+
+                          child: AnimatedContainer(
+                            duration:
+                                const Duration(milliseconds: 250),
+
+                            width: double.infinity,
+
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 18,
+                            ),
+
+                            decoration: BoxDecoration(
+                              color: cardColor,
+
+                              borderRadius:
+                                  BorderRadius.circular(20),
+
+                              border: Border.all(
+                                color: isDarkMode
+                                    ? Colors.grey.shade800
+                                    : Colors.grey.shade200,
+                              ),
+
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(
+                                    isDarkMode
+                                        ? 0.25
+                                        : 0.08,
+                                  ),
+
+                                  blurRadius: 6,
+
+                                  offset: const Offset(
+                                    0,
+                                    4,
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            child: Row(
+                              children: [
+
+                                // =================================================
+                                // ICON CONTAINER
+                                // =================================================
+
+                                Container(
+                                  width: 52,
+                                  height: 52,
+
+                                  decoration: BoxDecoration(
+                                    color: isDarkMode
+                                        ? const Color(0xFF383838)
+                                        : const Color(0xFFEAF0FF),
+
+                                    borderRadius:
+                                        BorderRadius.circular(16),
+                                  ),
+
+                                  child: Icon(
+                                    isDarkMode
+                                        ? Icons.dark_mode_rounded
+                                        : Icons.light_mode_rounded,
+
+                                    size: 27,
+
+                                    color: isDarkMode
+                                        ? Colors.white
+                                        : const Color(0xFF4877F7),
+                                  ),
+                                ),
+
+                                const SizedBox(width: 16),
+
+                                // =================================================
+                                // TEXT
+                                // =================================================
+
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+
+                                    children: [
+
+                                      Text(
+                                        'Dark Mode',
+
+                                        style: TextStyle(
+                                          fontSize: 17,
+                                          fontWeight:
+                                              FontWeight.w600,
+                                          color: textColor,
+                                        ),
+                                      ),
+
+                                      const SizedBox(height: 4),
+
+                                      Text(
+                                        isDarkMode
+                                            ? 'Dark appearance is enabled'
+                                            : 'Use a darker appearance',
+
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: isDarkMode
+                                              ? Colors.white60
+                                              : Colors.grey.shade600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+
+                                // =================================================
+                                // TOGGLE
+                                // =================================================
+
+                                Switch(
+                                  value: isDarkMode,
+
+                                  onChanged: (value) {
+                                    isDarkModeNotifier.value = value;
+                                  },
+
+                                  activeColor:
+                                      const Color(0xFF4877F7),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 14),
+
+                        // =================================================
                         // ABOUT APP
                         // =================================================
 
