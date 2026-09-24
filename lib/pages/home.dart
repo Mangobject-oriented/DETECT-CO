@@ -968,7 +968,26 @@ class _HomeTabState extends State<HomeTab>
             backgroundColor: isDarkMode
                 ? const Color(0xFF212121)
                 : Colors.white,
-            body: StreamBuilder<DatabaseEvent>(
+            // =====================================================
+            // RAIN BACKGROUND (BEHIND EVERYTHING) + PAGE CONTENT
+            // =====================================================
+            body: Stack(
+              fit: StackFit.expand,
+              children: [
+
+                // Rainy / cloudy background.
+                // IgnorePointer keeps all taps and double-taps working.
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: RepaintBoundary(
+                      child: _RainBackground(
+                        isDark: isDarkMode,
+                      ),
+                    ),
+                  ),
+                ),
+
+                StreamBuilder<DatabaseEvent>(
               stream: dbRef.child('flood').onValue,
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
@@ -1211,14 +1230,10 @@ class _HomeTabState extends State<HomeTab>
                       height: topHeight,
                       width: double.infinity,
                       alignment: Alignment.topCenter,
-                      color: isDarkMode
-                          ? const Color(0xFF212121)
-                          : const Color.fromARGB(
-                              255,
-                              72,
-                              119,
-                              247,
-                            ),
+                      // Transparent so the rainy background shows
+                      // through. The background gradient starts with the
+                      // same blue (light) / dark grey (dark) as before.
+                      color: Colors.transparent,
                       child: SafeArea(
                         bottom: false,
                         child: Padding(
@@ -2378,11 +2393,251 @@ class _HomeTabState extends State<HomeTab>
                 );
               },
             ),
+              ],
+            ),
           ),
         );
       },
     );
   }
+}
+
+// =====================================================
+// RAIN BACKGROUND
+// =====================================================
+//
+// Soft, slow, low-opacity rain that is concentrated along the
+// left / right edges of the screen and fades toward the center,
+// so the sensor card stays fully readable.
+//
+// Dark mode  -> darker, moodier rainy sky.
+// Light mode -> soft cloudy blue sky.
+
+class _RainDrop {
+  final double x; // 0..1 across the screen width
+  final double phase; // 0..1 starting offset
+  final double length; // pixels
+  final int speed; // whole number so the loop is seamless
+  final double opacity; // 0..1 per-drop variation
+
+  const _RainDrop({
+    required this.x,
+    required this.phase,
+    required this.length,
+    required this.speed,
+    required this.opacity,
+  });
+}
+
+class _RainBackground extends StatefulWidget {
+  final bool isDark;
+
+  const _RainBackground({
+    required this.isDark,
+  });
+
+  @override
+  State<_RainBackground> createState() =>
+      _RainBackgroundState();
+}
+
+class _RainBackgroundState
+    extends State<_RainBackground>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final List<_RainDrop> _drops;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // SLOW animation:
+    // one full cycle takes 10 seconds.
+    // Drops with speed 1 take 10s to cross the screen,
+    // drops with speed 2 take 5s.
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 10),
+    )..repeat();
+
+    final math.Random rnd = math.Random(42);
+
+    _drops = List.generate(80, (i) {
+      double x;
+
+      // ~85% of the drops are placed near the left/right edges.
+      // The rest are spread across the screen (very faint in the middle).
+      if (rnd.nextDouble() < 0.85) {
+        final double t = rnd.nextDouble();
+        final double s = t * t * 0.30;
+        x = rnd.nextBool() ? s : 1 - s;
+      } else {
+        x = rnd.nextDouble();
+      }
+
+      return _RainDrop(
+        x: x,
+        phase: rnd.nextDouble(),
+        length: 10 + rnd.nextDouble() * 14,
+        speed: rnd.nextBool() ? 1 : 2,
+        opacity: 0.5 + rnd.nextDouble() * 0.5,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return CustomPaint(
+          size: Size.infinite,
+          painter: _RainPainter(
+            progress: _controller.value,
+            isDark: widget.isDark,
+            drops: _drops,
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _RainPainter extends CustomPainter {
+  final double progress;
+  final bool isDark;
+  final List<_RainDrop> drops;
+
+  _RainPainter({
+    required this.progress,
+    required this.isDark,
+    required this.drops,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Rect rect = Offset.zero & size;
+
+    // =====================================================
+    // BACKGROUND GRADIENT
+    // =====================================================
+
+    final List<Color> colors = isDark
+        ? const [
+            Color(0xFF0E1218),
+            Color(0xFF161C24),
+            Color(0xFF212121),
+          ]
+        : const [
+            Color(0xFF4877F7),
+            Color(0xFFA9C4FB),
+            Color(0xFFE8F0FE),
+          ];
+
+    const List<double> stops = [0.0, 0.45, 1.0];
+
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: colors,
+          stops: isDark ? stops : const [0.28, 0.55, 1.0],
+        ).createShader(rect),
+    );
+
+    // =====================================================
+    // SOFT CLOUDS (slow horizontal drift)
+    // =====================================================
+
+    final Paint cloudPaint = Paint()
+      ..maskFilter =
+          const MaskFilter.blur(BlurStyle.normal, 32)
+      ..color = isDark
+          ? const Color(0xFF3A4652).withOpacity(0.35)
+          : Colors.white.withOpacity(0.40);
+
+    final List<List<double>> clouds = [
+      // x, y, radius (fractions of screen size)
+      [0.10, 0.10, 0.22],
+      [0.65, 0.05, 0.28],
+      [0.98, 0.22, 0.20],
+      [0.02, 0.58, 0.24],
+      [1.00, 0.78, 0.24],
+    ];
+
+    for (int i = 0; i < clouds.length; i++) {
+      final double drift =
+          math.sin(progress * math.pi * 2 + i) * 12;
+
+      canvas.drawCircle(
+        Offset(
+          clouds[i][0] * size.width + drift,
+          clouds[i][1] * size.height,
+        ),
+        clouds[i][2] * size.width,
+        cloudPaint,
+      );
+    }
+
+    // =====================================================
+    // RAIN DROPS
+    // =====================================================
+
+    final Paint rainPaint = Paint()
+      ..strokeWidth = 1.2
+      ..strokeCap = StrokeCap.round;
+
+    final Color rainColor = isDark
+        ? const Color(0xFFB0C4DE)
+        : const Color(0xFF5F86D6);
+
+    // Low opacity overall.
+    final double maxAlpha = isDark ? 0.22 : 0.28;
+
+    for (final _RainDrop d in drops) {
+      final double travel = size.height + d.length;
+
+      final double y =
+          ((d.phase + progress * d.speed) % 1.0) *
+                  travel -
+              d.length;
+
+      final double x = d.x * size.width;
+
+      // 0 in the center, 1 at the very edges.
+      final double edgeDistance =
+          ((d.x - 0.5).abs() * 2).clamp(0.0, 1.0);
+
+      // Center stays very faint, edges are strongest.
+      final double alpha =
+          maxAlpha *
+              d.opacity *
+              (0.15 + 0.85 * edgeDistance);
+
+      rainPaint.color = rainColor.withOpacity(alpha);
+
+      canvas.drawLine(
+        Offset(x, y),
+        Offset(x - d.length * 0.2, y + d.length),
+        rainPaint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(
+    covariant _RainPainter oldDelegate,
+  ) =>
+      oldDelegate.progress != progress ||
+      oldDelegate.isDark != isDark;
 }
 
 // =====================================================
