@@ -1,11 +1,64 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:convert';
+import 'dart:ui' as ui;
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_database/firebase_database.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:detectco/main.dart'; // for isDarkModeNotifier
+
+// =====================================================
+// GLASSMORPHISM CARD HELPER
+// =====================================================
+//
+// Reusable frosted-glass container used across the new
+// dashboard UI. Semi-transparent background, subtle light
+// border, soft drop shadow, and an optional colored glow
+// border (used for the flood-risk card).
+
+Widget _glassCard({
+  required Widget child,
+  Color? glowColor,
+  EdgeInsetsGeometry padding = const EdgeInsets.all(14),
+  BorderRadius? borderRadius,
+}) {
+  final BorderRadius radius =
+      borderRadius ?? BorderRadius.circular(18);
+
+  return ClipRRect(
+    borderRadius: radius,
+    child: BackdropFilter(
+      filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+      child: Container(
+        padding: padding,
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          color: Colors.white.withOpacity(0.025),
+          border: Border.all(
+            color: glowColor != null
+                ? glowColor.withOpacity(0.5)
+                : Colors.white.withOpacity(0.12),
+            width: glowColor != null ? 1.4 : 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.28),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
+            ),
+            if (glowColor != null)
+              BoxShadow(
+                color: glowColor.withOpacity(0.3),
+                blurRadius: 20,
+                spreadRadius: 1,
+              ),
+          ],
+        ),
+        child: child,
+      ),
+    ),
+  );
+}
 
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key});
@@ -19,6 +72,7 @@ class _HomeTabState extends State<HomeTab>
       String _selectedBarangay = 'Uwisan';
       Timer? _manilaTimeTimer;
       DateTime _manilaTime = DateTime.now().toUtc().add(const Duration(hours: 8));
+
   // =====================================================
   // WATER SETTINGS
   // =====================================================
@@ -108,14 +162,26 @@ class _HomeTabState extends State<HomeTab>
   String? _openMeteoRainError;
 
   // =====================================================
+  // WEATHER CONDITION (FOR BACKGROUND ANIMATION)
+  // =====================================================
+  //
+  // This is separate from the flood/rainfall logic above.
+  // It only tells the background what the sky currently looks
+  // like (sunny / cloudy / rainy / stormy), using Open-Meteo's
+  // weather_code and cloud_cover, combined with the rainfall
+  // data that is already fetched elsewhere in this file.
+
+  int? _weatherCode;
+  double? _cloudCover;
+  Timer? _weatherConditionTimer;
+
+  // =====================================================
   // INIT STATE
   // =====================================================
 
   @override
   void initState() {
     super.initState();
-
-    loadTheme();
 
     // Continuous water-wave animation.
     _waterAnimationController = AnimationController(
@@ -165,6 +231,17 @@ class _HomeTabState extends State<HomeTab>
       const Duration(seconds: 2),
       (_) => _checkEsp32Connection(),
     );
+
+    // =====================================================
+    // START WEATHER CONDITION (BACKGROUND ANIMATION)
+    // =====================================================
+
+    _fetchWeatherCondition();
+
+    _weatherConditionTimer = Timer.periodic(
+      const Duration(minutes: 10),
+      (_) => _fetchWeatherCondition(),
+    );
   }
 
   @override
@@ -172,6 +249,7 @@ class _HomeTabState extends State<HomeTab>
     _mlPredictionTimer?.cancel();
     _esp32StatusTimer?.cancel();
     _manilaTimeTimer?.cancel();
+    _weatherConditionTimer?.cancel();
     _waterAnimationController.dispose();
     super.dispose();
   }
@@ -878,6 +956,126 @@ class _HomeTabState extends State<HomeTab>
   }
 
   // =====================================================
+  // FETCH WEATHER CONDITION (SUNNY / CLOUDY / RAIN CODE)
+  // =====================================================
+  //
+  // This is a small, separate Open-Meteo call used only to
+  // decide which background animation to show. It does not
+  // touch or duplicate the flood/rainfall logic above; it
+  // only reads weather_code and cloud_cover, which none of
+  // the existing calls request.
+
+  Future<void> _fetchWeatherCondition() async {
+    try {
+      final uri = Uri.parse(
+        'https://api.open-meteo.com/v1/forecast'
+        '?latitude=14.15'
+        '&longitude=121.05'
+        '&current=weather_code,cloud_cover'
+        '&timezone=Asia%2FManila',
+      );
+
+      final response = await http
+          .get(uri)
+          .timeout(
+        const Duration(seconds: 15),
+      );
+
+      if (response.statusCode != 200) {
+        return;
+      }
+
+      final Map<String, dynamic> result =
+          jsonDecode(response.body);
+
+      final Map<String, dynamic>? current =
+          result['current'] is Map
+              ? Map<String, dynamic>.from(
+                  result['current'] as Map,
+                )
+              : null;
+
+      if (current == null) {
+        return;
+      }
+
+      final double? weatherCodeValue =
+          _parseDouble(current['weather_code']);
+
+      final double? cloudCoverValue =
+          _parseDouble(current['cloud_cover']);
+
+      if (!mounted) return;
+
+      setState(() {
+        if (weatherCodeValue != null) {
+          _weatherCode = weatherCodeValue.round();
+        }
+
+        if (cloudCoverValue != null) {
+          _cloudCover = cloudCoverValue;
+        }
+      });
+    } catch (e) {
+      // Silently ignored: the background simply falls back
+      // to whatever rainfall data is already available.
+    }
+  }
+
+  // =====================================================
+  // COMPUTE BACKGROUND WEATHER MODE
+  // =====================================================
+  //
+  // Combines the weather_code/cloud_cover fetched above with
+  // the rainfall figures already tracked elsewhere in this
+  // file (ML prediction or Open-Meteo fallback) to decide
+  // which background animation to show.
+
+  _WeatherBackgroundMode _computeWeatherMode() {
+    final int? code = _weatherCode;
+
+    final bool isThunderCode =
+        code != null && code >= 95 && code <= 99;
+
+    final bool isRainCode = code != null &&
+        ((code >= 51 && code <= 67) ||
+            (code >= 80 && code <= 82));
+
+    final bool isCloudyCode =
+        code != null && code >= 1 && code <= 3;
+
+    final double? rain1h =
+        (!_mlForecastIdle && _mlError == null)
+            ? _mlRainfall1h
+            : _openMeteoRainfall1h;
+
+    final double currentRain =
+        _openMeteoCurrentRainfall ?? 0;
+
+    final double hourlyRain = rain1h ?? 0;
+
+    final bool heavyByAmount =
+        hourlyRain >= 4.0 || currentRain >= 2.0;
+
+    final bool lightByAmount =
+        hourlyRain > 0 || currentRain > 0;
+
+    if (isThunderCode || heavyByAmount) {
+      return _WeatherBackgroundMode.storm;
+    }
+
+    if (isRainCode || lightByAmount) {
+      return _WeatherBackgroundMode.rain;
+    }
+
+    if (isCloudyCode || (_cloudCover ?? 0) > 50) {
+      return _WeatherBackgroundMode.cloudy;
+    }
+
+    return _WeatherBackgroundMode.sunny;
+  }
+
+  // =====================================================
   // CHECK ESP32 TIMESTAMP
   // =====================================================
 
@@ -924,31 +1122,6 @@ class _HomeTabState extends State<HomeTab>
   }
 
   // =====================================================
-  // THEME
-  // =====================================================
-
-  void loadTheme() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    if (!mounted) return;
-
-    isDarkModeNotifier.value =
-        prefs.getBool('darkMode') ?? isDarkModeNotifier.value;
-  }
-
-  void toggleTheme() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    isDarkModeNotifier.value =
-        !isDarkModeNotifier.value;
-
-    await prefs.setBool(
-      'darkMode',
-      isDarkModeNotifier.value,
-    );
-  }
-
-  // =====================================================
   // BUILD
   // =====================================================
 
@@ -956,1425 +1129,567 @@ class _HomeTabState extends State<HomeTab>
   Widget build(BuildContext context) {
     final dbRef = FirebaseDatabase.instance.ref();
 
-    return ValueListenableBuilder<bool>(
-      valueListenable: isDarkModeNotifier,
-      builder: (context, isDarkMode, child) {
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 400),
-          color: isDarkMode
-              ? const Color(0xFF212121)
-              : Colors.white,
-          child: Scaffold(
-            backgroundColor: isDarkMode
-                ? const Color(0xFF212121)
-                : Colors.white,
+    // Dark mode is now the permanent, fixed UI for this app.
+    const bool isDarkMode = true;
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
+        systemNavigationBarColor: Color(0xFF212121),
+        systemNavigationBarIconBrightness: Brightness.light,
+        systemNavigationBarDividerColor: Color(0xFF212121),
+      ),
+      child: AnimatedContainer(
+      duration: const Duration(milliseconds: 400),
+      color: isDarkMode
+          ? const Color(0xFF212121)
+          : Colors.white,
+      child: Scaffold(
+        backgroundColor: isDarkMode
+            ? const Color(0xFF212121)
+            : Colors.white,
+        // =====================================================
+        // RAIN BACKGROUND (BEHIND EVERYTHING) + PAGE CONTENT
+        // =====================================================
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+
+            // Weather-based background.
+            // IgnorePointer keeps all taps and double-taps working.
+            Positioned.fill(
+              child: IgnorePointer(
+                child: RepaintBoundary(
+                  child: _RainBackground(
+                    mode: _computeWeatherMode(),
+                  ),
+                ),
+              ),
+            ),
+
+            StreamBuilder<DatabaseEvent>(
+          stream: dbRef.child('flood').onValue,
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return const Center(
+                child: Text(
+                  'Error loading data',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.red,
+                  ),
+                ),
+              );
+            }
+
             // =====================================================
-            // RAIN BACKGROUND (BEHIND EVERYTHING) + PAGE CONTENT
+            // SENSOR DATA
             // =====================================================
-            body: Stack(
-              fit: StackFit.expand,
+
+            Map<String, dynamic> data = {};
+
+            double waterLevel =
+                idleWaterLevel;
+
+            bool sensorActive = false;
+
+            bool esp32Online = _esp32Online;
+
+            if (snapshot.hasData &&
+                snapshot.data!.snapshot.value != null) {
+              final rawValue =
+                  snapshot.data!.snapshot.value;
+
+              if (rawValue is Map) {
+                final rawData =
+                    rawValue as Map<dynamic, dynamic>;
+
+                data = rawData.map(
+                  (key, value) =>
+                      MapEntry(
+                    key.toString(),
+                    value,
+                  ),
+                );
+
+                // =================================================
+                // ESP32 TIMESTAMP
+                // =================================================
+
+                final dynamic timestampRaw =
+                    data['timestamp'];
+
+                // Store the latest Firebase timestamp.
+                //
+                // This value will continue to be checked by
+                // _esp32StatusTimer even after the ESP32 stops
+                // sending Firebase updates.
+                double? parsedTimestamp;
+
+                if (timestampRaw is num) {
+                  parsedTimestamp =
+                      timestampRaw.toDouble();
+                } else {
+                  parsedTimestamp =
+                      double.tryParse(
+                    timestampRaw?.toString() ?? '',
+                  );
+                }
+
+                if (parsedTimestamp != null &&
+                    parsedTimestamp.isFinite) {
+                  if (parsedTimestamp <
+                      100000000000) {
+                    parsedTimestamp *= 1000;
+                  }
+
+                  _latestEsp32Timestamp =
+                      parsedTimestamp.round();
+
+                  _hasReceivedFirebaseData = true;
+                }
+
+                // Use the timestamp immediately for the current
+                // Firebase rebuild.
+                esp32Online =
+                    _isEsp32TimestampRecent(
+                  timestampRaw,
+                );
+
+                _esp32Online = esp32Online;
+              }
+            }
+
+            // =====================================================
+            // OPEN-METEO FALLBACK
+            // =====================================================
+
+            if (!esp32Online) {
+              _scheduleFallbackWeather();
+            }
+
+            // =================================================
+            // DISTANCE FROM ULTRASONIC SENSOR
+            // =================================================
+
+            if (esp32Online) {
+              final dynamic distanceRaw =
+                  data['distance'];
+
+              if (distanceRaw != null) {
+                final double? parsedDistance =
+                    distanceRaw is num
+                        ? distanceRaw.toDouble()
+                        : double.tryParse(
+                            distanceRaw.toString(),
+                          );
+
+                if (parsedDistance != null &&
+                    parsedDistance.isFinite) {
+                  if (parsedDistance >=
+                      maxWaterLevel) {
+                    sensorActive = false;
+                    waterLevel =
+                        idleWaterLevel;
+                  } else if (parsedDistance >= 0) {
+                    sensorActive = true;
+
+                    waterLevel =
+                        parsedDistance
+                            .clamp(
+                              0.0,
+                              maxWaterLevel,
+                            )
+                            .toDouble();
+                  } else {
+                    // Keep the ESP32 online but do not
+                    // treat an ultrasonic out-of-range
+                    // reading as a real water level.
+                    sensorActive = false;
+                    waterLevel =
+                        idleWaterLevel;
+                  }
+                }
+              }
+            } else {
+              // =================================================
+              // ESP32 OFFLINE
+              // =================================================
+              //
+              // Do NOT use stale distance data.
+              // Do NOT display 0 as the water level.
+              //
+              // Open-Meteo does not provide the physical
+              // ultrasonic water level, so the water section
+              // remains IDLE until the ESP32 reconnects.
+
+              sensorActive = false;
+              waterLevel =
+                  idleWaterLevel;
+            }
+
+            // =====================================================
+            // TEMPERATURE
+            // =====================================================
+
+            final dynamic temperatureRaw =
+                data['temperature'];
+
+            final double? sensorTemperature =
+                temperatureRaw is num
+                    ? temperatureRaw.toDouble()
+                    : double.tryParse(
+                        temperatureRaw
+                                ?.toString() ??
+                            '',
+                      );
+
+            final double? displayedTemperature =
+                esp32Online
+                    ? sensorTemperature
+                    : _fallbackTemperature;
+
+            // =====================================================
+            // HUMIDITY
+            // =====================================================
+
+            final dynamic humidityRaw =
+                data['humidity'];
+
+            final double? sensorHumidity =
+                humidityRaw is num
+                    ? humidityRaw.toDouble()
+                    : double.tryParse(
+                        humidityRaw?.toString() ??
+                            '',
+                      );
+
+            final double humidity =
+                (esp32Online
+                        ? sensorHumidity
+                        : _fallbackHumidity) ??
+                    0;
+
+            // =====================================================
+            // SCREEN / HEADER
+            // =====================================================
+
+            final double screenHeight =
+                MediaQuery.of(context).size.height;
+
+            final double topHeight =
+                screenHeight * 0.32;
+
+            // =====================================================
+            // WATER ANIMATION
+            // =====================================================
+
+            final double animationStart =
+                _previousWaterLevel;
+
+            final double animationEnd =
+                waterLevel;
+
+            _previousWaterLevel =
+                waterLevel;
+
+            // =====================================================
+            // FLOOD RISK STATUS (dynamic — unchanged logic)
+            // =====================================================
+
+            final Color floodColor = !sensorActive
+                ? Colors.grey.shade500
+                : waterLevel > 50
+                    ? Colors.red.shade400
+                    : waterLevel > 30
+                        ? Colors.orange.shade400
+                        : Colors.green.shade400;
+
+            final String floodStatusText = !sensorActive
+                ? 'IDLE'
+                : waterLevel > 50
+                    ? 'FLOODING'
+                    : waterLevel > 30
+                        ? 'MEDIUM RISK'
+                        : 'SAFE';
+
+            final String floodMessage = !sensorActive
+                ? 'Waiting for sensor data'
+                : waterLevel > 50
+                    ? 'High water levels detected'
+                    : waterLevel > 30
+                        ? 'Monitor conditions closely'
+                        : 'Conditions are normal';
+
+            // =====================================================
+            // FIXED PAGE - NO SCROLLING
+            // =====================================================
+
+            return Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
               children: [
 
-                // Rainy / cloudy background.
-                // IgnorePointer keeps all taps and double-taps working.
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: RepaintBoundary(
-                      child: _RainBackground(
-                        isDark: isDarkMode,
+                // =================================================
+                // HEADER
+                // =================================================
+
+                Container(
+                  height: topHeight,
+                  width: double.infinity,
+                  alignment: Alignment.topCenter,
+                  // Transparent so the rainy background shows
+                  // through. The background gradient starts with the
+                  // same blue (light) / dark grey (dark) as before.
+                  color: Colors.transparent,
+                  child: SafeArea(
+                    bottom: false,
+                    child: Padding(
+                      padding:
+                          const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      child: Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                        children: [
+
+                          // =====================================
+                          // HEADER TOP ROW
+                          // =====================================
+
+                          Row(
+                            children: [
+
+                              SizedBox(
+                                width: 50,
+                                height: 50,
+                                child: Image.asset(
+                                  "assets/icon/detect-co_logo.png",
+                                ),
+                              ),
+
+                              const SizedBox(
+                                width: 8,
+                              ),
+
+                              const Text(
+                                'DETECT-CO',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight:
+                                      FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+
+                              const Spacer(),
+                            ],
+                          ),
+
+                          const SizedBox(
+                            height: 12,
+                          ),
+
+                          // =====================================
+                          // GREETING
+                          // =====================================
+
+                          Row(
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                            children: [
+
+                              const Expanded(
+                                child: Text(
+                                  'Hello!',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight:
+                                        FontWeight.w500,
+                                    color:
+                                        Colors.white,
+                                  ),
+                                ),
+                              ),
+
+                              Text(
+                                'Last Synced',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.white
+                                      .withOpacity(
+                                    0.85,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(
+                            height: 4,
+                          ),
+
+                          // =====================================
+                          // LOCATION / TIME
+                          // =====================================
+
+                          Row(
+                            children: [
+
+                              const Icon(
+                                Icons.location_on,
+                                color:
+                                    Colors.white70,
+                                size: 16,
+                              ),
+
+                              const SizedBox(
+                                width: 4,
+                              ),
+
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.025),
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(
+                                    color: Colors.white.withOpacity(0.12),
+                                    width: 1,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.22),
+                                      blurRadius: 12,
+                                      offset: const Offset(0, 5),
+                                    ),
+                                  ],
+                                ),
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<String>(
+                                    value: _selectedBarangay,
+                                    isDense: true,
+                                    borderRadius: BorderRadius.circular(16),
+                                    dropdownColor: const Color(0xFF303030),
+                                    icon: const Icon(
+                                      Icons.keyboard_arrow_down_rounded,
+                                      color: Colors.white70,
+                                      size: 20,
+                                    ),
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    items: const [
+                                      DropdownMenuItem(
+                                        value: 'Uwisan',
+                                        child: Text('Barangay Uwisan'),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: 'Palingon',
+                                        child: Text('Barangay Palingon'),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: 'Lingga',
+                                        child: Text('Barangay Lingga'),
+                                      ),
+                                    ],
+                                    onChanged: (value) {
+                                      if (value == null) return;
+
+                                      setState(() {
+                                        _selectedBarangay = value;
+                                      });
+                                    },
+                                  ),
+                                ),
+                              ),
+
+                              const Spacer(),
+
+                              Text(
+                                '${((_manilaTime.hour % 12) == 0 ? 12 : (_manilaTime.hour % 12)).toString().padLeft(2, '0')}:${_manilaTime.minute.toString().padLeft(2, '0')}:${_manilaTime.second.toString().padLeft(2, '0')} ${_manilaTime.hour >= 12 ? 'PM' : 'AM'}',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.white70,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ),
 
-                StreamBuilder<DatabaseEvent>(
-              stream: dbRef.child('flood').onValue,
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return const Center(
-                    child: Text(
-                      'Error loading data',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.red,
-                      ),
-                    ),
-                  );
-                }
-
-                // =====================================================
-                // SENSOR DATA
-                // =====================================================
-
-                Map<String, dynamic> data = {};
-
-                double waterLevel =
-                    idleWaterLevel;
-
-                bool sensorActive = false;
-
-                bool esp32Online = _esp32Online;
-
-                if (snapshot.hasData &&
-                    snapshot.data!.snapshot.value != null) {
-                  final rawValue =
-                      snapshot.data!.snapshot.value;
-
-                  if (rawValue is Map) {
-                    final rawData =
-                        rawValue as Map<dynamic, dynamic>;
-
-                    data = rawData.map(
-                      (key, value) =>
-                          MapEntry(
-                        key.toString(),
-                        value,
-                      ),
-                    );
-
-                    // =================================================
-                    // ESP32 TIMESTAMP
-                    // =================================================
-
-                    final dynamic timestampRaw =
-                        data['timestamp'];
-
-                    // Store the latest Firebase timestamp.
-                    //
-                    // This value will continue to be checked by
-                    // _esp32StatusTimer even after the ESP32 stops
-                    // sending Firebase updates.
-                    double? parsedTimestamp;
-
-                    if (timestampRaw is num) {
-                      parsedTimestamp =
-                          timestampRaw.toDouble();
-                    } else {
-                      parsedTimestamp =
-                          double.tryParse(
-                        timestampRaw?.toString() ?? '',
-                      );
-                    }
-
-                    if (parsedTimestamp != null &&
-                        parsedTimestamp.isFinite) {
-                      if (parsedTimestamp <
-                          100000000000) {
-                        parsedTimestamp *= 1000;
-                      }
-
-                      _latestEsp32Timestamp =
-                          parsedTimestamp.round();
-
-                      _hasReceivedFirebaseData = true;
-                    }
-
-                    // Use the timestamp immediately for the current
-                    // Firebase rebuild.
-                    esp32Online =
-                        _isEsp32TimestampRecent(
-                      timestampRaw,
-                    );
-
-                    _esp32Online = esp32Online;
-                  }
-                }
-
-                // =====================================================
-                // OPEN-METEO FALLBACK
-                // =====================================================
-
-                if (!esp32Online) {
-                  _scheduleFallbackWeather();
-                }
-
                 // =================================================
-                // DISTANCE FROM ULTRASONIC SENSOR
+                // SENSOR CARD (glassmorphism dashboard)
                 // =================================================
 
-                if (esp32Online) {
-                  final dynamic distanceRaw =
-                      data['distance'];
+                Expanded(
+                  child: Transform.translate(
+                    offset:
+                        const Offset(0, -28),
+                    child: Padding(
+                      padding:
+                          const EdgeInsets.symmetric(
+                        horizontal: 14,
+                      ),
+                      child: Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.stretch,
+                        children: [
 
-                  if (distanceRaw != null) {
-                    final double? parsedDistance =
-                        distanceRaw is num
-                            ? distanceRaw.toDouble()
-                            : double.tryParse(
-                                distanceRaw.toString(),
-                              );
+                          // =========================================
+                          // TOP ROW: TEMPERATURE + HUMIDITY
+                          // =========================================
 
-                    if (parsedDistance != null &&
-                        parsedDistance.isFinite) {
-                      if (parsedDistance >=
-                          maxWaterLevel) {
-                        sensorActive = false;
-                        waterLevel =
-                            idleWaterLevel;
-                      } else if (parsedDistance >= 0) {
-                        sensorActive = true;
-
-                        waterLevel =
-                            parsedDistance
-                                .clamp(
-                                  0.0,
-                                  maxWaterLevel,
-                                )
-                                .toDouble();
-                      } else {
-                        // Keep the ESP32 online but do not
-                        // treat an ultrasonic out-of-range
-                        // reading as a real water level.
-                        sensorActive = false;
-                        waterLevel =
-                            idleWaterLevel;
-                      }
-                    }
-                  }
-                } else {
-                  // =================================================
-                  // ESP32 OFFLINE
-                  // =================================================
-                  //
-                  // Do NOT use stale distance data.
-                  // Do NOT display 0 as the water level.
-                  //
-                  // Open-Meteo does not provide the physical
-                  // ultrasonic water level, so the water section
-                  // remains IDLE until the ESP32 reconnects.
-
-                  sensorActive = false;
-                  waterLevel =
-                      idleWaterLevel;
-                }
-
-                // =====================================================
-                // TEMPERATURE
-                // =====================================================
-
-                final dynamic temperatureRaw =
-                    data['temperature'];
-
-                final double? sensorTemperature =
-                    temperatureRaw is num
-                        ? temperatureRaw.toDouble()
-                        : double.tryParse(
-                            temperatureRaw
-                                    ?.toString() ??
-                                '',
-                          );
-
-                final double? displayedTemperature =
-                    esp32Online
-                        ? sensorTemperature
-                        : _fallbackTemperature;
-
-                // =====================================================
-                // HUMIDITY
-                // =====================================================
-
-                final dynamic humidityRaw =
-                    data['humidity'];
-
-                final double? sensorHumidity =
-                    humidityRaw is num
-                        ? humidityRaw.toDouble()
-                        : double.tryParse(
-                            humidityRaw?.toString() ??
-                                '',
-                          );
-
-                final double humidity =
-                    (esp32Online
-                            ? sensorHumidity
-                            : _fallbackHumidity) ??
-                        0;
-
-                // =====================================================
-                // SCREEN / HEADER
-                // =====================================================
-
-                final double screenHeight =
-                    MediaQuery.of(context).size.height;
-
-                final double topHeight =
-                    screenHeight * 0.40;
-
-                // =====================================================
-                // WATER ANIMATION
-                // =====================================================
-
-                final double animationStart =
-                    _previousWaterLevel;
-
-                final double animationEnd =
-                    waterLevel;
-
-                _previousWaterLevel =
-                    waterLevel;
-
-                // =====================================================
-                // FIXED PAGE - NO SCROLLING
-                // =====================================================
-
-                return Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
-                  children: [
-
-                    // =================================================
-                    // HEADER
-                    // =================================================
-
-                    Container(
-                      height: topHeight,
-                      width: double.infinity,
-                      alignment: Alignment.topCenter,
-                      // Transparent so the rainy background shows
-                      // through. The background gradient starts with the
-                      // same blue (light) / dark grey (dark) as before.
-                      color: Colors.transparent,
-                      child: SafeArea(
-                        bottom: false,
-                        child: Padding(
-                          padding:
-                              const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.start,
+                          Row(
                             children: [
-
-                              // =====================================
-                              // HEADER TOP ROW
-                              // =====================================
-
-                              Row(
-                                children: [
-
-                                  GestureDetector(
-                                    onDoubleTap:
-                                        toggleTheme,
-                                    child: SizedBox(
-                                      width: 50,
-                                      height: 50,
-                                      child: Image.asset(
-                                        "assets/icon/detect-co_logo.png",
-                                      ),
-                                    ),
+                              Expanded(
+                                child: _glassCard(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 12,
                                   ),
-
-                                  const SizedBox(
-                                    width: 8,
-                                  ),
-
-                                  const Text(
-                                    'DETECT-CO',
-                                    style: TextStyle(
-                                      fontSize: 20,
-                                      fontWeight:
-                                          FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-
-                                  const Spacer(),
-                                ],
-                              ),
-
-                              const SizedBox(
-                                height: 12,
-                              ),
-
-                              // =====================================
-                              // GREETING
-                              // =====================================
-
-                              Row(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
-                                children: [
-
-                                  const Expanded(
-                                    child: Text(
-                                      'Hello!',
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        fontWeight:
-                                            FontWeight.w500,
-                                        color:
-                                            Colors.white,
-                                      ),
-                                    ),
-                                  ),
-
-                                  Text(
-                                    'Last Synced',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.white
-                                          .withOpacity(
-                                        0.85,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-
-                              const SizedBox(
-                                height: 4,
-                              ),
-
-                              // =====================================
-                              // LOCATION / TIME
-                              // =====================================
-
-                              Row(
-                                children: [
-
-                                  const Icon(
-                                    Icons.location_on,
-                                    color:
-                                        Colors.white70,
-                                    size: 16,
-                                  ),
-
-                                  const SizedBox(
-                                    width: 4,
-                                  ),
-
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: isDarkMode
-                                          ? const Color(0xFF303030)
-                                          : const Color(0xFF4877F7),
-                                      borderRadius: BorderRadius.circular(16),
-                                      border: Border.all(
-                                        color: isDarkMode
-                                            ? Colors.white.withOpacity(0.12)
-                                            : Colors.white.withOpacity(0.20),
-                                        width: 1,
-                                      ),
-                                    ),
-                                    child: DropdownButtonHideUnderline(
-                                      child: DropdownButton<String>(
-                                        value: _selectedBarangay,
-                                        isDense: true,
-                                        borderRadius: BorderRadius.circular(16),
-                                        dropdownColor: isDarkMode
-                                            ? const Color(0xFF303030)
-                                            : const Color(0xFF4877F7),
-                                        icon: const Icon(
-                                          Icons.keyboard_arrow_down_rounded,
-                                          color: Colors.white70,
-                                          size: 20,
-                                        ),
-                                        style: const TextStyle(
-                                          fontSize: 14,
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                        items: const [
-                                          DropdownMenuItem(
-                                            value: 'Uwisan',
-                                            child: Text('Barangay Uwisan'),
-                                          ),
-                                          DropdownMenuItem(
-                                            value: 'Palingon',
-                                            child: Text('Barangay Palingon'),
-                                          ),
-                                          DropdownMenuItem(
-                                            value: 'Lingga',
-                                            child: Text('Barangay Lingga'),
-                                          ),
-                                        ],
-                                        onChanged: (value) {
-                                          if (value == null) return;
-
-                                          setState(() {
-                                            _selectedBarangay = value;
-                                          });
-                                        },
-                                      ),
-                                    ),
-                                  ),
-
-                                  const Spacer(),
-
-                                  Text(
-                                    '${((_manilaTime.hour % 12) == 0 ? 12 : (_manilaTime.hour % 12)).toString().padLeft(2, '0')}:${_manilaTime.minute.toString().padLeft(2, '0')}:${_manilaTime.second.toString().padLeft(2, '0')} ${_manilaTime.hour >= 12 ? 'PM' : 'AM'}',
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      color: Colors.white70,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    // =================================================
-                    // SENSOR CARD
-                    // =================================================
-
-                    Expanded(
-                      child: Transform.translate(
-                        offset:
-                            const Offset(0, -100),
-                        child: Padding(
-                          padding:
-                              const EdgeInsets.symmetric(
-                            horizontal: 20,
-                          ),
-                          child: Container(
-                            width: double.infinity,
-                            padding:
-                                const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: isDarkMode
-                                  ? const Color(0xFF2C2C2C)
-                                  : Colors.white,
-                              borderRadius:
-                                  BorderRadius.circular(
-                                20,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black
-                                      .withOpacity(
-                                    isDarkMode
-                                        ? 0.25
-                                        : 0.08,
-                                  ),
-                                  blurRadius: 6,
-                                  offset:
-                                      const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-                              children: [
-
-                                // =================================================
-                                // TEMPERATURE + HOUSE
-                                // =================================================
-
-                                Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment
-                                                .start,
-                                        children: [
-
-                                          Text(
-                                            'Current Temperature:',
-                                            style:
-                                                TextStyle(
-                                              fontSize: 14,
-                                              fontWeight:
-                                                  FontWeight
-                                                      .w500,
-                                              color:
-                                                  isDarkMode
-                                                      ? Colors
-                                                          .white
-                                                      : Colors
-                                                          .black,
-                                            ),
-                                          ),
-
-                                          const SizedBox(
-                                            height: 6,
-                                          ),
-
-                                          Row(
-                                            children: [
-
-                                              Image.asset(
-                                                'assets/icon/thermometer.png',
-                                                width: 50,
-                                                height: 80,
-                                              ),
-
-                                              const SizedBox(
-                                                width: 8,
-                                              ),
-
-                                              Flexible(
-                                                child:
-                                                    Text(
-                                                  displayedTemperature !=
-                                                          null
-                                                      ? '${displayedTemperature.toStringAsFixed(1)}°C'
-                                                      : '--°C',
-                                                  style:
-                                                      TextStyle(
-                                                    fontSize:
-                                                        30,
-                                                    fontWeight:
-                                                        FontWeight
-                                                            .bold,
-                                                    color:
-                                                        isDarkMode
-                                                            ? Colors
-                                                                .white
-                                                            : Colors
-                                                                .black,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-
-
-                                  ],
-                                ),
-
-                                const SizedBox(
-                                  height: 6,
-                                ),
-
-                                // =================================================
-                                // WATER LEVEL + HUMIDITY
-                                // =================================================
-
-                                Expanded(
                                   child: Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment
-                                            .start,
                                     children: [
-
-                                      // =================================================
-                                      // WIDER WATER LEVEL
-                                      // =================================================
-
+                                      const Icon(
+                                        Icons.thermostat_rounded,
+                                        color: Colors.orangeAccent,
+                                        size: 26,
+                                      ),
+                                      const SizedBox(width: 9),
                                       Expanded(
-                                        flex: 6,
                                         child: Column(
                                           crossAxisAlignment:
-                                              CrossAxisAlignment
-                                                  .center,
+                                              CrossAxisAlignment.start,
                                           children: [
-
+                                            const Text(
+                                              'TEMPERATURE',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w700,
+                                                letterSpacing: 0.8,
+                                                color: Colors.white60,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
                                             Text(
-                                              'Water Level',
-                                              style:
-                                                  TextStyle(
-                                                fontSize: 15,
-                                                fontWeight:
-                                                    FontWeight
-                                                        .w600,
-                                                color:
-                                                    isDarkMode
-                                                        ? Colors
-                                                            .white
-                                                        : Colors
-                                                            .black,
-                                              ),
-                                            ),
-
-                                            const SizedBox(
-                                              height: 6,
-                                            ),
-
-                                            Expanded(
-                                              child:
-                                                  LayoutBuilder(
-                                                builder:
-                                                    (
-                                                  context,
-                                                  constraints,
-                                                ) {
-
-                                                  // =================================================
-                                                  // WIDER WATER CONTAINER + SCALE
-                                                  // =================================================
-
-                                                  final double
-                                                      tubeCanvasWidth =
-                                                      math.min(
-                                                    180,
-                                                    constraints
-                                                            .maxWidth *
-                                                        0.62,
-                                                  );
-
-                                                  return Row(
-                                                    mainAxisAlignment:
-                                                        MainAxisAlignment
-                                                            .center,
-                                                    crossAxisAlignment:
-                                                        CrossAxisAlignment
-                                                            .start,
-                                                    children: [
-
-                                                      // =============================================
-                                                      // WATER CONTAINER
-                                                      // =============================================
-
-                                                      SizedBox(
-                                                        width:
-                                                            tubeCanvasWidth +
-                                                                8,
-                                                        child:
-                                                            Column(
-                                                          crossAxisAlignment:
-                                                              CrossAxisAlignment
-                                                                  .center,
-                                                          children: [
-
-                                                            // =====================================
-                                                            // WATER LEVEL TEXT
-                                                            // =====================================
-
-                                                            TweenAnimationBuilder<
-                                                                double>(
-                                                              tween:
-                                                                  Tween<
-                                                                      double>(
-                                                                begin:
-                                                                    animationStart,
-                                                                end:
-                                                                    animationEnd,
-                                                              ),
-                                                              duration:
-                                                                  const Duration(
-                                                                milliseconds:
-                                                                    800,
-                                                              ),
-                                                              curve:
-                                                                  Curves.easeInOut,
-                                                              builder:
-                                                                  (
-                                                                context,
-                                                                animatedLevel,
-                                                                child,
-                                                              ) {
-                                                                return Text(
-                                                                  sensorActive
-                                                                      ? '${animatedLevel.toStringAsFixed(1)} cm'
-                                                                      : 'IDLE',
-                                                                  style:
-                                                                      TextStyle(
-                                                                    fontSize:
-                                                                        20,
-                                                                    fontWeight:
-                                                                        FontWeight.bold,
-                                                                    color:
-                                                                        isDarkMode
-                                                                            ? Colors.white
-                                                                            : Colors.black,
-                                                                  ),
-                                                                );
-                                                              },
-                                                            ),
-
-                                                            const SizedBox(
-                                                              height: 2,
-                                                            ),
-
-                                                            Expanded(
-                                                              child:
-                                                                  Center(
-                                                                child:
-                                                                    _WaterWithDuck(
-                                                                  width:
-                                                                      tubeCanvasWidth,
-                                                                  height:
-                                                                      constraints.maxHeight -
-                                                                          34,
-                                                                  animation:
-                                                                      _waterAnimationController,
-                                                                  animationStart:
-                                                                      animationStart,
-                                                                  animationEnd:
-                                                                      animationEnd,
-                                                                  maxWaterLevel:
-                                                                      maxWaterLevel,
-                                                                  isDark:
-                                                                      isDarkMode,
-                                                                ),
-                                                              ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      ),
-
-                                                      const SizedBox(
-                                                        width: 8,
-                                                      ),
-
-                                                      // =============================================
-                                                      // GAUGE SCALE
-                                                      // =============================================
-
-                                                      Expanded(
-                                                        child:
-                                                            Padding(
-                                                          padding:
-                                                              const EdgeInsets
-                                                                  .only(
-                                                            top: 34,
-                                                            left: 0,
-                                                          ),
-                                                          child:
-                                                              SizedBox(
-                                                            height:
-                                                                constraints.maxHeight -
-                                                                    34,
-                                                            child:
-                                                                Column(
-                                                              mainAxisAlignment:
-                                                                  MainAxisAlignment
-                                                                      .spaceBetween,
-                                                              crossAxisAlignment:
-                                                                  CrossAxisAlignment
-                                                                      .start,
-                                                              children: [
-
-                                                                Text(
-                                                                  '200 cm',
-                                                                  style:
-                                                                      TextStyle(
-                                                                    color:
-                                                                        Colors.red.shade400,
-                                                                    fontWeight:
-                                                                        FontWeight.bold,
-                                                                    fontSize:
-                                                                        10,
-                                                                  ),
-                                                                ),
-
-                                                                Text(
-                                                                  '180 cm',
-                                                                  style:
-                                                                      TextStyle(
-                                                                    color:
-                                                                        Colors.red.shade400,
-                                                                    fontWeight:
-                                                                        FontWeight.bold,
-                                                                    fontSize:
-                                                                        10,
-                                                                  ),
-                                                                ),
-
-                                                                Text(
-                                                                  '160 cm',
-                                                                  style:
-                                                                      TextStyle(
-                                                                    color:
-                                                                        Colors.red.shade400,
-                                                                    fontWeight:
-                                                                        FontWeight.bold,
-                                                                    fontSize:
-                                                                        10,
-                                                                  ),
-                                                                ),
-
-                                                                Text(
-                                                                  '140 cm',
-                                                                  style:
-                                                                      TextStyle(
-                                                                    color:
-                                                                        Colors.orange.shade700,
-                                                                    fontWeight:
-                                                                        FontWeight.bold,
-                                                                    fontSize:
-                                                                        10,
-                                                                  ),
-                                                                ),
-
-                                                                Text(
-                                                                  '120 cm',
-                                                                  style:
-                                                                      TextStyle(
-                                                                    color:
-                                                                        Colors.orange.shade700,
-                                                                    fontWeight:
-                                                                        FontWeight.bold,
-                                                                    fontSize:
-                                                                        10,
-                                                                  ),
-                                                                ),
-
-                                                                Text(
-                                                                  '100 cm',
-                                                                  style:
-                                                                      TextStyle(
-                                                                    color:
-                                                                        Colors.orange.shade700,
-                                                                    fontWeight:
-                                                                        FontWeight.bold,
-                                                                    fontSize:
-                                                                        10,
-                                                                  ),
-                                                                ),
-
-                                                                Text(
-                                                                  '80 cm',
-                                                                  style:
-                                                                      TextStyle(
-                                                                    color:
-                                                                        Colors.orange.shade300,
-                                                                    fontWeight:
-                                                                        FontWeight.bold,
-                                                                    fontSize:
-                                                                        10,
-                                                                  ),
-                                                                ),
-
-                                                                Text(
-                                                                  '60 cm',
-                                                                  style:
-                                                                      TextStyle(
-                                                                    color:
-                                                                        Colors.orange.shade300,
-                                                                    fontWeight:
-                                                                        FontWeight.bold,
-                                                                    fontSize:
-                                                                        10,
-                                                                  ),
-                                                                ),
-
-                                                                Text(
-                                                                  '40 cm',
-                                                                  style:
-                                                                      TextStyle(
-                                                                    color:
-                                                                        Colors.orange.shade300,
-                                                                    fontWeight:
-                                                                        FontWeight.bold,
-                                                                    fontSize:
-                                                                        10,
-                                                                  ),
-                                                                ),
-
-                                                                Text(
-                                                                  '20 cm',
-                                                                  style:
-                                                                      TextStyle(
-                                                                    color:
-                                                                        Colors.green.shade600,
-                                                                    fontWeight:
-                                                                        FontWeight.bold,
-                                                                    fontSize:
-                                                                        10,
-                                                                  ),
-                                                                ),
-
-                                                                Text(
-                                                                  '0 cm',
-                                                                  style:
-                                                                      TextStyle(
-                                                                    color:
-                                                                        Colors.green.shade600,
-                                                                    fontWeight:
-                                                                        FontWeight.bold,
-                                                                    fontSize:
-                                                                        10,
-                                                                  ),
-                                                                ),
-                                                              ],
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  );
-                                                },
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-
-                                      const SizedBox(
-                                        width: 12,
-                                      ),
-
-                                      // =================================================
-                                      // HUMIDITY + FLOOD STATUS
-                                      // =================================================
-
-                                      Expanded(
-                                        flex: 4,
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment
-                                                  .center,
-                                          children: [
-
-                                            Text(
-                                              'Humidity',
-                                              style:
-                                                  TextStyle(
-                                                fontSize: 15,
-                                                fontWeight:
-                                                    FontWeight
-                                                        .w600,
-                                                color:
-                                                    isDarkMode
-                                                        ? Colors
-                                                            .white
-                                                        : Colors
-                                                            .black,
-                                              ),
-                                            ),
-
-                                            const SizedBox(
-                                              height: 6,
-                                            ),
-
-                                            // =================================================
-                                            // HUMIDITY GAUGE
-                                            // =================================================
-
-                                            LayoutBuilder(
-                                              builder:
-                                                  (
-                                                context,
-                                                constraints,
-                                              ) {
-                                                final double
-                                                    gaugeSize =
-                                                    math.min(
-                                                  150,
-                                                  constraints
-                                                      .maxWidth,
-                                                );
-
-                                                return CustomPaint(
-                                                  size: Size(
-                                                    gaugeSize,
-                                                    gaugeSize *
-                                                        0.6,
-                                                  ),
-                                                  painter:
-                                                      _HumidityGaugePainter(
-                                                    percent:
-                                                        (humidity /
-                                                                100)
-                                                            .clamp(
-                                                              0,
-                                                              1,
-                                                            )
-                                                            .toDouble(),
-                                                    isDark:
-                                                        isDarkMode,
-                                                  ),
-                                                  child:
-                                                      SizedBox(
-                                                    width:
-                                                        gaugeSize,
-                                                    height:
-                                                        gaugeSize *
-                                                            0.6,
-                                                    child:
-                                                        Padding(
-                                                      padding:
-                                                          const EdgeInsets
-                                                              .only(
-                                                        top: 26,
-                                                      ),
-                                                      child:
-                                                          Center(
-                                                        child:
-                                                            Text(
-                                                          (esp32Online ||
-                                                                  _fallbackHumidity !=
-                                                                      null)
-                                                              ? '${humidity.toStringAsFixed(0)}%'
-                                                              : '--%',
-                                                          style:
-                                                              TextStyle(
-                                                            fontSize:
-                                                                24,
-                                                            fontWeight:
-                                                                FontWeight.bold,
-                                                            color:
-                                                                isDarkMode
-                                                                    ? Colors.white
-                                                                    : Colors.black,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                );
-                                              },
-                                            ),
-
-                                            const SizedBox(
-                                              height: 4,
-                                            ),
-
-                                            // =================================================
-                                            // FLOOD RISK STATUS
-                                            // =================================================
-
-                                            Text(
-                                              'Flood Risk Status',
-                                              style:
-                                                  TextStyle(
-                                                fontSize: 15,
-                                                fontWeight:
-                                                    FontWeight
-                                                        .w600,
-                                                color:
-                                                    isDarkMode
-                                                        ? Colors
-                                                            .white
-                                                        : Colors
-                                                            .black,
-                                              ),
-                                            ),
-
-                                            const SizedBox(
-                                              height: 4,
-                                            ),
-
-                                            Container(
-                                              width:
-                                                  double.infinity,
-                                              constraints:
-                                                  const BoxConstraints(
-                                                maxWidth:
-                                                    double.infinity,
-                                              ),
-                                              padding:
-                                                  const EdgeInsets
-                                                      .symmetric(
-                                                vertical: 10,
-                                                horizontal: 8,
-                                              ),
-                                              decoration:
-                                                  BoxDecoration(
-                                                color:
-                                                    !sensorActive
-                                                        ? Colors
-                                                            .grey
-                                                            .shade600
-                                                        : waterLevel >
-                                                                50
-                                                            ? Colors
-                                                                .red
-                                                                .shade700
-                                                            : waterLevel >
-                                                                    30
-                                                                ? Colors
-                                                                    .orange
-                                                                    .shade700
-                                                                : Colors
-                                                                    .green
-                                                                    .shade700,
-                                                borderRadius:
-                                                    BorderRadius
-                                                        .circular(
-                                                  12,
-                                                ),
-                                              ),
-                                              child:
-                                                  FittedBox(
-                                                fit: BoxFit
-                                                    .scaleDown,
-                                                child:
-                                                    Text(
-                                                  !sensorActive
-                                                      ? 'IDLE'
-                                                      : waterLevel >
-                                                              50
-                                                          ? 'FLOODING'
-                                                          : waterLevel >
-                                                                  30
-                                                              ? 'MEDIUM RISK'
-                                                              : 'SAFE',
-                                                  maxLines: 1,
-                                                  style:
-                                                      const TextStyle(
-                                                    fontSize:
-                                                        16,
-                                                    fontWeight:
-                                                        FontWeight
-                                                            .w900,
-                                                    color:
-                                                        Colors
-                                                            .white,
-                                                    letterSpacing:
-                                                        0.5,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-
-                                            const SizedBox(
-                                              height: 4,
-                                            ),
-
-                                            // =================================================
-                                            // ML / OPEN-METEO RAINFALL PREDICTION
-                                            // =================================================
-
-                                            Container(
-                                              width:
-                                                  double.infinity,
-                                              padding:
-                                                  const EdgeInsets
-                                                      .symmetric(
-                                                vertical: 8,
-                                                horizontal: 8,
-                                              ),
-                                              decoration:
-                                                  BoxDecoration(
-                                                color: isDarkMode
-                                                    ? const Color(
-                                                        0xFF353535,
-                                                      )
-                                                    : Colors
-                                                        .blue
-                                                        .shade50,
-                                                borderRadius:
-                                                    BorderRadius
-                                                        .circular(
-                                                  12,
-                                                ),
-                                              ),
-                                              child: Column(
-                                                children: [
-
-                                                  // =================================================
-                                                  // FORECAST TITLE
-                                                  // =================================================
-
-                                                  Text(
-                                                    _mlForecastIdle ||
-                                                            _mlError !=
-                                                                null
-                                                        ? 'Rainfall Forecast'
-                                                        : 'ML Rainfall Forecast',
-                                                    textAlign:
-                                                        TextAlign
-                                                            .center,
-                                                    style: TextStyle(
-                                                      fontSize: 12,
-                                                      fontWeight:
-                                                          FontWeight
-                                                              .w700,
-                                                      color:
-                                                          isDarkMode
-                                                              ? Colors
-                                                                  .white
-                                                              : Colors
-                                                                  .black87,
-                                                    ),
-                                                  ),
-
-                                                  const SizedBox(
-                                                    height: 4,
-                                                  ),
-
-                                                  // =================================================
-                                                  // MAIN RAINFALL VALUE
-                                                  // =================================================
-
-                                                  if (_mlLoading &&
-                                                      !_mlForecastIdle &&
-                                                      _mlError ==
-                                                          null)
-                                                    const SizedBox(
-                                                      width: 16,
-                                                      height: 16,
-                                                      child:
-                                                          CircularProgressIndicator(
-                                                        strokeWidth: 2,
-                                                      ),
-                                                    )
-                                                  else if (!_mlForecastIdle &&
-                                                      _mlError ==
-                                                          null &&
-                                                      _mlRainfall24h !=
-                                                          null)
-                                                    Text(
-                                                      '24h: ${_mlRainfall24h!.toStringAsFixed(2)} mm',
-                                                      textAlign:
-                                                          TextAlign
-                                                              .center,
-                                                      style: TextStyle(
-                                                        fontSize: 16,
-                                                        fontWeight:
-                                                            FontWeight
-                                                                .bold,
-                                                        color:
-                                                            isDarkMode
-                                                                ? Colors
-                                                                    .white
-                                                                : Colors
-                                                                    .black,
-                                                      ),
-                                                    )
-                                                  else if (_openMeteoRainfall24h !=
-                                                      null)
-                                                    Text(
-                                                      '24h: ${_openMeteoRainfall24h!.toStringAsFixed(2)} mm',
-                                                      textAlign:
-                                                          TextAlign
-                                                              .center,
-                                                      style: TextStyle(
-                                                        fontSize: 16,
-                                                        fontWeight:
-                                                            FontWeight
-                                                                .bold,
-                                                        color:
-                                                            isDarkMode
-                                                                ? Colors
-                                                                    .white
-                                                                : Colors
-                                                                    .black,
-                                                      ),
-                                                    )
-                                                  else if (_openMeteoRainLoading)
-                                                    const SizedBox(
-                                                      width: 16,
-                                                      height: 16,
-                                                      child:
-                                                          CircularProgressIndicator(
-                                                        strokeWidth: 2,
-                                                      ),
-                                                    )
-                                                  else
-                                                    Text(
-                                                      '--',
-                                                      style: TextStyle(
-                                                        fontSize: 16,
-                                                        fontWeight:
-                                                            FontWeight
-                                                                .bold,
-                                                        color:
-                                                            isDarkMode
-                                                                ? Colors
-                                                                    .white
-                                                                : Colors
-                                                                    .black,
-                                                      ),
-                                                    ),
-
-                                                  const SizedBox(
-                                                    height: 2,
-                                                  ),
-
-                                                  // =================================================
-                                                  // 1 HOUR RAINFALL
-                                                  // =================================================
-
-                                                  if (!_mlForecastIdle &&
-                                                      _mlError ==
-                                                          null &&
-                                                      _mlRainfall1h !=
-                                                          null)
-                                                    Text(
-                                                      '1h: ${_mlRainfall1h!.toStringAsFixed(2)} mm',
-                                                      textAlign:
-                                                          TextAlign
-                                                              .center,
-                                                      style: TextStyle(
-                                                        fontSize: 10,
-                                                        color:
-                                                            isDarkMode
-                                                                ? Colors
-                                                                    .grey[300]
-                                                                : Colors
-                                                                    .grey[700],
-                                                      ),
-                                                    )
-                                                  else if (_openMeteoRainfall1h !=
-                                                      null)
-                                                    Text(
-                                                      '1h: ${_openMeteoRainfall1h!.toStringAsFixed(2)} mm',
-                                                      textAlign:
-                                                          TextAlign
-                                                              .center,
-                                                      style: TextStyle(
-                                                        fontSize: 10,
-                                                        color:
-                                                            isDarkMode
-                                                                ? Colors
-                                                                    .grey[300]
-                                                                : Colors
-                                                                    .grey[700],
-                                                      ),
-                                                    ),
-
-                                                  // =================================================
-                                                  // CURRENT RAIN
-                                                  // =================================================
-
-                                                  if ((_mlForecastIdle ||
-                                                          _mlError !=
-                                                              null) &&
-                                                      _openMeteoCurrentRainfall !=
-                                                          null)
-                                                    Text(
-                                                      'Current rain: '
-                                                      '${_openMeteoCurrentRainfall!.toStringAsFixed(2)} mm',
-                                                      textAlign:
-                                                          TextAlign
-                                                              .center,
-                                                      style: TextStyle(
-                                                        fontSize: 10,
-                                                        color:
-                                                            isDarkMode
-                                                                ? Colors
-                                                                    .grey[300]
-                                                                : Colors
-                                                                    .grey[700],
-                                                      ),
-                                                    ),
-
-                                                  // =================================================
-                                                  // RAIN PROBABILITY
-                                                  // =================================================
-
-                                                  if ((_mlForecastIdle ||
-                                                          _mlError !=
-                                                              null) &&
-                                                      _openMeteoRainProbability !=
-                                                          null)
-                                                    Text(
-                                                      'Rain probability: '
-                                                      '${_openMeteoRainProbability!.toStringAsFixed(0)}%',
-                                                      textAlign:
-                                                          TextAlign
-                                                              .center,
-                                                      style: TextStyle(
-                                                        fontSize: 10,
-                                                        color:
-                                                            isDarkMode
-                                                                ? Colors
-                                                                    .grey[300]
-                                                                : Colors
-                                                                    .grey[700],
-                                                      ),
-                                                    ),
-                                                ],
+                                              displayedTemperature != null
+                                                  ? '${displayedTemperature.toStringAsFixed(1)}°C'
+                                                  : '--°C',
+                                              style: const TextStyle(
+                                                fontSize: 20,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.white,
                                               ),
                                             ),
                                           ],
@@ -2383,23 +1698,628 @@ class _HomeTabState extends State<HomeTab>
                                     ],
                                   ),
                                 ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: _glassCard(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 12,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.water_drop_rounded,
+                                        color: Colors.lightBlueAccent,
+                                        size: 26,
+                                      ),
+                                      const SizedBox(width: 9),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            const Text(
+                                              'HUMIDITY',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w700,
+                                                letterSpacing: 0.8,
+                                                color: Colors.white60,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              (esp32Online ||
+                                                      _fallbackHumidity != null)
+                                                  ? '${humidity.toStringAsFixed(0)}%'
+                                                  : '--%',
+                                              style: const TextStyle(
+                                                fontSize: 20,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 10),
+
+                          // =========================================
+                          // FLOOD RISK STATUS
+                          // =========================================
+
+                          _glassCard(
+                            glowColor: floodColor,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 14,
+                            ),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 46,
+                                  height: 46,
+                                  child: Stack(
+                                    alignment: Alignment.center,
+                                    children: [
+                                      Container(
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color:
+                                              floodColor.withOpacity(0.18),
+                                          border: Border.all(
+                                            color:
+                                                floodColor.withOpacity(0.6),
+                                            width: 1.4,
+                                          ),
+                                        ),
+                                      ),
+                                      Icon(
+                                        Icons.shield_outlined,
+                                        color: floodColor,
+                                        size: 28,
+                                      ),
+                                      Positioned(
+                                        bottom: 8,
+                                        right: 8,
+                                        child: Icon(
+                                          Icons.check_circle,
+                                          color: floodColor,
+                                          size: 16,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'FLOOD RISK STATUS',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: 1.0,
+                                          color: Colors.white60,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        floodStatusText,
+                                        style: TextStyle(
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.w900,
+                                          color: floodColor,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        floodMessage,
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.white60,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Icon(
+                                  Icons.chevron_right_rounded,
+                                  color: Colors.white38,
+                                ),
                               ],
                             ),
                           ),
-                        ),
+
+                          const SizedBox(height: 10),
+
+                          // =========================================
+                          // WATER LEVEL
+                          // =========================================
+
+                          Expanded(
+                            child: _glassCard(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.center,
+                                children: [
+                                  const Text(
+                                    'Water Level',
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Expanded(
+                                    child: LayoutBuilder(
+                                      builder: (context, constraints) {
+                                        final double tubeCanvasWidth =
+                                            math.min(
+                                          180,
+                                          constraints.maxWidth * 0.62,
+                                        );
+
+                                        return Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+
+                                            // WATER CONTAINER
+                                            SizedBox(
+                                              width: tubeCanvasWidth + 8,
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment
+                                                        .center,
+                                                children: [
+
+                                                  // FLOATING PILL WITH VALUE
+                                                  TweenAnimationBuilder<
+                                                      double>(
+                                                    tween: Tween<double>(
+                                                      begin: animationStart,
+                                                      end: animationEnd,
+                                                    ),
+                                                    duration: const Duration(
+                                                      milliseconds: 800,
+                                                    ),
+                                                    curve: Curves.easeInOut,
+                                                    builder: (
+                                                      context,
+                                                      animatedLevel,
+                                                      child,
+                                                    ) {
+                                                      return Container(
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .symmetric(
+                                                          horizontal: 12,
+                                                          vertical: 4,
+                                                        ),
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          color: Colors.white
+                                                              .withOpacity(
+                                                            0.10,
+                                                          ),
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(
+                                                            20,
+                                                          ),
+                                                          border: Border.all(
+                                                            color: Colors
+                                                                .lightBlueAccent
+                                                                .withOpacity(
+                                                              0.45,
+                                                            ),
+                                                            width: 1,
+                                                          ),
+                                                        ),
+                                                        child: Text(
+                                                          sensorActive
+                                                              ? '${animatedLevel.toStringAsFixed(1)} cm'
+                                                              : 'IDLE',
+                                                          style:
+                                                              const TextStyle(
+                                                            fontSize: 16,
+                                                            fontWeight:
+                                                                FontWeight
+                                                                    .bold,
+                                                            color:
+                                                                Colors.white,
+                                                          ),
+                                                        ),
+                                                      );
+                                                    },
+                                                  ),
+
+                                                  const SizedBox(height: 4),
+
+                                                  Expanded(
+                                                    child: Center(
+                                                      child: _WaterWithDuck(
+                                                        width:
+                                                            tubeCanvasWidth,
+                                                        height:
+                                                            constraints
+                                                                    .maxHeight -
+                                                                40,
+                                                        animation:
+                                                            _waterAnimationController,
+                                                        animationStart:
+                                                            animationStart,
+                                                        animationEnd:
+                                                            animationEnd,
+                                                        maxWaterLevel:
+                                                            maxWaterLevel,
+                                                        isDark: isDarkMode,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+
+                                            const SizedBox(width: 8),
+
+                                            // GAUGE SCALE
+                                            Expanded(
+                                              child: Padding(
+                                                padding:
+                                                    const EdgeInsets.only(
+                                                  top: 40,
+                                                  left: 0,
+                                                ),
+                                                child: SizedBox(
+                                                  height:
+                                                      constraints.maxHeight -
+                                                          40,
+                                                  child: Column(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .spaceBetween,
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    children: [
+                                                      Text(
+                                                        '200 cm',
+                                                        style: TextStyle(
+                                                          color: Colors
+                                                              .red.shade400,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          fontSize: 10,
+                                                        ),
+                                                      ),
+                                                      Text(
+                                                        '180 cm',
+                                                        style: TextStyle(
+                                                          color: Colors
+                                                              .red.shade400,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          fontSize: 10,
+                                                        ),
+                                                      ),
+                                                      Text(
+                                                        '160 cm',
+                                                        style: TextStyle(
+                                                          color: Colors
+                                                              .red.shade400,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          fontSize: 10,
+                                                        ),
+                                                      ),
+                                                      Text(
+                                                        '140 cm',
+                                                        style: TextStyle(
+                                                          color: Colors
+                                                              .orange
+                                                              .shade700,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          fontSize: 10,
+                                                        ),
+                                                      ),
+                                                      Text(
+                                                        '120 cm',
+                                                        style: TextStyle(
+                                                          color: Colors
+                                                              .orange
+                                                              .shade700,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          fontSize: 10,
+                                                        ),
+                                                      ),
+                                                      Text(
+                                                        '100 cm',
+                                                        style: TextStyle(
+                                                          color: Colors
+                                                              .orange
+                                                              .shade700,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          fontSize: 10,
+                                                        ),
+                                                      ),
+                                                      Text(
+                                                        '80 cm',
+                                                        style: TextStyle(
+                                                          color: Colors
+                                                              .orange
+                                                              .shade300,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          fontSize: 10,
+                                                        ),
+                                                      ),
+                                                      Text(
+                                                        '60 cm',
+                                                        style: TextStyle(
+                                                          color: Colors
+                                                              .orange
+                                                              .shade300,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          fontSize: 10,
+                                                        ),
+                                                      ),
+                                                      Text(
+                                                        '40 cm',
+                                                        style: TextStyle(
+                                                          color: Colors
+                                                              .orange
+                                                              .shade300,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          fontSize: 10,
+                                                        ),
+                                                      ),
+                                                      Text(
+                                                        '20 cm',
+                                                        style: TextStyle(
+                                                          color: Colors.green
+                                                              .shade600,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          fontSize: 10,
+                                                        ),
+                                                      ),
+                                                      Text(
+                                                        '0 cm',
+                                                        style: TextStyle(
+                                                          color: Colors.green
+                                                              .shade600,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          fontSize: 10,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(height: 12),
+
+                          // =========================================
+                          // RAINFALL FORECAST (always visible)
+                          // =========================================
+
+                          _glassCard(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 14,
+                            ),
+                            child: Column(
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.stretch,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.cloud_queue_rounded,
+                                      color: Colors.white70,
+                                      size: 24,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        _mlForecastIdle ||
+                                                _mlError != null
+                                            ? 'RAINFALL FORECAST'
+                                            : 'ML RAINFALL FORECAST',
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: 1.0,
+                                          color: Colors.white70,
+                                        ),
+                                      ),
+                                    ),
+                                    if (_mlLoading &&
+                                        !_mlForecastIdle &&
+                                        _mlError == null)
+                                      const SizedBox(
+                                        width: 14,
+                                        height: 14,
+                                        child:
+                                            CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    else if (_openMeteoRainLoading)
+                                      const SizedBox(
+                                        width: 14,
+                                        height: 14,
+                                        child:
+                                            CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                    top: 8,
+                                  ),
+                                  child: Column(
+                                    children: [
+
+                                      // MAIN RAINFALL VALUE
+                                      if (!_mlForecastIdle &&
+                                          _mlError == null &&
+                                          _mlRainfall24h != null)
+                                        Text(
+                                          '24h: ${_mlRainfall24h!.toStringAsFixed(2)} mm',
+                                          textAlign: TextAlign.center,
+                                          style: const TextStyle(
+                                            fontSize: 18,
+                                            fontWeight:
+                                                FontWeight.bold,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      else if (_openMeteoRainfall24h !=
+                                          null)
+                                        Text(
+                                          '24h: ${_openMeteoRainfall24h!.toStringAsFixed(2)} mm',
+                                          textAlign: TextAlign.center,
+                                          style: const TextStyle(
+                                            fontSize: 16,
+                                            fontWeight:
+                                                FontWeight.bold,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      else
+                                        const Text(
+                                          '--',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight:
+                                                FontWeight.bold,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+
+                                      const SizedBox(height: 4),
+
+                                      // 1 HOUR RAINFALL
+                                      if (!_mlForecastIdle &&
+                                          _mlError == null &&
+                                          _mlRainfall1h != null)
+                                        Text(
+                                          '1h: ${_mlRainfall1h!.toStringAsFixed(2)} mm',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.grey[300],
+                                          ),
+                                        )
+                                      else if (_openMeteoRainfall1h !=
+                                          null)
+                                        Text(
+                                          '1h: ${_openMeteoRainfall1h!.toStringAsFixed(2)} mm',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.grey[300],
+                                          ),
+                                        ),
+
+                                      // CURRENT RAIN
+                                      if ((_mlForecastIdle ||
+                                              _mlError != null) &&
+                                          _openMeteoCurrentRainfall !=
+                                              null)
+                                        Text(
+                                          'Current rain: '
+                                          '${_openMeteoCurrentRainfall!.toStringAsFixed(2)} mm',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.grey[300],
+                                          ),
+                                        ),
+
+                                      // RAIN PROBABILITY
+                                      if ((_mlForecastIdle ||
+                                              _mlError != null) &&
+                                          _openMeteoRainProbability !=
+                                              null)
+                                        Text(
+                                          'Rain probability: '
+                                          '${_openMeteoRainProbability!.toStringAsFixed(0)}%',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.grey[300],
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                );
-              },
-            ),
+                  ),
+                ),
               ],
-            ),
-          ),
-        );
-      },
+            );
+          },
+        ),
+          ],
+        ),
+      ),
+      ),
     );
   }
+}
+
+// =====================================================
+// BACKGROUND WEATHER MODE
+// =====================================================
+
+enum _WeatherBackgroundMode {
+  sunny,
+  cloudy,
+  rain,
+  storm,
 }
 
 // =====================================================
@@ -2410,8 +2330,10 @@ class _HomeTabState extends State<HomeTab>
 // left / right edges of the screen and fades toward the center,
 // so the sensor card stays fully readable.
 //
-// Dark mode  -> darker, moodier rainy sky.
-// Light mode -> soft cloudy blue sky.
+// The background now switches automatically between four looks
+// based on current weather: sunny, cloudy, rain (unchanged from
+// before), and storm (the same rain animation, made heavier and
+// faster, with occasional lightning).
 
 class _RainDrop {
   final double x; // 0..1 across the screen width
@@ -2430,10 +2352,10 @@ class _RainDrop {
 }
 
 class _RainBackground extends StatefulWidget {
-  final bool isDark;
+  final _WeatherBackgroundMode mode;
 
   const _RainBackground({
-    required this.isDark,
+    required this.mode,
   });
 
   @override
@@ -2493,18 +2415,51 @@ class _RainBackgroundState
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        return CustomPaint(
-          size: Size.infinite,
-          painter: _RainPainter(
-            progress: _controller.value,
-            isDark: widget.isDark,
-            drops: _drops,
-          ),
-        );
-      },
+    final bool isStorm =
+        widget.mode == _WeatherBackgroundMode.storm;
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            switch (widget.mode) {
+              case _WeatherBackgroundMode.sunny:
+                return CustomPaint(
+                  size: Size.infinite,
+                  painter: _SunnyPainter(
+                    progress: _controller.value,
+                  ),
+                );
+
+              case _WeatherBackgroundMode.cloudy:
+                return CustomPaint(
+                  size: Size.infinite,
+                  painter: _CloudyPainter(
+                    progress: _controller.value,
+                  ),
+                );
+
+              case _WeatherBackgroundMode.rain:
+              case _WeatherBackgroundMode.storm:
+                return CustomPaint(
+                  size: Size.infinite,
+                  painter: _RainPainter(
+                    progress: _controller.value,
+                    isDark: true,
+                    drops: _drops,
+                    speedMultiplier: isStorm ? 1.8 : 1.0,
+                    alphaMultiplier: isStorm ? 1.4 : 1.0,
+                  ),
+                );
+            }
+          },
+        ),
+
+        // Occasional lightning flashes, storm mode only.
+        _LightningOverlay(enabled: isStorm),
+      ],
     );
   }
 }
@@ -2513,11 +2468,15 @@ class _RainPainter extends CustomPainter {
   final double progress;
   final bool isDark;
   final List<_RainDrop> drops;
+  final double speedMultiplier;
+  final double alphaMultiplier;
 
   _RainPainter({
     required this.progress,
     required this.isDark,
     required this.drops,
+    this.speedMultiplier = 1.0,
+    this.alphaMultiplier = 1.0,
   });
 
   @override
@@ -2606,7 +2565,8 @@ class _RainPainter extends CustomPainter {
       final double travel = size.height + d.length;
 
       final double y =
-          ((d.phase + progress * d.speed) % 1.0) *
+          ((d.phase + progress * d.speed * speedMultiplier) %
+                      1.0) *
                   travel -
               d.length;
 
@@ -2618,9 +2578,11 @@ class _RainPainter extends CustomPainter {
 
       // Center stays very faint, edges are strongest.
       final double alpha =
-          maxAlpha *
-              d.opacity *
-              (0.15 + 0.85 * edgeDistance);
+          (maxAlpha *
+                  d.opacity *
+                  (0.15 + 0.85 * edgeDistance) *
+                  alphaMultiplier)
+              .clamp(0.0, 1.0);
 
       rainPaint.color = rainColor.withOpacity(alpha);
 
@@ -2637,7 +2599,342 @@ class _RainPainter extends CustomPainter {
     covariant _RainPainter oldDelegate,
   ) =>
       oldDelegate.progress != progress ||
-      oldDelegate.isDark != isDark;
+      oldDelegate.isDark != isDark ||
+      oldDelegate.speedMultiplier != speedMultiplier ||
+      oldDelegate.alphaMultiplier != alphaMultiplier;
+}
+
+// =====================================================
+// SUNNY BACKGROUND
+// =====================================================
+//
+// A subtle warm glow with slow, faint light rays. Kept low-key
+// so it still reads as the app's dark theme rather than a bright
+// daytime sky.
+
+class _SunnyPainter extends CustomPainter {
+  final double progress;
+
+  _SunnyPainter({required this.progress});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Rect rect = Offset.zero & size;
+
+    const List<Color> colors = [
+      Color(0xFF0E1218),
+      Color(0xFF161C24),
+      Color(0xFF212121),
+    ];
+
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: colors,
+          stops: [0.0, 0.45, 1.0],
+        ).createShader(rect),
+    );
+
+    final Offset sunCenter = Offset(
+      size.width * 0.78,
+      size.height * 0.16,
+    );
+
+    // Slow, gentle pulse.
+    final double pulse =
+        0.9 + math.sin(progress * math.pi * 2) * 0.1;
+
+    final double glowRadius =
+        size.width * 0.32 * pulse;
+
+    final Paint glowPaint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          const Color(0xFFFFD98A).withOpacity(0.35),
+          const Color(0xFFFFD98A).withOpacity(0.0),
+        ],
+      ).createShader(
+        Rect.fromCircle(
+          center: sunCenter,
+          radius: glowRadius,
+        ),
+      );
+
+    canvas.drawCircle(sunCenter, glowRadius, glowPaint);
+
+    final Paint corePaint = Paint()
+      ..color = const Color(0xFFFFE7B3).withOpacity(0.55);
+
+    canvas.drawCircle(
+      sunCenter,
+      size.width * 0.06,
+      corePaint,
+    );
+
+    // Subtle, very slow-rotating light rays.
+    final Paint rayPaint = Paint()
+      ..color = const Color(0xFFFFE7B3).withOpacity(0.06)
+      ..strokeWidth = 2;
+
+    final double rotation =
+        progress * math.pi * 2 * 0.1;
+
+    for (int i = 0; i < 8; i++) {
+      final double angle =
+          rotation + (i * math.pi / 4);
+
+      final Offset rayEnd = Offset(
+        sunCenter.dx +
+            math.cos(angle) * size.width * 0.5,
+        sunCenter.dy +
+            math.sin(angle) * size.width * 0.5,
+      );
+
+      canvas.drawLine(sunCenter, rayEnd, rayPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(
+    covariant _SunnyPainter oldDelegate,
+  ) =>
+      oldDelegate.progress != progress;
+}
+
+// =====================================================
+// CLOUDY BACKGROUND
+// =====================================================
+//
+// Larger, slower-drifting clouds with no rain, for overcast /
+// partly cloudy conditions.
+
+class _CloudyPainter extends CustomPainter {
+  final double progress;
+
+  _CloudyPainter({required this.progress});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Rect rect = Offset.zero & size;
+
+    const List<Color> colors = [
+      Color(0xFF161B22),
+      Color(0xFF20262E),
+      Color(0xFF212121),
+    ];
+
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: colors,
+          stops: [0.0, 0.45, 1.0],
+        ).createShader(rect),
+    );
+
+    final Paint cloudPaint = Paint()
+      ..maskFilter =
+          const MaskFilter.blur(BlurStyle.normal, 34)
+      ..color = const Color(0xFF4A5560).withOpacity(0.45);
+
+    final List<List<double>> clouds = [
+      // x, y, radius (fractions of screen size)
+      [0.05, 0.12, 0.26],
+      [0.55, 0.06, 0.30],
+      [0.95, 0.20, 0.24],
+      [0.20, 0.55, 0.28],
+      [0.85, 0.62, 0.26],
+      [0.45, 0.35, 0.22],
+    ];
+
+    for (int i = 0; i < clouds.length; i++) {
+      final double drift =
+          math.sin(progress * math.pi * 2 * 0.5 + i) * 20 +
+              progress * size.width * 0.15;
+
+      final double x =
+          (clouds[i][0] * size.width + drift) %
+                  (size.width * 1.3) -
+              size.width * 0.15;
+
+      canvas.drawCircle(
+        Offset(x, clouds[i][1] * size.height),
+        clouds[i][2] * size.width,
+        cloudPaint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(
+    covariant _CloudyPainter oldDelegate,
+  ) =>
+      oldDelegate.progress != progress;
+}
+
+// =====================================================
+// LIGHTNING OVERLAY (STORM MODE)
+// =====================================================
+//
+// Occasional, natural-looking lightning flashes: a brief
+// whole-screen brightening plus a jagged bolt, on a random
+// timer while storm mode is active.
+
+class _LightningOverlay extends StatefulWidget {
+  final bool enabled;
+
+  const _LightningOverlay({required this.enabled});
+
+  @override
+  State<_LightningOverlay> createState() =>
+      _LightningOverlayState();
+}
+
+class _LightningOverlayState
+    extends State<_LightningOverlay>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _flashController;
+  Timer? _flashTimer;
+  final math.Random _rnd = math.Random();
+  double _boltX = 0.5;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _flashController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+    );
+
+    if (widget.enabled) {
+      _scheduleFlash();
+    }
+  }
+
+  @override
+  void didUpdateWidget(
+    covariant _LightningOverlay oldWidget,
+  ) {
+    super.didUpdateWidget(oldWidget);
+
+    if (widget.enabled && !oldWidget.enabled) {
+      _scheduleFlash();
+    } else if (!widget.enabled && oldWidget.enabled) {
+      _flashTimer?.cancel();
+      _flashController.stop();
+    }
+  }
+
+  void _scheduleFlash() {
+    _flashTimer?.cancel();
+
+    final int delaySeconds = 4 + _rnd.nextInt(9); // 4-12s
+
+    _flashTimer = Timer(
+      Duration(seconds: delaySeconds),
+      () {
+        if (!mounted || !widget.enabled) return;
+
+        _boltX = 0.15 + _rnd.nextDouble() * 0.7;
+
+        _flashController.forward(from: 0).then((_) {
+          if (!mounted) return;
+          _flashController.reverse();
+        });
+
+        _scheduleFlash();
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _flashTimer?.cancel();
+    _flashController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.enabled) {
+      return const SizedBox.shrink();
+    }
+
+    return AnimatedBuilder(
+      animation: _flashController,
+      builder: (context, child) {
+        return CustomPaint(
+          size: Size.infinite,
+          painter: _LightningPainter(
+            intensity: _flashController.value,
+            boltX: _boltX,
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _LightningPainter extends CustomPainter {
+  final double intensity;
+  final double boltX;
+
+  _LightningPainter({
+    required this.intensity,
+    required this.boltX,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (intensity <= 0) return;
+
+    final Rect rect = Offset.zero & size;
+
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..color = Colors.white.withOpacity(0.22 * intensity),
+    );
+
+    if (intensity > 0.3) {
+      final Paint boltPaint = Paint()
+        ..color = Colors.white.withOpacity(0.85 * intensity)
+        ..strokeWidth = 2.5
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round;
+
+      final double startX = boltX * size.width;
+
+      final Path bolt = Path()..moveTo(startX, 0);
+
+      final math.Random rnd =
+          math.Random(boltX.hashCode);
+
+      double x = startX;
+      double y = 0;
+
+      while (y < size.height * 0.6) {
+        y += 24 + rnd.nextDouble() * 20;
+        x += (rnd.nextDouble() - 0.5) * 30;
+        bolt.lineTo(x, y);
+      }
+
+      canvas.drawPath(bolt, boltPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(
+    covariant _LightningPainter oldDelegate,
+  ) =>
+      oldDelegate.intensity != intensity ||
+      oldDelegate.boltX != boltX;
 }
 
 // =====================================================

@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:curved_navigation_bar/curved_navigation_bar.dart';
@@ -596,9 +597,14 @@ void main() async {
 // =====================================================
 // GLOBAL DARK MODE
 // =====================================================
+//
+// Dark mode is now permanently enabled.
+// The notifier is kept so existing files that reference
+// isDarkModeNotifier do not break.
+// =====================================================
 
 final ValueNotifier<bool> isDarkModeNotifier =
-    ValueNotifier<bool>(false);
+    ValueNotifier<bool>(true);
 
 // =====================================================
 // APP
@@ -609,45 +615,27 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<bool>(
-      valueListenable: isDarkModeNotifier,
-      builder: (
-        context,
-        isDarkMode,
-        child,
-      ) {
-        return MaterialApp(
-          title: 'DETECT CO',
-          debugShowCheckedModeBanner: false,
+    return MaterialApp(
+      title: 'DETECT CO',
+      debugShowCheckedModeBanner: false,
 
-          // =================================================
-          // LIGHT THEME
-          // =================================================
+      // =================================================
+      // DARK THEME ONLY
+      // =================================================
 
-          theme: ThemeData(
-            brightness: Brightness.light,
-            primarySwatch: Colors.blue,
-            scaffoldBackgroundColor: Colors.white,
-          ),
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor:
+            const Color(0xFF212121),
+      ),
 
-          // =================================================
-          // DARK THEME
-          // =================================================
+      // =================================================
+      // DARK MODE IS ALWAYS ON
+      // =================================================
 
-          darkTheme: ThemeData(
-            brightness: Brightness.dark,
-            scaffoldBackgroundColor:
-                const Color(0xFF212121),
-          ),
+      themeMode: ThemeMode.dark,
 
-          themeMode:
-              isDarkMode
-                  ? ThemeMode.dark
-                  : ThemeMode.light,
-
-          home: const BottomNavPage(),
-        );
-      },
+      home: const BottomNavPage(),
     );
   }
 }
@@ -696,339 +684,324 @@ class _BottomNavPageState
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<bool>(
-      valueListenable: isDarkModeNotifier,
 
-      builder: (
-        context,
-        isDarkMode,
-        child,
-      ) {
-        // =================================================
-        // NAVIGATION COLORS
-        // =================================================
+    // =================================================
+    // NAVIGATION COLORS
+    // =================================================
 
-        final Color navBackground =
-            isDarkMode
-                ? const Color(0xFF212121)
-                : Colors.white;
+    final Color navBackground =
+        const Color(0xFF212121);
 
-        final Color barColor =
-            isDarkMode
-                ? const Color(0xFF303030)
-                : const Color(0xFF0353A4);
+    final Color barColor =
+        const Color(0xFF303030);
 
-        // =================================================
-        // ICON COLORS
-        // =================================================
+    // =================================================
+    // ICON COLORS
+    // =================================================
 
-        final Color iconColor =
-            Colors.white;
+    final Color iconColor =
+        Colors.white;
 
-        // =================================================
-        // SELECTED BUTTON
-        // =================================================
+    // =================================================
+    // SELECTED BUTTON
+    // =================================================
 
-        final Color selectedButtonColor =
-            isDarkMode
-                ? const Color(0xFF424242)
-                : const Color(0xFF0353A4);
+    final Color selectedButtonColor =
+        const Color(0xFF424242);
 
-        final Color selectedIconColor =
-            Colors.white;
+    final Color selectedIconColor =
+        Colors.white;
 
-        return Scaffold(
-          backgroundColor: navBackground,
+    return Scaffold(
+      backgroundColor: navBackground,
 
-          // =================================================
-          // CURRENT TAB
-          //
-          // IndexedStack keeps all tabs alive instead of
-          // destroying HomeTab when another tab is selected.
-          // =================================================
+      // =================================================
+      // CURRENT TAB
+      //
+      // IndexedStack keeps all tabs alive instead of
+      // destroying HomeTab when another tab is selected.
+      // =================================================
 
-          body: IndexedStack(
-            index: _currentIndex,
-            children: _tabs,
-          ),
+      body: IndexedStack(
+        index: _currentIndex,
+        children: _tabs,
+      ),
 
-          // =================================================
-          // BOTTOM NAVIGATION
-          // =================================================
+      // =================================================
+      // BOTTOM NAVIGATION
+      // =================================================
 
-          bottomNavigationBar: Container(
-            height: 75,
-            color: barColor,
+      bottomNavigationBar: Container(
+        height: 75,
+        color: barColor,
 
-            child: Stack(
-              children: [
+        child: Stack(
+          children: [
+
+            // =================================================
+            // CURVED NAVIGATION BAR
+            // =================================================
+
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 0,
+              height: 55,
+
+              child: CurvedNavigationBar(
+                key: _navKey,
+
+                index: _currentIndex,
+
+                height: 55,
+
+                backgroundColor:
+                    navBackground,
+
+                color:
+                    barColor,
 
                 // =================================================
-                // CURVED NAVIGATION BAR
+                // SELECTED ICON CIRCLE
                 // =================================================
 
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  top: 0,
-                  height: 55,
+                buttonBackgroundColor:
+                    selectedButtonColor,
 
-                  child: CurvedNavigationBar(
-                    key: _navKey,
+                // =================================================
+                // ANIMATION
+                // =================================================
 
-                    index: _currentIndex,
+                animationDuration:
+                    const Duration(
+                  milliseconds: 350,
+                ),
 
-                    height: 55,
+                animationCurve:
+                    Curves.easeInOut,
 
-                    backgroundColor:
-                        navBackground,
+                // =================================================
+                // ICONS
+                // =================================================
 
+                items: [
+
+                  // =================================================
+                  // EVACUATE
+                  // =================================================
+
+                  Icon(
+                    Icons.directions_run,
+                    size: 26,
                     color:
-                        barColor,
+                        _currentIndex == 0
+                            ? selectedIconColor
+                            : iconColor,
+                  ),
 
-                    // =================================================
-                    // SELECTED ICON CIRCLE
-                    // =================================================
+                  // =================================================
+                  // MAP
+                  // =================================================
 
-                    buttonBackgroundColor:
-                        selectedButtonColor,
+                  Icon(
+                    Icons.map,
+                    size: 26,
+                    color:
+                        _currentIndex == 1
+                            ? selectedIconColor
+                            : iconColor,
+                  ),
 
-                    // =================================================
-                    // ANIMATION
-                    // =================================================
+                  // =================================================
+                  // HOME
+                  // =================================================
 
-                    animationDuration:
-                        const Duration(
-                      milliseconds: 350,
-                    ),
+                  Icon(
+                    Icons.home,
+                    size: 26,
+                    color:
+                        _currentIndex == 2
+                            ? selectedIconColor
+                            : iconColor,
+                  ),
 
-                    animationCurve:
-                        Curves.easeInOut,
+                  // =================================================
+                  // NOTIFICATIONS
+                  // =================================================
 
-                    // =================================================
-                    // ICONS
-                    // =================================================
+                  ValueListenableBuilder<int>(
+                    valueListenable:
+                        unreadNotificationCount,
 
-                    items: [
+                    builder: (
+                      context,
+                      unreadCount,
+                      child,
+                    ) {
+                      return Stack(
+                        clipBehavior:
+                            Clip.none,
 
-                      // =================================================
-                      // EVACUATE
-                      // =================================================
+                        children: [
 
-                      Icon(
-                        Icons.directions_run,
-                        size: 26,
-                        color:
-                            _currentIndex == 0
-                                ? selectedIconColor
-                                : iconColor,
-                      ),
+                          Icon(
+                            Icons
+                                .notifications_none_rounded,
+                            size: 26,
+                            color:
+                                _currentIndex == 3
+                                    ? selectedIconColor
+                                    : iconColor,
+                          ),
 
-                      // =================================================
-                      // MAP
-                      // =================================================
+                          // =================================================
+                          // RED UNREAD BADGE
+                          // =================================================
 
-                      Icon(
-                        Icons.map,
-                        size: 26,
-                        color:
-                            _currentIndex == 1
-                                ? selectedIconColor
-                                : iconColor,
-                      ),
+                          if (unreadCount > 0)
+                            Positioned(
+                              right: -8,
+                              top: -8,
 
-                      // =================================================
-                      // HOME
-                      // =================================================
+                              child:
+                                  Container(
+                                constraints:
+                                    const BoxConstraints(
+                                  minWidth: 18,
+                                  minHeight: 18,
+                                ),
 
-                      Icon(
-                        Icons.home,
-                        size: 26,
-                        color:
-                            _currentIndex == 2
-                                ? selectedIconColor
-                                : iconColor,
-                      ),
+                                padding:
+                                    const EdgeInsets
+                                        .symmetric(
+                                  horizontal: 4,
+                                ),
 
-                      // =================================================
-                      // NOTIFICATIONS
-                      // =================================================
+                                decoration:
+                                    BoxDecoration(
+                                  color:
+                                      Colors.red,
 
-                      ValueListenableBuilder<int>(
-                        valueListenable:
-                            unreadNotificationCount,
+                                  borderRadius:
+                                      BorderRadius
+                                          .circular(
+                                    20,
+                                  ),
 
-                        builder: (
-                          context,
-                          unreadCount,
-                          child,
-                        ) {
-                          return Stack(
-                            clipBehavior:
-                                Clip.none,
-
-                            children: [
-
-                              Icon(
-                                Icons
-                                    .notifications_none_rounded,
-                                size: 26,
-                                color:
-                                    _currentIndex == 3
-                                        ? selectedIconColor
-                                        : iconColor,
-                              ),
-
-                              // =================================================
-                              // RED UNREAD BADGE
-                              // =================================================
-
-                              if (unreadCount > 0)
-                                Positioned(
-                                  right: -8,
-                                  top: -8,
-
-                                  child:
-                                      Container(
-                                    constraints:
-                                        const BoxConstraints(
-                                      minWidth: 18,
-                                      minHeight: 18,
-                                    ),
-
-                                    padding:
-                                        const EdgeInsets
-                                            .symmetric(
-                                      horizontal: 4,
-                                    ),
-
-                                    decoration:
-                                        BoxDecoration(
-                                      color:
-                                          Colors.red,
-
-                                      borderRadius:
-                                          BorderRadius
-                                              .circular(
-                                        20,
-                                      ),
-
-                                      border:
-                                          Border.all(
-                                        color:
-                                            Colors.white,
-                                        width: 1.5,
-                                      ),
-                                    ),
-
-                                    child: Text(
-                                      unreadCount >
-                                              99
-                                          ? '99+'
-                                          : unreadCount
-                                              .toString(),
-
-                                      textAlign:
-                                          TextAlign.center,
-
-                                      style:
-                                          const TextStyle(
-                                        color:
-                                            Colors.white,
-                                        fontSize:
-                                            10,
-                                        fontWeight:
-                                            FontWeight.bold,
-                                      ),
-                                    ),
+                                  border:
+                                      Border.all(
+                                    color:
+                                        Colors.white,
+                                    width: 1.5,
                                   ),
                                 ),
-                            ],
-                          );
-                        },
-                      ),
 
-                      // =================================================
-                      // MENU
-                      // =================================================
+                                child: Text(
+                                  unreadCount >
+                                          99
+                                      ? '99+'
+                                      : unreadCount
+                                          .toString(),
 
-                      Icon(
-                        Icons.menu_rounded,
-                        size: 26,
-                        color:
-                            _currentIndex == 4
-                                ? selectedIconColor
-                                : iconColor,
-                      ),
-                    ],
+                                  textAlign:
+                                      TextAlign.center,
 
-                    // =================================================
-                    // NAVIGATION TAP
-                    // =================================================
-
-                    onTap: (index) {
-                      setState(() {
-                        _currentIndex = index;
-                      });
+                                  style:
+                                      const TextStyle(
+                                    color:
+                                        Colors.white,
+                                    fontSize:
+                                        10,
+                                    fontWeight:
+                                        FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      );
                     },
                   ),
-                ),
 
-                // =================================================
-                // LABELS
-                // =================================================
+                  // =================================================
+                  // MENU
+                  // =================================================
 
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 15,
-                  height: 14,
-
-                  child: Row(
-                    children: [
-
-                      Expanded(
-                        child: _buildLabel(
-                          'Tools',
-                          0,
-                        ),
-                      ),
-
-                      Expanded(
-                        child: _buildLabel(
-                          'Map',
-                          1,
-                        ),
-                      ),
-
-                      Expanded(
-                        child: _buildLabel(
-                          'Home',
-                          2,
-                        ),
-                      ),
-
-                      Expanded(
-                        child: _buildLabel(
-                          'Notifications',
-                          3,
-                        ),
-                      ),
-
-                      Expanded(
-                        child: _buildLabel(
-                          'Menu',
-                          4,
-                        ),
-                      ),
-                    ],
+                  Icon(
+                    Icons.menu_rounded,
+                    size: 26,
+                    color:
+                        _currentIndex == 4
+                            ? selectedIconColor
+                            : iconColor,
                   ),
-                ),
-              ],
+                ],
+
+                // =================================================
+                // NAVIGATION TAP
+                // =================================================
+
+                onTap: (index) {
+                  setState(() {
+                    _currentIndex = index;
+                  });
+                },
+              ),
             ),
-          ),
-        );
-      },
+
+            // =================================================
+            // LABELS
+            // =================================================
+
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 15,
+              height: 14,
+
+              child: Row(
+                children: [
+
+                  Expanded(
+                    child: _buildLabel(
+                      'Tools',
+                      0,
+                    ),
+                  ),
+
+                  Expanded(
+                    child: _buildLabel(
+                      'Map',
+                      1,
+                    ),
+                  ),
+
+                  Expanded(
+                    child: _buildLabel(
+                      'Home',
+                      2,
+                    ),
+                  ),
+
+                  Expanded(
+                    child: _buildLabel(
+                      'Notifications',
+                      3,
+                    ),
+                  ),
+
+                  Expanded(
+                    child: _buildLabel(
+                      'Menu',
+                      4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
