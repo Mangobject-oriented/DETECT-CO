@@ -6,6 +6,8 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:detectco/pages/menu.dart'; // change to your actual menu file name
+
 
 // =====================================================
 // GLASSMORPHISM CARD HELPER
@@ -1032,6 +1034,19 @@ class _HomeTabState extends State<HomeTab>
   // which background animation to show.
 
   _WeatherBackgroundMode _computeWeatherMode() {
+    
+      switch (homeBgChoice.value) {
+    case HomeBgChoice.storm:
+      return _WeatherBackgroundMode.storm;
+    case HomeBgChoice.rain:
+      return _WeatherBackgroundMode.rain;
+    case HomeBgChoice.cloudy:
+      return _WeatherBackgroundMode.cloudy;
+    case HomeBgChoice.sunny:
+      return _WeatherBackgroundMode.sunny;
+    case HomeBgChoice.auto:
+      break; // fall through to the API-based logic below
+  }
     final int? code = _weatherCode;
 
     final bool isThunderCode =
@@ -1159,11 +1174,20 @@ class _HomeTabState extends State<HomeTab>
 
             // Weather-based background.
             // IgnorePointer keeps all taps and double-taps working.
+            //
+            // ValueListenableBuilder makes the background react
+            // instantly when the Menu's Home Background dropdown
+            // changes (Default / Storm / Rain / Cloudy / Sunny).
             Positioned.fill(
               child: IgnorePointer(
                 child: RepaintBoundary(
-                  child: _RainBackground(
-                    mode: _computeWeatherMode(),
+                  child: ValueListenableBuilder<HomeBgChoice>(
+                    valueListenable: homeBgChoice,
+                    builder: (context, choice, _) {
+                      return _RainBackground(
+                        mode: _computeWeatherMode(),
+                      );
+                    },
                   ),
                 ),
               ),
@@ -1375,12 +1399,16 @@ class _HomeTabState extends State<HomeTab>
             // =====================================================
             // SCREEN / HEADER
             // =====================================================
-
-            final double screenHeight =
-                MediaQuery.of(context).size.height;
+            //
+            // LAYOUT FIX:
+            // The header used to take 32% of the screen height, which
+            // left a lot of unused space above the cards. It is now
+            // just tall enough for its content (status bar + logo +
+            // greeting + location row), and every remaining pixel goes
+            // to the cards below (mostly to the Water Level card).
 
             final double topHeight =
-                screenHeight * 0.32;
+                MediaQuery.of(context).padding.top + 150;
 
             // =====================================================
             // WATER ANIMATION
@@ -1632,12 +1660,16 @@ class _HomeTabState extends State<HomeTab>
                 // =================================================
                 // SENSOR CARD (glassmorphism dashboard)
                 // =================================================
+                //
+                // LAYOUT FIX:
+                // The old Transform.translate(0, -28) only moved the
+                // painting up while the layout box stayed the same,
+                // which wasted 28px at the bottom. The header is now
+                // 28px shorter instead, so the cards start at the same
+                // visual position and use the full remaining height.
 
                 Expanded(
-                  child: Transform.translate(
-                    offset:
-                        const Offset(0, -28),
-                    child: Padding(
+                  child: Padding(
                       padding:
                           const EdgeInsets.symmetric(
                         horizontal: 14,
@@ -1755,18 +1787,21 @@ class _HomeTabState extends State<HomeTab>
                           // =========================================
                           // FLOOD RISK STATUS
                           // =========================================
+                          //
+                          // LAYOUT FIX: slightly smaller (less vertical
+                          // padding, smaller badge, slightly smaller title).
 
                           _glassCard(
                             glowColor: floodColor,
                             padding: const EdgeInsets.symmetric(
                               horizontal: 16,
-                              vertical: 14,
+                              vertical: 9,
                             ),
                             child: Row(
                               children: [
                                 SizedBox(
-                                  width: 46,
-                                  height: 46,
+                                  width: 40,
+                                  height: 40,
                                   child: Stack(
                                     alignment: Alignment.center,
                                     children: [
@@ -1785,15 +1820,15 @@ class _HomeTabState extends State<HomeTab>
                                       Icon(
                                         Icons.shield_outlined,
                                         color: floodColor,
-                                        size: 28,
+                                        size: 25,
                                       ),
                                       Positioned(
-                                        bottom: 8,
-                                        right: 8,
+                                        bottom: 7,
+                                        right: 7,
                                         child: Icon(
                                           Icons.check_circle,
                                           color: floodColor,
-                                          size: 16,
+                                          size: 14,
                                         ),
                                       ),
                                     ],
@@ -1818,7 +1853,7 @@ class _HomeTabState extends State<HomeTab>
                                       Text(
                                         floodStatusText,
                                         style: TextStyle(
-                                          fontSize: 20,
+                                          fontSize: 18,
                                           fontWeight: FontWeight.w900,
                                           color: floodColor,
                                           letterSpacing: 0.5,
@@ -1848,6 +1883,12 @@ class _HomeTabState extends State<HomeTab>
                           // =========================================
                           // WATER LEVEL
                           // =========================================
+                          //
+                          // LAYOUT FIX: this is the only flexible
+                          // (Expanded) card, so it receives all the space
+                          // left over after the other cards. Because the
+                          // header, flood card and rainfall card are now
+                          // smaller / fixed, it is much taller than before.
 
                           Expanded(
                             child: _glassCard(
@@ -1873,6 +1914,20 @@ class _HomeTabState extends State<HomeTab>
                                           180,
                                           constraints.maxWidth * 0.62,
                                         );
+
+                                        // OVERFLOW FIX:
+                                        // The gauge has 11 labels that used to
+                                        // need ~132px of height no matter how
+                                        // small the card was, which caused the
+                                        // 40+px overflow. The font now scales
+                                        // down only if the space is too small,
+                                        // so the labels can never overflow.
+                                        final double gaugeFontSize =
+                                            ((constraints.maxHeight - 40) /
+                                                    11 /
+                                                    1.3)
+                                                .clamp(6.0, 10.0)
+                                                .toDouble();
 
                                         return Row(
                                           mainAxisAlignment:
@@ -2007,7 +2062,7 @@ class _HomeTabState extends State<HomeTab>
                                                               .red.shade400,
                                                           fontWeight:
                                                               FontWeight.bold,
-                                                          fontSize: 10,
+                                                          fontSize: gaugeFontSize,
                                                         ),
                                                       ),
                                                       Text(
@@ -2017,7 +2072,7 @@ class _HomeTabState extends State<HomeTab>
                                                               .red.shade400,
                                                           fontWeight:
                                                               FontWeight.bold,
-                                                          fontSize: 10,
+                                                          fontSize: gaugeFontSize,
                                                         ),
                                                       ),
                                                       Text(
@@ -2027,7 +2082,7 @@ class _HomeTabState extends State<HomeTab>
                                                               .red.shade400,
                                                           fontWeight:
                                                               FontWeight.bold,
-                                                          fontSize: 10,
+                                                          fontSize: gaugeFontSize,
                                                         ),
                                                       ),
                                                       Text(
@@ -2038,7 +2093,7 @@ class _HomeTabState extends State<HomeTab>
                                                               .shade700,
                                                           fontWeight:
                                                               FontWeight.bold,
-                                                          fontSize: 10,
+                                                          fontSize: gaugeFontSize,
                                                         ),
                                                       ),
                                                       Text(
@@ -2049,7 +2104,7 @@ class _HomeTabState extends State<HomeTab>
                                                               .shade700,
                                                           fontWeight:
                                                               FontWeight.bold,
-                                                          fontSize: 10,
+                                                          fontSize: gaugeFontSize,
                                                         ),
                                                       ),
                                                       Text(
@@ -2060,7 +2115,7 @@ class _HomeTabState extends State<HomeTab>
                                                               .shade700,
                                                           fontWeight:
                                                               FontWeight.bold,
-                                                          fontSize: 10,
+                                                          fontSize: gaugeFontSize,
                                                         ),
                                                       ),
                                                       Text(
@@ -2071,7 +2126,7 @@ class _HomeTabState extends State<HomeTab>
                                                               .shade300,
                                                           fontWeight:
                                                               FontWeight.bold,
-                                                          fontSize: 10,
+                                                          fontSize: gaugeFontSize,
                                                         ),
                                                       ),
                                                       Text(
@@ -2082,7 +2137,7 @@ class _HomeTabState extends State<HomeTab>
                                                               .shade300,
                                                           fontWeight:
                                                               FontWeight.bold,
-                                                          fontSize: 10,
+                                                          fontSize: gaugeFontSize,
                                                         ),
                                                       ),
                                                       Text(
@@ -2093,7 +2148,7 @@ class _HomeTabState extends State<HomeTab>
                                                               .shade300,
                                                           fontWeight:
                                                               FontWeight.bold,
-                                                          fontSize: 10,
+                                                          fontSize: gaugeFontSize,
                                                         ),
                                                       ),
                                                       Text(
@@ -2103,7 +2158,7 @@ class _HomeTabState extends State<HomeTab>
                                                               .shade600,
                                                           fontWeight:
                                                               FontWeight.bold,
-                                                          fontSize: 10,
+                                                          fontSize: gaugeFontSize,
                                                         ),
                                                       ),
                                                       Text(
@@ -2113,7 +2168,7 @@ class _HomeTabState extends State<HomeTab>
                                                               .shade600,
                                                           fontWeight:
                                                               FontWeight.bold,
-                                                          fontSize: 10,
+                                                          fontSize: gaugeFontSize,
                                                         ),
                                                       ),
                                                     ],
@@ -2136,168 +2191,185 @@ class _HomeTabState extends State<HomeTab>
                           // =========================================
                           // RAINFALL FORECAST (always visible)
                           // =========================================
+                          //
+                          // LAYOUT FIX: fixed height (SizedBox) so the card
+                          // never changes size when the forecast content
+                          // changes (ML vs Open-Meteo, extra lines, etc.).
+                          // The content sits in a FittedBox(scaleDown) so it
+                          // can never overflow the fixed height.
 
-                          _glassCard(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 14,
-                            ),
-                            child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.stretch,
-                              children: [
-                                Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.cloud_queue_rounded,
-                                      color: Colors.white70,
-                                      size: 24,
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Text(
-                                        _mlForecastIdle ||
-                                                _mlError != null
-                                            ? 'RAINFALL FORECAST'
-                                            : 'ML RAINFALL FORECAST',
-                                        style: const TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w700,
-                                          letterSpacing: 1.0,
-                                          color: Colors.white70,
-                                        ),
-                                      ),
-                                    ),
-                                    if (_mlLoading &&
-                                        !_mlForecastIdle &&
-                                        _mlError == null)
-                                      const SizedBox(
-                                        width: 14,
-                                        height: 14,
-                                        child:
-                                            CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    else if (_openMeteoRainLoading)
-                                      const SizedBox(
-                                        width: 14,
-                                        height: 14,
-                                        child:
-                                            CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.only(
-                                    top: 8,
-                                  ),
-                                  child: Column(
+                          SizedBox(
+                            height: 108,
+                            child: _glassCard(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 10,
+                              ),
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.stretch,
+                                children: [
+                                  Row(
                                     children: [
-
-                                      // MAIN RAINFALL VALUE
-                                      if (!_mlForecastIdle &&
-                                          _mlError == null &&
-                                          _mlRainfall24h != null)
-                                        Text(
-                                          '24h: ${_mlRainfall24h!.toStringAsFixed(2)} mm',
-                                          textAlign: TextAlign.center,
+                                      const Icon(
+                                        Icons.cloud_queue_rounded,
+                                        color: Colors.white70,
+                                        size: 24,
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          _mlForecastIdle ||
+                                                  _mlError != null
+                                              ? 'RAINFALL FORECAST'
+                                              : 'ML RAINFALL FORECAST',
                                           style: const TextStyle(
-                                            fontSize: 18,
-                                            fontWeight:
-                                                FontWeight.bold,
-                                            color: Colors.white,
-                                          ),
-                                        )
-                                      else if (_openMeteoRainfall24h !=
-                                          null)
-                                        Text(
-                                          '24h: ${_openMeteoRainfall24h!.toStringAsFixed(2)} mm',
-                                          textAlign: TextAlign.center,
-                                          style: const TextStyle(
-                                            fontSize: 16,
-                                            fontWeight:
-                                                FontWeight.bold,
-                                            color: Colors.white,
-                                          ),
-                                        )
-                                      else
-                                        const Text(
-                                          '--',
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight:
-                                                FontWeight.bold,
-                                            color: Colors.white,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700,
+                                            letterSpacing: 1.0,
+                                            color: Colors.white70,
                                           ),
                                         ),
-
-                                      const SizedBox(height: 4),
-
-                                      // 1 HOUR RAINFALL
-                                      if (!_mlForecastIdle &&
-                                          _mlError == null &&
-                                          _mlRainfall1h != null)
-                                        Text(
-                                          '1h: ${_mlRainfall1h!.toStringAsFixed(2)} mm',
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: Colors.grey[300],
+                                      ),
+                                      if (_mlLoading &&
+                                          !_mlForecastIdle &&
+                                          _mlError == null)
+                                        const SizedBox(
+                                          width: 14,
+                                          height: 14,
+                                          child:
+                                              CircularProgressIndicator(
+                                            strokeWidth: 2,
                                           ),
                                         )
-                                      else if (_openMeteoRainfall1h !=
-                                          null)
-                                        Text(
-                                          '1h: ${_openMeteoRainfall1h!.toStringAsFixed(2)} mm',
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: Colors.grey[300],
-                                          ),
-                                        ),
-
-                                      // CURRENT RAIN
-                                      if ((_mlForecastIdle ||
-                                              _mlError != null) &&
-                                          _openMeteoCurrentRainfall !=
-                                              null)
-                                        Text(
-                                          'Current rain: '
-                                          '${_openMeteoCurrentRainfall!.toStringAsFixed(2)} mm',
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: Colors.grey[300],
-                                          ),
-                                        ),
-
-                                      // RAIN PROBABILITY
-                                      if ((_mlForecastIdle ||
-                                              _mlError != null) &&
-                                          _openMeteoRainProbability !=
-                                              null)
-                                        Text(
-                                          'Rain probability: '
-                                          '${_openMeteoRainProbability!.toStringAsFixed(0)}%',
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: Colors.grey[300],
+                                      else if (_openMeteoRainLoading)
+                                        const SizedBox(
+                                          width: 14,
+                                          height: 14,
+                                          child:
+                                              CircularProgressIndicator(
+                                            strokeWidth: 2,
                                           ),
                                         ),
                                     ],
                                   ),
-                                ),
-                              ],
+                                  Expanded(
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(
+                                        top: 4,
+                                      ),
+                                      child: Center(
+                                        child: FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          child: Column(
+                                            mainAxisSize:
+                                                MainAxisSize.min,
+                                            children: [
+
+                                              // MAIN RAINFALL VALUE
+                                              if (!_mlForecastIdle &&
+                                                  _mlError == null &&
+                                                  _mlRainfall24h != null)
+                                                Text(
+                                                  '24h: ${_mlRainfall24h!.toStringAsFixed(2)} mm',
+                                                  textAlign: TextAlign.center,
+                                                  style: const TextStyle(
+                                                    fontSize: 18,
+                                                    fontWeight:
+                                                        FontWeight.bold,
+                                                    color: Colors.white,
+                                                  ),
+                                                )
+                                              else if (_openMeteoRainfall24h !=
+                                                  null)
+                                                Text(
+                                                  '24h: ${_openMeteoRainfall24h!.toStringAsFixed(2)} mm',
+                                                  textAlign: TextAlign.center,
+                                                  style: const TextStyle(
+                                                    fontSize: 16,
+                                                    fontWeight:
+                                                        FontWeight.bold,
+                                                    color: Colors.white,
+                                                  ),
+                                                )
+                                              else
+                                                const Text(
+                                                  '--',
+                                                  style: TextStyle(
+                                                    fontSize: 16,
+                                                    fontWeight:
+                                                        FontWeight.bold,
+                                                    color: Colors.white,
+                                                  ),
+                                                ),
+
+                                              const SizedBox(height: 2),
+
+                                              // 1 HOUR RAINFALL
+                                              if (!_mlForecastIdle &&
+                                                  _mlError == null &&
+                                                  _mlRainfall1h != null)
+                                                Text(
+                                                  '1h: ${_mlRainfall1h!.toStringAsFixed(2)} mm',
+                                                  textAlign: TextAlign.center,
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: Colors.grey[300],
+                                                  ),
+                                                )
+                                              else if (_openMeteoRainfall1h !=
+                                                  null)
+                                                Text(
+                                                  '1h: ${_openMeteoRainfall1h!.toStringAsFixed(2)} mm',
+                                                  textAlign: TextAlign.center,
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: Colors.grey[300],
+                                                  ),
+                                                ),
+
+                                              // CURRENT RAIN
+                                              if ((_mlForecastIdle ||
+                                                      _mlError != null) &&
+                                                  _openMeteoCurrentRainfall !=
+                                                      null)
+                                                Text(
+                                                  'Current rain: '
+                                                  '${_openMeteoCurrentRainfall!.toStringAsFixed(2)} mm',
+                                                  textAlign: TextAlign.center,
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: Colors.grey[300],
+                                                  ),
+                                                ),
+
+                                              // RAIN PROBABILITY
+                                              if ((_mlForecastIdle ||
+                                                      _mlError != null) &&
+                                                  _openMeteoRainProbability !=
+                                                      null)
+                                                Text(
+                                                  'Rain probability: '
+                                                  '${_openMeteoRainProbability!.toStringAsFixed(0)}%',
+                                                  textAlign: TextAlign.center,
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: Colors.grey[300],
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ),
                 ),
               ],
             );
@@ -2608,9 +2680,11 @@ class _RainPainter extends CustomPainter {
 // SUNNY BACKGROUND
 // =====================================================
 //
-// A subtle warm glow with slow, faint light rays. Kept low-key
-// so it still reads as the app's dark theme rather than a bright
-// daytime sky.
+// A bright, cheerful daytime sky: a light blue gradient, a
+// glowing sun with soft rotating rays, a soft rainbow arc, and
+// gently drifting white clouds. The sky is kept just saturated
+// enough (not pastel-white) so the white text and glass cards
+// on top of it stay readable.
 
 class _SunnyPainter extends CustomPainter {
   final double progress;
@@ -2621,10 +2695,14 @@ class _SunnyPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final Rect rect = Offset.zero & size;
 
+    // =====================================================
+    // LIGHT SKY GRADIENT
+    // =====================================================
+
     const List<Color> colors = [
-      Color(0xFF0E1218),
-      Color(0xFF161C24),
-      Color(0xFF212121),
+      Color(0xFF1E5CA6), // deeper sky blue at the top
+      Color(0xFF3C82C4), // mid sky
+      Color(0xFF6FA6D4), // soft horizon
     ];
 
     canvas.drawRect(
@@ -2634,28 +2712,34 @@ class _SunnyPainter extends CustomPainter {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: colors,
-          stops: [0.0, 0.45, 1.0],
+          stops: [0.0, 0.5, 1.0],
         ).createShader(rect),
     );
 
+    // =====================================================
+    // SUN GLOW
+    // =====================================================
+
     final Offset sunCenter = Offset(
-      size.width * 0.78,
-      size.height * 0.16,
+      size.width * 0.80,
+      size.height * 0.13,
     );
 
     // Slow, gentle pulse.
     final double pulse =
-        0.9 + math.sin(progress * math.pi * 2) * 0.1;
+        0.92 + math.sin(progress * math.pi * 2) * 0.08;
 
     final double glowRadius =
-        size.width * 0.32 * pulse;
+        size.width * 0.55 * pulse;
 
     final Paint glowPaint = Paint()
       ..shader = RadialGradient(
         colors: [
-          const Color(0xFFFFD98A).withOpacity(0.35),
-          const Color(0xFFFFD98A).withOpacity(0.0),
+          const Color(0xFFFFF3C4).withOpacity(0.55),
+          const Color(0xFFFFE28A).withOpacity(0.22),
+          const Color(0xFFFFE28A).withOpacity(0.0),
         ],
+        stops: const [0.0, 0.35, 1.0],
       ).createShader(
         Rect.fromCircle(
           center: sunCenter,
@@ -2665,35 +2749,159 @@ class _SunnyPainter extends CustomPainter {
 
     canvas.drawCircle(sunCenter, glowRadius, glowPaint);
 
-    final Paint corePaint = Paint()
-      ..color = const Color(0xFFFFE7B3).withOpacity(0.55);
+    // =====================================================
+    // SOFT LIGHT RAYS (very slow rotation)
+    // =====================================================
 
-    canvas.drawCircle(
-      sunCenter,
-      size.width * 0.06,
-      corePaint,
-    );
-
-    // Subtle, very slow-rotating light rays.
     final Paint rayPaint = Paint()
-      ..color = const Color(0xFFFFE7B3).withOpacity(0.06)
-      ..strokeWidth = 2;
+      ..color = Colors.white.withOpacity(0.06)
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round;
 
     final double rotation =
         progress * math.pi * 2 * 0.1;
 
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < 10; i++) {
       final double angle =
-          rotation + (i * math.pi / 4);
+          rotation + (i * math.pi / 5);
 
       final Offset rayEnd = Offset(
         sunCenter.dx +
-            math.cos(angle) * size.width * 0.5,
+            math.cos(angle) * size.width * 0.75,
         sunCenter.dy +
-            math.sin(angle) * size.width * 0.5,
+            math.sin(angle) * size.width * 0.75,
       );
 
       canvas.drawLine(sunCenter, rayEnd, rayPaint);
+    }
+
+    // =====================================================
+    // SUN CORE
+    // =====================================================
+
+    canvas.drawCircle(
+      sunCenter,
+      size.width * 0.075,
+      Paint()
+        ..color = const Color(0xFFFFF8DC).withOpacity(0.80),
+    );
+
+    canvas.drawCircle(
+      sunCenter,
+      size.width * 0.075,
+      Paint()
+        ..maskFilter =
+            const MaskFilter.blur(BlurStyle.outer, 10)
+        ..color = const Color(0xFFFFE9A0).withOpacity(0.5),
+    );
+
+    // =====================================================
+    // RAINBOW
+    // =====================================================
+    //
+    // Seven concentric arcs (red on the outside, violet on
+    // the inside). The rainbow gently "breathes" in opacity
+    // and is softly blurred so it blends into the sky.
+
+    final Offset rainbowCenter = Offset(
+      size.width * 0.42,
+      size.height * 0.42,
+    );
+
+    const List<Color> rainbowColors = [
+      Color(0xFFFF4B4B), // red
+      Color(0xFFFF9A3C), // orange
+      Color(0xFFFFE04A), // yellow
+      Color(0xFF5CDB6E), // green
+      Color(0xFF4AB8FF), // blue
+      Color(0xFF5B6CFF), // indigo
+      Color(0xFFA26BFF), // violet
+    ];
+
+    final double bandWidth = size.width * 0.028;
+    final double outerRadius = size.width * 0.62;
+
+    final double shimmer =
+        0.5 + math.sin(progress * math.pi * 2) * 0.5; // 0..1
+
+    // Soft white glow behind the whole rainbow.
+    canvas.drawArc(
+      Rect.fromCircle(
+        center: rainbowCenter,
+        radius: outerRadius - bandWidth * 3.5,
+      ),
+      math.pi,
+      math.pi,
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = bandWidth * 8
+        ..maskFilter =
+            const MaskFilter.blur(BlurStyle.normal, 18)
+        ..color = Colors.white.withOpacity(0.10 + 0.04 * shimmer),
+    );
+
+    final Paint bandPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = bandWidth + 0.8
+      ..maskFilter =
+          const MaskFilter.blur(BlurStyle.normal, 1.6);
+
+    for (int i = 0; i < rainbowColors.length; i++) {
+      final double radius = outerRadius - i * bandWidth;
+
+      bandPaint.color = rainbowColors[i]
+          .withOpacity(0.34 + 0.08 * shimmer);
+
+      canvas.drawArc(
+        Rect.fromCircle(
+          center: rainbowCenter,
+          radius: radius,
+        ),
+        math.pi,
+        math.pi,
+        false,
+        bandPaint,
+      );
+    }
+
+    // =====================================================
+    // FLUFFY WHITE CLOUDS (slow horizontal drift)
+    // =====================================================
+    //
+    // Some clouds sit at the rainbow's feet so it looks like it
+    // rises out of them; the others just drift across the sky.
+
+    final Paint cloudPaint = Paint()
+      ..maskFilter =
+          const MaskFilter.blur(BlurStyle.normal, 20)
+      ..color = Colors.white.withOpacity(0.36);
+
+    final List<List<double>> clouds = [
+      // x, y, radius (fractions of screen size)
+      [0.10, 0.44, 0.15], // rainbow left foot
+      [0.20, 0.46, 0.12],
+      [0.74, 0.44, 0.15], // rainbow right foot
+      [0.64, 0.46, 0.12],
+      [0.18, 0.12, 0.13],
+      [0.50, 0.28, 0.11],
+      [0.92, 0.30, 0.12],
+      [0.30, 0.66, 0.14],
+      [0.88, 0.74, 0.15],
+    ];
+
+    for (int i = 0; i < clouds.length; i++) {
+      final double drift =
+          math.sin(progress * math.pi * 2 + i) * 10;
+
+      canvas.drawCircle(
+        Offset(
+          clouds[i][0] * size.width + drift,
+          clouds[i][1] * size.height,
+        ),
+        clouds[i][2] * size.width,
+        cloudPaint,
+      );
     }
   }
 
