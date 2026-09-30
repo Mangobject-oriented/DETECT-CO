@@ -8,7 +8,12 @@ import 'package:detectco/pages/survival_kit_prep.dart';
 import 'package:detectco/pages/during_after_flood.dart';
 
 class EvacuateTab extends StatefulWidget {
-  const EvacuateTab({super.key});
+  const EvacuateTab({super.key, this.onGoToMap});
+
+  /// Called when the user taps an evacuation card.
+  /// (name, address, latitude, longitude)
+  final void Function(String name, String address, double lat, double lng)?
+      onGoToMap;
 
   @override
   State<EvacuateTab> createState() => _EvacuateTabState();
@@ -151,7 +156,7 @@ class _EvacuateTabState extends State<EvacuateTab> {
   }
 
   // =====================================================
-  // COPY TO CLIPBOARD
+  // COPY TO CLIPBOARD (still used by emergency numbers)
   // =====================================================
 
   void _copyToClipboard(
@@ -280,7 +285,25 @@ class _EvacuateTabState extends State<EvacuateTab> {
   }
 
   // =====================================================
+  // EVACUATE ON MAP
+  // =====================================================
+
+  void _openOnMap(
+    String name,
+    String address,
+    double lat,
+    double lng,
+  ) {
+    widget.onGoToMap?.call(name, address, lat, lng);
+  }
+
+  // =====================================================
   // EVACUATION CENTER CARD
+  //
+  // Tapping the card now switches to the Map tab (via the
+  // onGoToMap callback owned by BottomNavPage) instead of
+  // pushing a new screen. "Tap to copy address" was removed;
+  // the address is shown as plain text.
   // =====================================================
 
   Widget _evacuationCard(
@@ -288,16 +311,12 @@ class _EvacuateTabState extends State<EvacuateTab> {
     String name,
     String address,
     String distance,
+    double lat,
+    double lng,
     bool isDarkMode,
   ) {
     return GestureDetector(
-      onTap: () {
-        _copyToClipboard(
-          context,
-          address,
-          'Address copied to clipboard',
-        );
-      },
+      onTap: () => _openOnMap(name, address, lat, lng),
       child: Container(
         height: 78,
         margin: const EdgeInsets.only(bottom: 14),
@@ -346,41 +365,42 @@ class _EvacuateTabState extends State<EvacuateTab> {
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 3),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.copy_rounded,
-                        size: 12,
-                        color: isDarkMode
-                            ? Colors.grey[400]
-                            : const Color(0xFF8194BB),
-                      ),
-                      const SizedBox(width: 4),
-                      Flexible(
-                        child: Text(
-                          'Tap to copy address',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: isDarkMode
-                                ? Colors.grey[400]
-                                : const Color(0xFF8194BB),
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
+                  Text(
+                    address,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDarkMode
+                          ? Colors.grey[400]
+                          : const Color(0xFF8194BB),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
             ),
             Padding(
-              padding: const EdgeInsets.only(right: 16),
-              child: Text(
-                distance,
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: Color(0xFF8194BB),
-                ),
+              padding: const EdgeInsets.only(right: 12),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    distance,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF8194BB),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Icon(
+                    Icons.map_outlined,
+                    size: 16,
+                    color: isDarkMode
+                        ? Colors.grey[400]
+                        : const Color(0xFF8194BB),
+                  ),
+                ],
               ),
             ),
           ],
@@ -819,6 +839,8 @@ class _EvacuateTabState extends State<EvacuateTab> {
         'Lingga Elementary School',
         '658J+7WC, Dany, Calamba, 4027 Laguna',
         '-- km',
+        14.215765305050551,
+        121.18228271136698,
         isDarkMode,
       ),
       _evacuationCard(
@@ -826,6 +848,8 @@ class _EvacuateTabState extends State<EvacuateTab> {
         'Uwisan Barangay Hall',
         '65PF+Q9Q Uwisan, Calamba, 4027 Laguna',
         '-- km',
+        14.23707209551028,
+        121.17340069445697,
         isDarkMode,
       ),
       _evacuationCard(
@@ -833,6 +857,8 @@ class _EvacuateTabState extends State<EvacuateTab> {
         'Palingon Elementary School',
         '658P+425, 202 Caballero St, Real, Calamba, 4027 Laguna',
         '-- km',
+        14.215617735789499,
+        121.1861596967596,
         isDarkMode,
       ),
     ];

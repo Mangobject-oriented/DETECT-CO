@@ -12,7 +12,31 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:detectco/main.dart'; // for isDarkModeNotifier
 
 class MapTab extends StatefulWidget {
-  const MapTab({super.key});
+  const MapTab({
+    super.key,
+    this.focusRequestId = 0,
+    this.focusName,
+    this.focusLat,
+    this.focusLng,
+    this.focusDescription,
+  });
+
+  // ===================================================
+  // FOCUS REQUEST
+  //
+  // MapTab is kept alive inside an IndexedStack, so it
+  // won't rebuild from scratch when you tap an evacuation
+  // card. Instead, BottomNavPage bumps focusRequestId every
+  // time a new site is requested; didUpdateWidget below
+  // detects that change and re-centers the map even though
+  // the widget itself never left the tree.
+  // ===================================================
+
+  final int focusRequestId;
+  final String? focusName;
+  final double? focusLat;
+  final double? focusLng;
+  final String? focusDescription;
 
   @override
   State<MapTab> createState() => _MapTabState();
@@ -103,7 +127,7 @@ class _MapTabState extends State<MapTab> {
     // =====================================================
 
     EvacSite(
-      name: "Evacuation Center 0",
+      name: "Banlic Elementary School",
       description: "Supplied coordinate",
       image: "assets/images/evac1.png",
       location: LatLng(
@@ -113,7 +137,7 @@ class _MapTabState extends State<MapTab> {
     ),
 
     EvacSite(
-      name: "Evacuation Center 1",
+      name: "Batino Covered Court",
       description: "Supplied coordinate",
       image: "assets/images/evac1.png",
       location: LatLng(
@@ -123,7 +147,7 @@ class _MapTabState extends State<MapTab> {
     ),
 
     EvacSite(
-      name: "Evacuation Center 2",
+      name: "Bubuyan's Catholic Church",
       description: "Supplied coordinate",
       image: "assets/images/evac1.png",
       location: LatLng(
@@ -133,7 +157,7 @@ class _MapTabState extends State<MapTab> {
     ),
 
     EvacSite(
-      name: "Evacuation Center 3",
+      name: "Bubuyan's Mystica Church",
       description: "Supplied coordinate",
       image: "assets/images/evac1.png",
       location: LatLng(
@@ -433,7 +457,7 @@ class _MapTabState extends State<MapTab> {
     ),
 
     EvacSite(
-      name: "Evacuation Center 33",
+      name: "Lecheria Elementary School",
       description: "Supplied coordinate",
       image: "assets/images/evac1.png",
       location: LatLng(
@@ -443,7 +467,7 @@ class _MapTabState extends State<MapTab> {
     ),
 
     EvacSite(
-      name: "Evacuation Center 34",
+      name: "Lecheria Brgy. Hall",
       description: "Supplied coordinate",
       image: "assets/images/evac1.png",
       location: LatLng(
@@ -463,7 +487,7 @@ class _MapTabState extends State<MapTab> {
     ),
 
     EvacSite(
-      name: "Evacuation Center 36",
+      name: "Lingga Memorial Church",
       description: "Supplied coordinate",
       image: "assets/images/evac1.png",
       location: LatLng(
@@ -473,7 +497,7 @@ class _MapTabState extends State<MapTab> {
     ),
 
     EvacSite(
-      name: "Evacuation Center 37",
+      name: "Looc Covered Court",
       description: "Supplied coordinate",
       image: "assets/images/evac1.png",
       location: LatLng(
@@ -483,7 +507,7 @@ class _MapTabState extends State<MapTab> {
     ),
 
     EvacSite(
-      name: "Evacuation Center 38",
+      name: "Looc Elementary School",
       description: "Supplied coordinate",
       image: "assets/images/evac1.png",
       location: LatLng(
@@ -493,7 +517,7 @@ class _MapTabState extends State<MapTab> {
     ),
 
     EvacSite(
-      name: "Evacuation Center 39",
+      name: "Saint Mary Magdalene Parish Church",
       description: "Supplied coordinate",
       image: "assets/images/evac1.png",
       location: LatLng(
@@ -503,7 +527,7 @@ class _MapTabState extends State<MapTab> {
     ),
 
     EvacSite(
-      name: "Evacuation Center 40",
+      name: "Looc Brgy. Hall",
       description: "Supplied coordinate",
       image: "assets/images/evac1.png",
       location: LatLng(
@@ -977,7 +1001,7 @@ class _MapTabState extends State<MapTab> {
     ),
 
     EvacSite(
-      name: "Evacuation Center 89",
+      name: "Real Elementary School",
       description: "Supplied coordinate",
       image: "assets/images/evac1.png",
       location: LatLng(
@@ -1052,6 +1076,40 @@ class _MapTabState extends State<MapTab> {
         waterLevel = value;
       });
     });
+
+    // If we were opened with a focus request already pending
+    // (unlikely on first build, but handled for completeness),
+    // apply it once the first frame is laid out.
+    if (widget.focusLat != null && widget.focusLng != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _focusOnRequestedSite();
+      });
+    }
+  }
+
+  // =====================================================
+  // REACT TO NEW FOCUS REQUESTS
+  //
+  // Because MapTab is kept alive inside an IndexedStack, it
+  // is never destroyed/recreated when switching tabs, so
+  // initState only runs once. When the Evacuate tab asks to
+  // focus on a new site, BottomNavPage rebuilds MapTab with
+  // a new focusRequestId; this is what actually triggers the
+  // camera move + info panel, even for the map tab hidden in
+  // the background.
+  // =====================================================
+
+  @override
+  void didUpdateWidget(covariant MapTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (widget.focusRequestId != oldWidget.focusRequestId &&
+        widget.focusLat != null &&
+        widget.focusLng != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _focusOnRequestedSite();
+      });
+    }
   }
 
   @override
@@ -1059,6 +1117,56 @@ class _MapTabState extends State<MapTab> {
     _firebaseSub.cancel();
     _positionStream?.cancel();
     super.dispose();
+  }
+
+  // =====================================================
+  // FOCUS ON A SITE PASSED IN FROM THE EVACUATE TAB
+  // =====================================================
+
+  void _focusOnRequestedSite() {
+    if (!mounted) return;
+    if (widget.focusLat == null || widget.focusLng == null) return;
+
+    final LatLng target = LatLng(widget.focusLat!, widget.focusLng!);
+
+    // Try to match an existing EvacSite by name or by close
+    // coordinates, so we reuse its real image/description if
+    // one is already defined above.
+    EvacSite? match;
+
+    for (final site in evacSites) {
+      final bool sameName = widget.focusName != null &&
+          site.name.toLowerCase() == widget.focusName!.toLowerCase();
+
+      final bool sameSpot =
+          (site.location.latitude - target.latitude).abs() < 0.0005 &&
+          (site.location.longitude - target.longitude).abs() < 0.0005;
+
+      if (sameName || sameSpot) {
+        match = site;
+        break;
+      }
+    }
+
+    final EvacSite site = match ??
+        EvacSite(
+          name: widget.focusName ?? 'Evacuation Center',
+          description: widget.focusDescription ?? '',
+          image: 'assets/images/evac1.png',
+          location: target,
+        );
+
+    setState(() {
+      selectedSite = site;
+    });
+
+    mapController.move(site.location, 16);
+
+    if (currentPosition != null) {
+      getRoute(currentPosition!, site.location);
+    }
+
+    _showEvacPanel(site);
   }
 
   // =====================================================
@@ -1185,6 +1293,10 @@ class _MapTabState extends State<MapTab> {
 
   // =====================================================
   // EVACUATION SITE PANEL
+  //
+  // Wrapped in a ValueListenableBuilder so the sheet's
+  // background, text and buttons follow isDarkModeNotifier
+  // instead of being hardcoded to light mode.
   // =====================================================
 
   void _showEvacPanel(EvacSite site) {
@@ -1217,142 +1329,215 @@ class _MapTabState extends State<MapTab> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) {
-        return Container(
-          height:
-              MediaQuery.of(context).size.height * 0.50,
-          width: double.infinity,
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(20),
-              topRight: Radius.circular(20),
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
-            children: [
-              ClipRRect(
+        return ValueListenableBuilder<bool>(
+          valueListenable: isDarkModeNotifier,
+          builder: (context, isDarkMode, child) {
+            // =====================================================
+            // THEME-AWARE COLORS FOR THIS PANEL
+            // =====================================================
+
+            final Color panelBackground =
+                isDarkMode ? const Color(0xFF2C2C2C) : Colors.white;
+
+            final Color titleColor =
+                isDarkMode ? Colors.white : const Color(0xFF1D2B4A);
+
+            final Color subtitleColor =
+                isDarkMode ? Colors.grey[400]! : const Color(0xFF5A6B8C);
+
+            final Color primaryButtonColor = const Color(0xFF2867F5);
+
+            return Container(
+              height:
+                  MediaQuery.of(context).size.height * 0.50,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: panelBackground,
                 borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(20),
                   topRight: Radius.circular(20),
                 ),
-                child: Image.asset(
-                  site.image,
-                  height: 140,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                ),
               ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        site.name,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-
-                      const SizedBox(height: 8),
-
-                      Text(site.description),
-
-                      const SizedBox(height: 12),
-
-                      Container(
-                        padding:
-                            const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color:
-                              riskColor.withOpacity(0.15),
-                          borderRadius:
-                              BorderRadius.circular(20),
-                          border: Border.all(
-                            color: riskColor,
-                          ),
-                        ),
-                        child: Text(
-                          "Flood Risk: $riskText",
-                          style: TextStyle(
-                            color: riskColor,
-                            fontWeight:
-                                FontWeight.bold,
-                          ),
-                        ),
-                      ),
-
-                      const Spacer(),
-
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: () {
-                            if (currentPosition != null) {
-                              getRoute(
-                                currentPosition!,
-                                site.location,
-                              );
-                            }
-
-                            mapController.move(
-                              site.location,
-                              16,
-                            );
-
-                            Navigator.pop(context);
-                          },
-                          icon: const Icon(
-                            Icons.directions,
-                          ),
-                          label: const Text(
-                            "Go to Location",
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 8),
-
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: () {
-                            if (currentPosition != null) {
-                              getRoute(
-                                currentPosition!,
-                                site.location,
-                              );
-
-                              mapController.move(
-                                currentPosition!,
-                                16,
-                              );
-                            }
-
-                            Navigator.pop(context);
-                          },
-                          icon: const Icon(
-                            Icons.navigation,
-                          ),
-                          label: const Text(
-                            "Directions from Me",
-                          ),
-                        ),
-                      ),
-                    ],
+              child: Column(
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
+                children: [
+                  ClipRRect(
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(20),
+                      topRight: Radius.circular(20),
+                    ),
+                    child: Image.asset(
+                      site.image,
+                      height: 140,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    ),
                   ),
-                ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                        children: [
+                          // =====================================
+                          // SITE NAME
+                          // =====================================
+
+                          Text(
+                            site.name,
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: titleColor,
+                            ),
+                          ),
+
+                          const SizedBox(height: 8),
+
+                          // =====================================
+                          // SITE DESCRIPTION
+                          // =====================================
+
+                          Text(
+                            site.description,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: subtitleColor,
+                            ),
+                          ),
+
+                          const SizedBox(height: 12),
+
+                          Container(
+                            padding:
+                                const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color:
+                                  riskColor.withOpacity(0.15),
+                              borderRadius:
+                                  BorderRadius.circular(20),
+                              border: Border.all(
+                                color: riskColor,
+                              ),
+                            ),
+                            child: Text(
+                              "Flood Risk: $riskText",
+                              style: TextStyle(
+                                color: riskColor,
+                                fontWeight:
+                                    FontWeight.bold,
+                              ),
+                            ),
+                          ),
+
+                          const Spacer(),
+
+                          // =====================================
+                          // GO TO LOCATION BUTTON
+                          // =====================================
+
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                if (currentPosition != null) {
+                                  getRoute(
+                                    currentPosition!,
+                                    site.location,
+                                  );
+                                }
+
+                                mapController.move(
+                                  site.location,
+                                  16,
+                                );
+
+                                Navigator.pop(context);
+                              },
+                              icon: const Icon(
+                                Icons.directions,
+                              ),
+                              label: const Text(
+                                "Go to Location",
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: primaryButtonColor,
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius:
+                                      BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(height: 8),
+
+                          // =====================================
+                          // DIRECTIONS FROM ME BUTTON
+                          // =====================================
+
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: () {
+                                if (currentPosition != null) {
+                                  getRoute(
+                                    currentPosition!,
+                                    site.location,
+                                  );
+
+                                  mapController.move(
+                                    currentPosition!,
+                                    16,
+                                  );
+                                }
+
+                                Navigator.pop(context);
+                              },
+                              icon: Icon(
+                                Icons.navigation,
+                                color: primaryButtonColor,
+                              ),
+                              label: Text(
+                                "Directions from Me",
+                                style: TextStyle(
+                                  color: primaryButtonColor,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                side: BorderSide(
+                                  color: primaryButtonColor,
+                                  width: 1.5,
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius:
+                                      BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
@@ -1360,6 +1545,8 @@ class _MapTabState extends State<MapTab> {
 
   // =====================================================
   // HOSPITAL PANEL
+  //
+  // Same theme-aware treatment as the evacuation panel.
   // =====================================================
 
   void _showHospitalPanel(Hospital hospital, double distanceMeters) {
@@ -1372,93 +1559,135 @@ class _MapTabState extends State<MapTab> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) {
-        return Container(
-          padding: const EdgeInsets.all(20),
-          width: double.infinity,
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(20),
-              topRight: Radius.circular(20),
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+        return ValueListenableBuilder<bool>(
+          valueListenable: isDarkModeNotifier,
+          builder: (context, isDarkMode, child) {
+            final Color panelBackground =
+                isDarkMode ? const Color(0xFF2C2C2C) : Colors.white;
+
+            final Color titleColor =
+                isDarkMode ? Colors.white : const Color(0xFF1D2B4A);
+
+            final Color subtitleColor =
+                isDarkMode ? Colors.grey[400]! : const Color(0xFF5A6B8C);
+
+            const Color hospitalColor = Color(0xFFFF3035);
+
+            return Container(
+              padding: const EdgeInsets.all(20),
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: panelBackground,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(20),
+                  topRight: Radius.circular(20),
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: hospitalColor.withOpacity(0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.local_hospital,
+                          color: hospitalColor,
+                          size: 26,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // =============================================
+                            // HOSPITAL NAME
+                            // =============================================
+
+                            Text(
+                              hospital.name,
+                              style: TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.bold,
+                                color: titleColor,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+
+                            // =============================================
+                            // HOSPITAL DESCRIPTION
+                            // =============================================
+
+                            Text(
+                              hospital.description,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: subtitleColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
                   Container(
-                    width: 48,
-                    height: 48,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFF3035).withOpacity(0.15),
-                      shape: BoxShape.circle,
+                      color: Colors.blue.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.blue),
                     ),
-                    child: const Icon(
-                      Icons.local_hospital,
-                      color: Color(0xFFFF3035),
-                      size: 26,
+                    child: Text(
+                      distanceLabel,
+                      style: const TextStyle(
+                        color: Colors.blue,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          hospital.name,
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.bold,
-                          ),
+                  const SizedBox(height: 20),
+
+                  // =====================================
+                  // GO TO HOSPITAL BUTTON
+                  // =====================================
+
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        if (currentPosition != null) {
+                          getRoute(currentPosition!, hospital.location);
+                        }
+                        mapController.move(hospital.location, 16);
+                        Navigator.pop(context);
+                      },
+                      icon: const Icon(Icons.directions),
+                      label: const Text("Go to Hospital"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: hospitalColor,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 14,
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          hospital.description,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey[600],
-                          ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.blue),
-                ),
-                child: Text(
-                  distanceLabel,
-                  style: const TextStyle(
-                    color: Colors.blue,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    if (currentPosition != null) {
-                      getRoute(currentPosition!, hospital.location);
-                    }
-                    mapController.move(hospital.location, 16);
-                    Navigator.pop(context);
-                  },
-                  icon: const Icon(Icons.directions),
-                  label: const Text("Go to Hospital"),
-                ),
-              ),
-            ],
-          ),
+            );
+          },
         );
       },
     );

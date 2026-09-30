@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:curved_navigation_bar/curved_navigation_bar.dart';
@@ -20,10 +19,6 @@ final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 
 // =====================================================
 // NOTIFICATION CHANNEL IDs
-//
-// IMPORTANT:
-// Android notification channel settings are persistent.
-// Using a new ID makes sure the custom sound is applied.
 // =====================================================
 
 const String classNotificationChannelId = 'class_alerts';
@@ -64,13 +59,6 @@ Future<void> refreshUnreadNotificationCount() async {
 
 // =====================================================
 // INITIALIZE LOCAL NOTIFICATIONS
-//
-// This function is used by BOTH:
-// - foreground
-// - background isolate
-//
-// This is important because the background handler runs
-// separately from the normal Flutter UI isolate.
 // =====================================================
 
 Future<void> initializeLocalNotifications() async {
@@ -116,12 +104,6 @@ Future<void> initializeLocalNotifications() async {
 
   // ===================================================
   // TEST ALERT CHANNEL
-  //
-  // NEW CHANNEL ID:
-  // test_alerts_v2
-  //
-  // This is intentional because Android remembers the
-  // settings of old notification channels.
   // ===================================================
 
   const AndroidNotificationChannel testChannel =
@@ -192,22 +174,14 @@ Future<void> showLocalNotification({
         channelId,
         channelName,
         channelDescription: channelDescription,
-
         importance: Importance.max,
         priority: Priority.high,
-
         playSound: true,
-
-        // =================================================
-        // CUSTOM SOUND ONLY FOR TEST NOTIFICATIONS
-        // =================================================
-
         sound: isTestNotification
             ? const RawResourceAndroidNotificationSound(
                 'test_alert',
               )
             : null,
-
         enableVibration: true,
       ),
     ),
@@ -285,15 +259,7 @@ Future<void> firebaseMessagingBackgroundHandler(
   print('Background notification saved to history!');
 
   // ===================================================
-  // IMPORTANT
-  //
-  // Only show a local notification here when the FCM
-  // message does NOT contain a notification payload.
-  //
-  // This prevents duplicate notifications.
-  //
-  // Your test-notification.js should therefore send
-  // the TEST notification as DATA-ONLY.
+  // ONLY SHOW LOCAL NOTIFICATION FOR DATA-ONLY MESSAGE
   // ===================================================
 
   if (notification == null) {
@@ -321,17 +287,6 @@ Future<void> firebaseMessagingBackgroundHandler(
 
 // =====================================================
 // INITIALIZE FCM SERVICES
-//
-// IMPORTANT:
-// This is intentionally started AFTER runApp().
-//
-// Network-dependent operations such as:
-// - notification permission
-// - topic subscription
-// - FCM token
-//
-// should NOT prevent the application from opening
-// when there is no Wi-Fi or mobile data.
 // =====================================================
 
 Future<void> initializeFirebaseMessagingServices() async {
@@ -347,9 +302,6 @@ Future<void> initializeFirebaseMessagingServices() async {
 
   // ===================================================
   // LOAD UNREAD NOTIFICATION COUNT
-  //
-  // This uses local notification storage and does not
-  // need internet access.
   // ===================================================
 
   try {
@@ -553,11 +505,6 @@ void main() async {
 
   // ===================================================
   // FIREBASE
-  //
-  // Firebase initialization is kept before runApp()
-  // because the application pages use Firebase.
-  // Firebase initialization itself does not require an
-  // active internet connection.
   // ===================================================
 
   await Firebase.initializeApp();
@@ -572,23 +519,12 @@ void main() async {
 
   // ===================================================
   // START APP
-  //
-  // IMPORTANT:
-  // The app starts BEFORE notification permission,
-  // FCM topic subscription, and FCM token retrieval.
-  //
-  // This prevents the splash screen from being held
-  // when there is no Wi-Fi or mobile data.
   // ===================================================
 
   runApp(const MyApp());
 
   // ===================================================
   // INITIALIZE FCM SERVICES AFTER APP START
-  //
-  // These operations are intentionally not awaited.
-  // They can continue in the background while the
-  // application UI is already running.
   // ===================================================
 
   initializeFirebaseMessagingServices();
@@ -596,11 +532,6 @@ void main() async {
 
 // =====================================================
 // GLOBAL DARK MODE
-// =====================================================
-//
-// Dark mode is now permanently enabled.
-// The notifier is kept so existing files that reference
-// isDarkModeNotifier do not break.
 // =====================================================
 
 final ValueNotifier<bool> isDarkModeNotifier =
@@ -658,7 +589,7 @@ class _BottomNavPageState
   // ===================================================
   // START ON HOME
   //
-  // 0 = Evacuate
+  // 0 = Tools
   // 1 = Map
   // 2 = Home
   // 3 = Notifications
@@ -671,16 +602,50 @@ class _BottomNavPageState
       GlobalKey<CurvedNavigationBarState>();
 
   // ===================================================
+  // PENDING "GO TO THIS EVAC SITE ON THE MAP" REQUEST
+  // ===================================================
+
+  String? _focusName;
+  String? _focusAddress;
+  double? _focusLat;
+  double? _focusLng;
+  int _focusRequestId = 0;
+
+  void _goToEvacSiteOnMap(
+    String name,
+    String address,
+    double lat,
+    double lng,
+  ) {
+    setState(() {
+      _focusName = name;
+      _focusAddress = address;
+      _focusLat = lat;
+      _focusLng = lng;
+      _focusRequestId++;
+      _currentIndex = 1;
+    });
+  }
+
+  // ===================================================
   // TABS
   // ===================================================
 
-  final List<Widget> _tabs = const [
-    EvacuateTab(),
-    MapTab(),
-    HomeTab(),
-    NotificationTab(),
-    MenuTab(),
-  ];
+  List<Widget> get _tabs => [
+        EvacuateTab(
+          onGoToMap: _goToEvacSiteOnMap,
+        ),
+        MapTab(
+          focusRequestId: _focusRequestId,
+          focusName: _focusName,
+          focusLat: _focusLat,
+          focusLng: _focusLng,
+          focusDescription: _focusAddress,
+        ),
+        const HomeTab(),
+        const NotificationTab(),
+        const MenuTab(),
+      ];
 
   @override
   Widget build(BuildContext context) {
@@ -717,9 +682,6 @@ class _BottomNavPageState
 
       // =================================================
       // CURRENT TAB
-      //
-      // IndexedStack keeps all tabs alive instead of
-      // destroying HomeTab when another tab is selected.
       // =================================================
 
       body: IndexedStack(
@@ -787,12 +749,13 @@ class _BottomNavPageState
                 items: [
 
                   // =================================================
-                  // EVACUATE
+                  // TOOLS
                   // =================================================
 
-                  Icon(
-                    Icons.directions_run,
-                    size: 26,
+                  Image.asset(
+                    'assets/icon/tools.png',
+                    width: 26,
+                    height: 26,
                     color:
                         _currentIndex == 0
                             ? selectedIconColor
@@ -845,8 +808,7 @@ class _BottomNavPageState
                         children: [
 
                           Icon(
-                            Icons
-                                .notifications_none_rounded,
+                            Icons.notifications_none_rounded,
                             size: 26,
                             color:
                                 _currentIndex == 3
