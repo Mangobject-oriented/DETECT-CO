@@ -24,8 +24,37 @@ enum HomeBgChoice {
 final ValueNotifier<HomeBgChoice> homeBgChoice =
     ValueNotifier<HomeBgChoice>(HomeBgChoice.auto);
 
-class MenuTab extends StatelessWidget {
+// =====================================================
+// HOME BACKGROUND QUALITY (HIGH / LOW-END)
+// =====================================================
+//
+// high = the original detailed backgrounds.
+// low  = lightweight backgrounds for low-end devices
+//        (fewer rain particles, no blur filters, static layers).
+//
+// This only changes WHICH VERSION of the chosen background is
+// drawn. The weather choice above still decides the weather.
+
+enum HomeBgQuality {
+  high,
+  low,
+}
+
+final ValueNotifier<HomeBgQuality> homeBgQuality =
+    ValueNotifier<HomeBgQuality>(HomeBgQuality.high);
+
+// MenuTab is now a StatefulWidget so the Home Background card
+// can remember whether it is expanded or collapsed.
+class MenuTab extends StatefulWidget {
   const MenuTab({super.key});
+
+  @override
+  State<MenuTab> createState() => _MenuTabState();
+}
+
+class _MenuTabState extends State<MenuTab> {
+  // Whether the Home Background card is expanded (dropdowns visible).
+  bool _bgExpanded = false;
 
   @override
   Widget build(BuildContext context) {
@@ -381,9 +410,14 @@ class MenuTab extends StatelessWidget {
   // HOME BACKGROUND SELECTOR CARD
   // =====================================================
   //
-  // Same look as the other menu cards, but instead of an arrow
-  // it contains a dropdown. Default = live weather from the API;
-  // the other options force a background for demo purposes.
+  // Same look as the other menu cards: icon, title, subtitle and
+  // a ">" arrow on the right. Tapping the header expands the card
+  // (the arrow rotates down) and reveals the dropdowns. Default =
+  // live weather from the API; the other options force a
+  // background for demo purposes.
+  //
+  // A second dropdown below it selects the background quality
+  // (High / Low-end device).
 
   Widget _buildBackgroundSelectorCard({
     required bool isDarkMode,
@@ -392,11 +426,6 @@ class MenuTab extends StatelessWidget {
   }) {
     return Container(
       width: double.infinity,
-
-      padding: const EdgeInsets.symmetric(
-        horizontal: 18,
-        vertical: 18,
-      ),
 
       decoration: BoxDecoration(
         color: cardColor,
@@ -435,162 +464,354 @@ class MenuTab extends StatelessWidget {
         children: [
 
           // =================================================
-          // ICON + TEXT
+          // HEADER (TAP TO EXPAND / COLLAPSE)
           // =================================================
 
-          Row(
-            children: [
+          Material(
+            color: Colors.transparent,
 
-              Container(
-                width: 52,
-                height: 52,
+            child: InkWell(
+              borderRadius:
+                  BorderRadius.circular(20),
 
-                decoration: BoxDecoration(
-                  color: isDarkMode
-                      ? const Color(0xFF383838)
-                      : const Color(0xFFEAF0FF),
+              onTap: () {
+                setState(() {
+                  _bgExpanded = !_bgExpanded;
+                });
+              },
 
-                  borderRadius:
-                      BorderRadius.circular(16),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 18,
                 ),
 
-                child: Icon(
-                  Icons.wallpaper_rounded,
-                  size: 27,
-
-                  color: isDarkMode
-                      ? Colors.white
-                      : const Color(0xFF4877F7),
-                ),
-              ),
-
-              const SizedBox(width: 16),
-
-              Expanded(
-                child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
-
+                child: Row(
                   children: [
 
-                    Text(
-                      'Home Background',
+                    Container(
+                      width: 52,
+                      height: 52,
 
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight:
-                            FontWeight.w600,
-                        color: textColor,
+                      decoration: BoxDecoration(
+                        color: isDarkMode
+                            ? const Color(0xFF383838)
+                            : const Color(0xFFEAF0FF),
+
+                        borderRadius:
+                            BorderRadius.circular(16),
+                      ),
+
+                      child: Icon(
+                        Icons.wallpaper_rounded,
+                        size: 27,
+
+                        color: isDarkMode
+                            ? Colors.white
+                            : const Color(0xFF4877F7),
                       ),
                     ),
 
-                    const SizedBox(height: 4),
+                    const SizedBox(width: 16),
 
-                    Text(
-                      'Choose the weather shown on Home',
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
 
-                      style: TextStyle(
-                        fontSize: 13,
+                        children: [
+
+                          Text(
+                            'Home Background',
+
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight:
+                                  FontWeight.w600,
+                              color: textColor,
+                            ),
+                          ),
+
+                          const SizedBox(height: 4),
+
+                          Text(
+                            'Choose the weather shown on Home',
+
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: isDarkMode
+                                  ? Colors.white60
+                                  : Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // =========================================
+                    // ARROW (ROTATES WHEN EXPANDED)
+                    // =========================================
+
+                    AnimatedRotation(
+                      turns: _bgExpanded ? 0.25 : 0.0,
+
+                      duration:
+                          const Duration(milliseconds: 250),
+
+                      child: Icon(
+                        Icons.chevron_right_rounded,
+
+                        size: 28,
+
                         color: isDarkMode
-                            ? Colors.white60
-                            : Colors.grey.shade600,
+                            ? Colors.white54
+                            : Colors.grey.shade500,
                       ),
                     ),
                   ],
                 ),
               ),
-            ],
+            ),
           ),
 
-          const SizedBox(height: 16),
-
           // =================================================
-          // DROPDOWN
+          // EXPANDABLE DROPDOWN AREA
           // =================================================
 
-          ValueListenableBuilder<HomeBgChoice>(
-            valueListenable: homeBgChoice,
+          AnimatedSize(
+            duration:
+                const Duration(milliseconds: 250),
 
-            builder: (context, choice, _) {
-              return Container(
-                width: double.infinity,
+            curve: Curves.easeInOut,
 
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 4,
-                ),
+            alignment: Alignment.topCenter,
 
-                decoration: BoxDecoration(
-                  color: const Color(0xFF383838),
-
-                  borderRadius:
-                      BorderRadius.circular(14),
-
-                  border: Border.all(
-                    color: Colors.white
-                        .withOpacity(0.12),
-                  ),
-                ),
-
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<HomeBgChoice>(
-                    value: choice,
-                    isExpanded: true,
-
-                    borderRadius:
-                        BorderRadius.circular(14),
-
-                    dropdownColor:
-                        const Color(0xFF303030),
-
-                    icon: const Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      color: Colors.white70,
+            child: _bgExpanded
+                ? Padding(
+                    padding:
+                        const EdgeInsets.fromLTRB(
+                      18,
+                      0,
+                      18,
+                      18,
                     ),
 
-                    style: const TextStyle(
-                      fontSize: 15,
-                      color: Colors.white,
-                      fontWeight: FontWeight.w500,
+                    child: Column(
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
+
+                      children: [
+
+                        // =================================================
+                        // DROPDOWN
+                        // =================================================
+
+                        ValueListenableBuilder<HomeBgChoice>(
+                          valueListenable: homeBgChoice,
+
+                          builder: (context, choice, _) {
+                            return Container(
+                              width: double.infinity,
+
+                              padding:
+                                  const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 4,
+                              ),
+
+                              decoration: BoxDecoration(
+                                color:
+                                    const Color(0xFF383838),
+
+                                borderRadius:
+                                    BorderRadius.circular(14),
+
+                                border: Border.all(
+                                  color: Colors.white
+                                      .withOpacity(0.12),
+                                ),
+                              ),
+
+                              child:
+                                  DropdownButtonHideUnderline(
+                                child:
+                                    DropdownButton<HomeBgChoice>(
+                                  value: choice,
+                                  isExpanded: true,
+
+                                  borderRadius:
+                                      BorderRadius.circular(14),
+
+                                  dropdownColor:
+                                      const Color(0xFF303030),
+
+                                  icon: const Icon(
+                                    Icons
+                                        .keyboard_arrow_down_rounded,
+                                    color: Colors.white70,
+                                  ),
+
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+
+                                  items: [
+                                    _bgItem(
+                                      HomeBgChoice.auto,
+                                      Icons.cloud_sync_rounded,
+                                      'Default (Live weather from API)',
+                                    ),
+                                    _bgItem(
+                                      HomeBgChoice.storm,
+                                      Icons.thunderstorm_rounded,
+                                      'Storm',
+                                    ),
+                                    _bgItem(
+                                      HomeBgChoice.rain,
+                                      Icons.water_drop_rounded,
+                                      'Rain',
+                                    ),
+                                    _bgItem(
+                                      HomeBgChoice.cloudy,
+                                      Icons.cloud_rounded,
+                                      'Cloudy',
+                                    ),
+                                    _bgItem(
+                                      HomeBgChoice.sunny,
+                                      Icons.wb_sunny_rounded,
+                                      'Sunny',
+                                    ),
+                                  ],
+
+                                  onChanged: (value) {
+                                    if (value == null) return;
+
+                                    homeBgChoice.value = value;
+                                  },
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+
+                        const SizedBox(height: 18),
+
+                        // =================================================
+                        // QUALITY LABEL
+                        // =================================================
+
+                        Text(
+                          'Background Quality',
+
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: textColor,
+                          ),
+                        ),
+
+                        const SizedBox(height: 4),
+
+                        Text(
+                          'Choose Low for smoother performance on low-end devices',
+
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDarkMode
+                                ? Colors.white60
+                                : Colors.grey.shade600,
+                          ),
+                        ),
+
+                        const SizedBox(height: 10),
+
+                        // =================================================
+                        // QUALITY DROPDOWN
+                        // =================================================
+
+                        ValueListenableBuilder<HomeBgQuality>(
+                          valueListenable: homeBgQuality,
+
+                          builder: (context, quality, _) {
+                            return Container(
+                              width: double.infinity,
+
+                              padding:
+                                  const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 4,
+                              ),
+
+                              decoration: BoxDecoration(
+                                color:
+                                    const Color(0xFF383838),
+
+                                borderRadius:
+                                    BorderRadius.circular(14),
+
+                                border: Border.all(
+                                  color: Colors.white
+                                      .withOpacity(0.12),
+                                ),
+                              ),
+
+                              child:
+                                  DropdownButtonHideUnderline(
+                                child: DropdownButton<
+                                    HomeBgQuality>(
+                                  value: quality,
+                                  isExpanded: true,
+
+                                  borderRadius:
+                                      BorderRadius.circular(14),
+
+                                  dropdownColor:
+                                      const Color(0xFF303030),
+
+                                  icon: const Icon(
+                                    Icons
+                                        .keyboard_arrow_down_rounded,
+                                    color: Colors.white70,
+                                  ),
+
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+
+                                  items: [
+                                    _qualityItem(
+                                      HomeBgQuality.high,
+                                      Icons.high_quality_rounded,
+                                      'High (Detailed animations)',
+                                    ),
+                                    _qualityItem(
+                                      HomeBgQuality.low,
+                                      Icons.speed_rounded,
+                                      'Low (Low-end device friendly)',
+                                    ),
+                                  ],
+
+                                  onChanged: (value) {
+                                    if (value == null) return;
+
+                                    homeBgQuality.value = value;
+                                  },
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
                     ),
-
-                    items: [
-                      _bgItem(
-                        HomeBgChoice.auto,
-                        Icons.cloud_sync_rounded,
-                        'Default (Live weather from API)',
-                      ),
-                      _bgItem(
-                        HomeBgChoice.storm,
-                        Icons.thunderstorm_rounded,
-                        'Storm',
-                      ),
-                      _bgItem(
-                        HomeBgChoice.rain,
-                        Icons.water_drop_rounded,
-                        'Rain',
-                      ),
-                      _bgItem(
-                        HomeBgChoice.cloudy,
-                        Icons.cloud_rounded,
-                        'Cloudy',
-                      ),
-                      _bgItem(
-                        HomeBgChoice.sunny,
-                        Icons.wb_sunny_rounded,
-                        'Sunny',
-                      ),
-                    ],
-
-                    onChanged: (value) {
-                      if (value == null) return;
-
-                      homeBgChoice.value = value;
-                    },
+                  )
+                : const SizedBox(
+                    width: double.infinity,
                   ),
-                ),
-              );
-            },
           ),
         ],
       ),
@@ -607,6 +828,40 @@ class MenuTab extends StatelessWidget {
     String label,
   ) {
     return DropdownMenuItem<HomeBgChoice>(
+      value: value,
+
+      child: Row(
+        children: [
+
+          Icon(
+            icon,
+            size: 20,
+            color: Colors.white70,
+          ),
+
+          const SizedBox(width: 10),
+
+          Expanded(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // =====================================================
+  // QUALITY DROPDOWN ITEM HELPER
+  // =====================================================
+
+  DropdownMenuItem<HomeBgQuality> _qualityItem(
+    HomeBgQuality value,
+    IconData icon,
+    String label,
+  ) {
+    return DropdownMenuItem<HomeBgQuality>(
       value: value,
 
       child: Row(

@@ -1177,15 +1177,23 @@ class _HomeTabState extends State<HomeTab>
             //
             // ValueListenableBuilder makes the background react
             // instantly when the Menu's Home Background dropdown
-            // changes (Default / Storm / Rain / Cloudy / Sunny).
+            // changes (Default / Storm / Rain / Cloudy / Sunny),
+            // and when the Menu's quality setting changes
+            // (High / Low). The quality setting lives in menu.dart.
             Positioned.fill(
               child: IgnorePointer(
                 child: RepaintBoundary(
                   child: ValueListenableBuilder<HomeBgChoice>(
                     valueListenable: homeBgChoice,
                     builder: (context, choice, _) {
-                      return _RainBackground(
-                        mode: _computeWeatherMode(),
+                      return ValueListenableBuilder<HomeBgQuality>(
+                        valueListenable: homeBgQuality,
+                        builder: (context, quality, _) {
+                          return _RainBackground(
+                            mode: _computeWeatherMode(),
+                            lite: quality == HomeBgQuality.low,
+                          );
+                        },
                       );
                     },
                   ),
@@ -2406,6 +2414,13 @@ enum _WeatherBackgroundMode {
 // based on current weather: sunny, cloudy, rain (unchanged from
 // before), and storm (the same rain animation, made heavier and
 // faster, with occasional lightning).
+//
+// LOW-END MODE ("lite"):
+// When `lite` is true, a second set of four lightweight
+// backgrounds is used instead (sunny / cloudy / rain / storm).
+// They use far fewer particles, no blur filters, and draw their
+// gradients once as static layers instead of every frame, so
+// they run smoothly on weak devices.
 
 class _RainDrop {
   final double x; // 0..1 across the screen width
@@ -2426,8 +2441,12 @@ class _RainDrop {
 class _RainBackground extends StatefulWidget {
   final _WeatherBackgroundMode mode;
 
+  // True = use the low-end (lightweight) backgrounds.
+  final bool lite;
+
   const _RainBackground({
     required this.mode,
+    this.lite = false,
   });
 
   @override
@@ -2440,6 +2459,9 @@ class _RainBackgroundState
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final List<_RainDrop> _drops;
+
+  // Much smaller particle set used by the low-end backgrounds.
+  late final List<_RainDrop> _liteDrops;
 
   @override
   void initState() {
@@ -2477,6 +2499,24 @@ class _RainBackgroundState
         opacity: 0.5 + rnd.nextDouble() * 0.5,
       );
     });
+
+    // LOW-END DROPS:
+    // Only 22 drops (instead of 80), all placed near the edges.
+    final math.Random liteRnd = math.Random(7);
+
+    _liteDrops = List.generate(22, (i) {
+      final double t = liteRnd.nextDouble();
+      final double s = t * t * 0.28;
+      final double x = liteRnd.nextBool() ? s : 1 - s;
+
+      return _RainDrop(
+        x: x,
+        phase: liteRnd.nextDouble(),
+        length: 10 + liteRnd.nextDouble() * 10,
+        speed: liteRnd.nextBool() ? 1 : 2,
+        opacity: 0.6 + liteRnd.nextDouble() * 0.4,
+      );
+    });
   }
 
   @override
@@ -2485,8 +2525,194 @@ class _RainBackgroundState
     super.dispose();
   }
 
+  // =====================================================
+  // LOW-END BACKGROUNDS
+  // =====================================================
+
+  Widget _buildLite() {
+    final _WeatherBackgroundMode mode = widget.mode;
+
+    switch (mode) {
+      // ---------------------------------------------
+      // SUNNY (LITE)
+      // ---------------------------------------------
+      case _WeatherBackgroundMode.sunny:
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0xFF1E5CA6),
+                    Color(0xFF3C82C4),
+                    Color(0xFF6FA6D4),
+                  ],
+                  stops: [0.0, 0.5, 1.0],
+                ),
+              ),
+            ),
+
+            // Sun + rainbow are painted once and never repainted.
+            RepaintBoundary(
+              child: CustomPaint(
+                size: Size.infinite,
+                painter: _LiteSunPainter(),
+              ),
+            ),
+
+            // A few soft clouds drifting slowly.
+            AnimatedBuilder(
+              animation: _controller,
+              builder: (context, child) {
+                return CustomPaint(
+                  size: Size.infinite,
+                  painter: _LiteCloudsPainter(
+                    progress: _controller.value,
+                    color: Colors.white.withOpacity(0.30),
+                    clouds: _liteSunnyClouds,
+                    drift: 8,
+                    scroll: 0,
+                  ),
+                );
+              },
+            ),
+          ],
+        );
+
+      // ---------------------------------------------
+      // CLOUDY (LITE)
+      // ---------------------------------------------
+      case _WeatherBackgroundMode.cloudy:
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0xFF161B22),
+                    Color(0xFF20262E),
+                    Color(0xFF212121),
+                  ],
+                  stops: [0.0, 0.45, 1.0],
+                ),
+              ),
+            ),
+            AnimatedBuilder(
+              animation: _controller,
+              builder: (context, child) {
+                return CustomPaint(
+                  size: Size.infinite,
+                  painter: _LiteCloudsPainter(
+                    progress: _controller.value,
+                    color: const Color(0xFF4A5560)
+                        .withOpacity(0.55),
+                    clouds: _liteCloudyClouds,
+                    drift: 14,
+                    scroll: 0.10,
+                  ),
+                );
+              },
+            ),
+          ],
+        );
+
+      // ---------------------------------------------
+      // RAIN (LITE)
+      // ---------------------------------------------
+      case _WeatherBackgroundMode.rain:
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0xFF0E1218),
+                    Color(0xFF161C24),
+                    Color(0xFF212121),
+                  ],
+                  stops: [0.0, 0.45, 1.0],
+                ),
+              ),
+            ),
+            AnimatedBuilder(
+              animation: _controller,
+              builder: (context, child) {
+                return CustomPaint(
+                  size: Size.infinite,
+                  painter: _LiteRainPainter(
+                    progress: _controller.value,
+                    drops: _liteDrops,
+                    speedMultiplier: 1.0,
+                    alphaMultiplier: 1.0,
+                  ),
+                );
+              },
+            ),
+          ],
+        );
+
+      // ---------------------------------------------
+      // STORM (LITE)
+      // ---------------------------------------------
+      case _WeatherBackgroundMode.storm:
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0xFF080B10),
+                    Color(0xFF10151C),
+                    Color(0xFF212121),
+                  ],
+                  stops: [0.0, 0.45, 1.0],
+                ),
+              ),
+            ),
+            AnimatedBuilder(
+              animation: _controller,
+              builder: (context, child) {
+                return CustomPaint(
+                  size: Size.infinite,
+                  painter: _LiteRainPainter(
+                    progress: _controller.value,
+                    drops: _liteDrops,
+                    speedMultiplier: 1.8,
+                    alphaMultiplier: 1.4,
+                  ),
+                );
+              },
+            ),
+
+            // Simple whole-screen flash only (no bolt drawing).
+            const _LightningOverlay(
+              enabled: true,
+              simple: true,
+            ),
+          ],
+        );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Low-end devices get the lightweight set of backgrounds.
+    if (widget.lite) {
+      return _buildLite();
+    }
+
     final bool isStorm =
         widget.mode == _WeatherBackgroundMode.storm;
 
@@ -2986,17 +3212,278 @@ class _CloudyPainter extends CustomPainter {
 }
 
 // =====================================================
+// LOW-END BACKGROUND PAINTERS
+// =====================================================
+//
+// Lightweight versions of the four backgrounds. Rules used
+// to keep them fast on weak devices:
+//   * NO MaskFilter.blur (the most expensive operation).
+//   * Gradients are drawn once by a DecoratedBox instead of
+//     being rebuilt every frame.
+//   * Very few particles (22 raindrops, 4-5 clouds).
+//   * Sun + rainbow are static and never repaint.
+
+// x, y, radius (fractions of screen size)
+const List<List<double>> _liteSunnyClouds = [
+  [0.14, 0.14, 0.13],
+  [0.55, 0.30, 0.11],
+  [0.92, 0.40, 0.12],
+  [0.25, 0.62, 0.13],
+];
+
+const List<List<double>> _liteCloudyClouds = [
+  [0.05, 0.12, 0.26],
+  [0.60, 0.08, 0.28],
+  [0.25, 0.55, 0.26],
+  [0.85, 0.62, 0.24],
+];
+
+// -----------------------------------------------------
+// LITE RAIN PAINTER (rain + storm)
+// -----------------------------------------------------
+//
+// Same edge-weighted look as the normal rain, but with no
+// gradient, no clouds, and only a handful of drops.
+
+class _LiteRainPainter extends CustomPainter {
+  final double progress;
+  final List<_RainDrop> drops;
+  final double speedMultiplier;
+  final double alphaMultiplier;
+
+  _LiteRainPainter({
+    required this.progress,
+    required this.drops,
+    this.speedMultiplier = 1.0,
+    this.alphaMultiplier = 1.0,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Paint rainPaint = Paint()
+      ..strokeWidth = 1.2
+      ..strokeCap = StrokeCap.butt;
+
+    const Color rainColor = Color(0xFFB0C4DE);
+
+    const double maxAlpha = 0.24;
+
+    for (final _RainDrop d in drops) {
+      final double travel = size.height + d.length;
+
+      final double y =
+          ((d.phase + progress * d.speed * speedMultiplier) %
+                      1.0) *
+                  travel -
+              d.length;
+
+      final double x = d.x * size.width;
+
+      final double edgeDistance =
+          ((d.x - 0.5).abs() * 2).clamp(0.0, 1.0);
+
+      final double alpha =
+          (maxAlpha *
+                  d.opacity *
+                  (0.15 + 0.85 * edgeDistance) *
+                  alphaMultiplier)
+              .clamp(0.0, 1.0);
+
+      rainPaint.color = rainColor.withOpacity(alpha);
+
+      canvas.drawLine(
+        Offset(x, y),
+        Offset(x - d.length * 0.2, y + d.length),
+        rainPaint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(
+    covariant _LiteRainPainter oldDelegate,
+  ) =>
+      oldDelegate.progress != progress ||
+      oldDelegate.speedMultiplier != speedMultiplier ||
+      oldDelegate.alphaMultiplier != alphaMultiplier;
+}
+
+// -----------------------------------------------------
+// LITE CLOUDS PAINTER (sunny + cloudy)
+// -----------------------------------------------------
+//
+// Soft clouds drawn with a cheap radial-gradient fade
+// instead of a blur filter.
+
+class _LiteCloudsPainter extends CustomPainter {
+  final double progress;
+  final Color color;
+  final List<List<double>> clouds;
+
+  // Sideways sway in pixels.
+  final double drift;
+
+  // Fraction of screen width the clouds slowly travel per cycle
+  // (0 = they only sway in place).
+  final double scroll;
+
+  _LiteCloudsPainter({
+    required this.progress,
+    required this.color,
+    required this.clouds,
+    required this.drift,
+    required this.scroll,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (int i = 0; i < clouds.length; i++) {
+      final double sway =
+          math.sin(progress * math.pi * 2 + i) * drift;
+
+      double x = clouds[i][0] * size.width + sway;
+
+      if (scroll > 0) {
+        x = (x + progress * size.width * scroll) %
+                (size.width * 1.3) -
+            size.width * 0.15;
+      }
+
+      final Offset center =
+          Offset(x, clouds[i][1] * size.height);
+
+      final double radius = clouds[i][2] * size.width;
+
+      canvas.drawCircle(
+        center,
+        radius,
+        Paint()
+          ..shader = RadialGradient(
+            colors: [
+              color,
+              color.withOpacity(0.0),
+            ],
+          ).createShader(
+            Rect.fromCircle(center: center, radius: radius),
+          ),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(
+    covariant _LiteCloudsPainter oldDelegate,
+  ) =>
+      oldDelegate.progress != progress;
+}
+
+// -----------------------------------------------------
+// LITE SUN + RAINBOW PAINTER (static, painted once)
+// -----------------------------------------------------
+
+class _LiteSunPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Sun glow.
+    final Offset sunCenter = Offset(
+      size.width * 0.80,
+      size.height * 0.13,
+    );
+
+    final double glowRadius = size.width * 0.50;
+
+    canvas.drawCircle(
+      sunCenter,
+      glowRadius,
+      Paint()
+        ..shader = RadialGradient(
+          colors: [
+            const Color(0xFFFFF3C4).withOpacity(0.55),
+            const Color(0xFFFFE28A).withOpacity(0.20),
+            const Color(0xFFFFE28A).withOpacity(0.0),
+          ],
+          stops: const [0.0, 0.35, 1.0],
+        ).createShader(
+          Rect.fromCircle(
+            center: sunCenter,
+            radius: glowRadius,
+          ),
+        ),
+    );
+
+    // Sun core.
+    canvas.drawCircle(
+      sunCenter,
+      size.width * 0.075,
+      Paint()
+        ..color = const Color(0xFFFFF8DC).withOpacity(0.85),
+    );
+
+    // Flat rainbow (no blur, no animation).
+    final Offset rainbowCenter = Offset(
+      size.width * 0.42,
+      size.height * 0.42,
+    );
+
+    const List<Color> rainbowColors = [
+      Color(0xFFFF4B4B),
+      Color(0xFFFF9A3C),
+      Color(0xFFFFE04A),
+      Color(0xFF5CDB6E),
+      Color(0xFF4AB8FF),
+      Color(0xFF5B6CFF),
+      Color(0xFFA26BFF),
+    ];
+
+    final double bandWidth = size.width * 0.028;
+    final double outerRadius = size.width * 0.62;
+
+    final Paint bandPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = bandWidth + 0.8;
+
+    for (int i = 0; i < rainbowColors.length; i++) {
+      bandPaint.color = rainbowColors[i].withOpacity(0.36);
+
+      canvas.drawArc(
+        Rect.fromCircle(
+          center: rainbowCenter,
+          radius: outerRadius - i * bandWidth,
+        ),
+        math.pi,
+        math.pi,
+        false,
+        bandPaint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(
+    covariant _LiteSunPainter oldDelegate,
+  ) =>
+      false;
+}
+
+// =====================================================
 // LIGHTNING OVERLAY (STORM MODE)
 // =====================================================
 //
 // Occasional, natural-looking lightning flashes: a brief
 // whole-screen brightening plus a jagged bolt, on a random
 // timer while storm mode is active.
+//
+// When `simple` is true (low-end storm background), only the
+// whole-screen flash is drawn and the bolt is skipped.
 
 class _LightningOverlay extends StatefulWidget {
   final bool enabled;
+  final bool simple;
 
-  const _LightningOverlay({required this.enabled});
+  const _LightningOverlay({
+    required this.enabled,
+    this.simple = false,
+  });
 
   @override
   State<_LightningOverlay> createState() =>
@@ -3082,6 +3569,7 @@ class _LightningOverlayState
           painter: _LightningPainter(
             intensity: _flashController.value,
             boltX: _boltX,
+            simple: widget.simple,
           ),
         );
       },
@@ -3092,10 +3580,12 @@ class _LightningOverlayState
 class _LightningPainter extends CustomPainter {
   final double intensity;
   final double boltX;
+  final bool simple;
 
   _LightningPainter({
     required this.intensity,
     required this.boltX,
+    this.simple = false,
   });
 
   @override
@@ -3109,6 +3599,9 @@ class _LightningPainter extends CustomPainter {
       Paint()
         ..color = Colors.white.withOpacity(0.22 * intensity),
     );
+
+    // Low-end mode: flash only, skip the jagged bolt.
+    if (simple) return;
 
     if (intensity > 0.3) {
       final Paint boltPaint = Paint()
@@ -3142,7 +3635,8 @@ class _LightningPainter extends CustomPainter {
     covariant _LightningPainter oldDelegate,
   ) =>
       oldDelegate.intensity != intensity ||
-      oldDelegate.boltX != boltX;
+      oldDelegate.boltX != boltX ||
+      oldDelegate.simple != simple;
 }
 
 // =====================================================
