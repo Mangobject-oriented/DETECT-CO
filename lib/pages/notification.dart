@@ -6,6 +6,30 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:detectco/main.dart';
 
+// =====================================================
+// NOTIFICATION COUNT NOTIFIER
+// =====================================================
+
+class NotificationCountNotifier extends ValueNotifier<int> {
+  NotificationCountNotifier(super.value);
+
+  @override
+  set value(int newValue) {
+    final oldValue = super.value;
+
+    super.value = newValue;
+
+    // ValueNotifier normally does not notify listeners
+    // when the value is the same.
+    //
+    // Force a notification when the notification storage
+    // changes even if the unread number stays the same.
+    if (oldValue == newValue) {
+      notifyListeners();
+    }
+  }
+}
+
 class AppNotification {
   final String id;
   final String title;
@@ -60,59 +84,76 @@ class NotificationStorage {
   // GLOBAL UNREAD NOTIFICATION COUNT
   // ===================================================
 
-  static final ValueNotifier<int> unreadCountNotifier =
-      ValueNotifier<int>(0);
+  static final NotificationCountNotifier unreadCountNotifier =
+      NotificationCountNotifier(0);
 
   // ===================================================
-  // LOAD NOTIFICATIONS
+  // READ RAW NOTIFICATIONS
   // ===================================================
 
-  static Future<List<AppNotification>> getNotifications() async {
+  static Future<List<AppNotification>> _readNotifications() async {
     final prefs = await SharedPreferences.getInstance();
 
     final String? raw = prefs.getString(_key);
 
     if (raw == null || raw.isEmpty) {
-      unreadCountNotifier.value = 0;
       return [];
     }
 
     try {
       final List<dynamic> decoded = jsonDecode(raw);
 
-      final List<AppNotification> notifications = decoded
+      return decoded
           .map(
             (item) => AppNotification.fromJson(
               Map<String, dynamic>.from(item),
             ),
           )
+          .where(
+            (notification) =>
+                notification.type == 'announcement' ||
+                notification.type == 'alert',
+          )
           .toList();
-
-      // Update global unread count.
-      unreadCountNotifier.value = notifications
-          .where((notification) => !notification.isRead)
-          .length;
-
-      return notifications;
     } catch (e) {
       debugPrint('Notification storage error: $e');
-
-      unreadCountNotifier.value = 0;
-
       return [];
     }
   }
 
   // ===================================================
-  // UPDATE UNREAD COUNT
+  // UPDATE GLOBAL UNREAD COUNT
   // ===================================================
 
   static Future<void> updateUnreadCount() async {
-    final notifications = await getNotifications();
+    final notifications = await _readNotifications();
 
     unreadCountNotifier.value = notifications
         .where((notification) => !notification.isRead)
         .length;
+  }
+
+  // ===================================================
+  // INITIALIZE UNREAD COUNT
+  // ===================================================
+
+  static Future<void> initializeUnreadCount() async {
+    await updateUnreadCount();
+  }
+
+  // ===================================================
+  // LOAD NOTIFICATIONS
+  // ===================================================
+
+  static Future<List<AppNotification>> getNotifications() async {
+    // IMPORTANT:
+    // Do not update unreadCountNotifier here.
+    //
+    // The actual notification-changing methods already
+    // update the notifier. Updating it again here would
+    // cause the NotificationTab listener to repeatedly
+    // reload itself.
+    return await _readNotifications();
   }
 
   // ===================================================
@@ -124,7 +165,7 @@ class NotificationStorage {
   ) async {
     final prefs = await SharedPreferences.getInstance();
 
-    final notifications = await getNotifications();
+    final notifications = await _readNotifications();
 
     // Prevent duplicate notifications.
     notifications.removeWhere(
@@ -147,8 +188,8 @@ class NotificationStorage {
 
     await prefs.setString(_key, encoded);
 
-    // IMPORTANT:
-    // Refresh unread counter immediately.
+    // Immediately update navbar unread count
+    // and notify the Notification page.
     unreadCountNotifier.value = notifications
         .where((notification) => !notification.isRead)
         .length;
@@ -159,13 +200,13 @@ class NotificationStorage {
   // ===================================================
 
   static Future<void> deleteNotification(String id) async {
-    final notifications = await getNotifications();
+    final prefs = await SharedPreferences.getInstance();
+
+    final notifications = await _readNotifications();
 
     notifications.removeWhere(
       (item) => item.id == id,
     );
-
-    final prefs = await SharedPreferences.getInstance();
 
     await prefs.setString(
       _key,
@@ -174,8 +215,11 @@ class NotificationStorage {
       ),
     );
 
-    // IMPORTANT:
-    // Refresh unread counter after deletion.
+    // Recalculate from the actual remaining notifications.
+    //
+    // NotificationCountNotifier also notifies when the
+    // count remains the same, so the navbar/page refreshes
+    // even when deleting an already-read notification.
     unreadCountNotifier.value = notifications
         .where((notification) => !notification.isRead)
         .length;
@@ -190,7 +234,6 @@ class NotificationStorage {
 
     await prefs.remove(_key);
 
-    // IMPORTANT:
     // No notifications = zero unread.
     unreadCountNotifier.value = 0;
   }
@@ -200,15 +243,16 @@ class NotificationStorage {
   // ===================================================
 
   static Future<void> markAsRead(String id) async {
-    final notifications = await getNotifications();
+    final prefs = await SharedPreferences.getInstance();
+
+    final notifications = await _readNotifications();
 
     for (final notification in notifications) {
       if (notification.id == id) {
         notification.isRead = true;
+        break;
       }
     }
-
-    final prefs = await SharedPreferences.getInstance();
 
     await prefs.setString(
       _key,
@@ -217,8 +261,13 @@ class NotificationStorage {
       ),
     );
 
-    // IMPORTANT:
-    // Refresh unread counter.
+    // Recalculate immediately.
+    //
+    // If the unread count changes from 1 -> 0,
+    // the navbar gets notified normally.
+    //
+    // If it somehow remains the same, the custom notifier
+    // still forces a refresh.
     unreadCountNotifier.value = notifications
         .where((notification) => !notification.isRead)
         .length;
@@ -229,13 +278,13 @@ class NotificationStorage {
   // ===================================================
 
   static Future<void> markAllAsRead() async {
-    final notifications = await getNotifications();
+    final prefs = await SharedPreferences.getInstance();
+
+    final notifications = await _readNotifications();
 
     for (final notification in notifications) {
       notification.isRead = true;
     }
-
-    final prefs = await SharedPreferences.getInstance();
 
     await prefs.setString(
       _key,
@@ -244,7 +293,6 @@ class NotificationStorage {
       ),
     );
 
-    // IMPORTANT:
     // Everything is read.
     unreadCountNotifier.value = 0;
   }
@@ -270,6 +318,26 @@ class _NotificationTabState extends State<NotificationTab>
 
   bool isLoading = true;
 
+  // ===================================================
+  // LISTEN FOR NEW/UPDATED NOTIFICATIONS
+  // ===================================================
+
+  void _notificationCountChanged() {
+    // The notification storage has changed.
+    //
+    // Reload the actual notification list so the page
+    // immediately reflects:
+    //
+    // - New notifications
+    // - Deleted notifications
+    // - Read notifications
+    // - Mark-all-as-read
+    //
+    // This does NOT update the notifier again because
+    // getNotifications() only reads the storage.
+    _loadNotifications();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -279,11 +347,27 @@ class _NotificationTabState extends State<NotificationTab>
       vsync: this,
     );
 
+    // Listen for notification storage changes.
+    //
+    // saveNotification(), deleteNotification(),
+    // markAsRead(), markAllAsRead(), etc. all update
+    // unreadCountNotifier.
+    NotificationStorage.unreadCountNotifier.addListener(
+      _notificationCountChanged,
+    );
+
+    // Initialize the navbar unread count immediately.
+    NotificationStorage.initializeUnreadCount();
+
     _loadNotifications();
   }
 
   @override
   void dispose() {
+    NotificationStorage.unreadCountNotifier.removeListener(
+      _notificationCountChanged,
+    );
+
     _tabController.dispose();
     super.dispose();
   }
@@ -338,26 +422,26 @@ class _NotificationTabState extends State<NotificationTab>
             isDarkModeNotifier.value;
 
         return AlertDialog(
-          backgroundColor:
-              isDarkMode
-                  ? const Color(0xFF303030)
-                  : Colors.white,
+          backgroundColor: isDarkMode
+              ? const Color(0xFF303030)
+              : Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
           title: Text(
             'Remove all notifications?',
             style: TextStyle(
-              color:
-                  isDarkMode
-                      ? Colors.white
-                      : Colors.black,
+              color: isDarkMode
+                  ? Colors.white
+                  : Colors.black,
             ),
           ),
           content: Text(
             'This will permanently remove all notifications.',
             style: TextStyle(
-              color:
-                  isDarkMode
-                      ? Colors.white70
-                      : Colors.black87,
+              color: isDarkMode
+                  ? Colors.white70
+                  : Colors.black87,
             ),
           ),
           actions: [
@@ -476,23 +560,33 @@ class _NotificationTabState extends State<NotificationTab>
           mainAxisAlignment:
               MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.notifications_none_rounded,
-              size: 60,
-              color:
-                  isDarkMode
-                      ? Colors.grey[600]
-                      : Colors.grey[400],
+            Container(
+              width: 76,
+              height: 76,
+              decoration: BoxDecoration(
+                color: isDarkMode
+                    ? Colors.white.withOpacity(0.06)
+                    : const Color(0xFF4A7FF7)
+                        .withOpacity(0.08),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.notifications_none_rounded,
+                size: 40,
+                color: isDarkMode
+                    ? Colors.grey[600]
+                    : Colors.grey[400],
+              ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             Text(
               'No notifications yet',
               style: TextStyle(
                 fontSize: 16,
-                color:
-                    isDarkMode
-                        ? Colors.grey[400]
-                        : Colors.grey[600],
+                fontWeight: FontWeight.w500,
+                color: isDarkMode
+                    ? Colors.grey[400]
+                    : Colors.grey[600],
               ),
             ),
           ],
@@ -520,7 +614,7 @@ class _NotificationTabState extends State<NotificationTab>
             decoration: BoxDecoration(
               color: Colors.red,
               borderRadius:
-                  BorderRadius.circular(14),
+                  BorderRadius.circular(18),
             ),
             alignment: Alignment.centerRight,
             padding:
@@ -545,19 +639,23 @@ class _NotificationTabState extends State<NotificationTab>
               decoration: BoxDecoration(
                 color: notification.isRead
                     ? isDarkMode
-                        ? const Color(0xFF2C2C2C)
+                        ? Colors.white.withOpacity(0.055)
                         : Colors.grey.shade100
                     : isDarkMode
                         ? const Color(0xFF263B63)
+                            .withOpacity(0.90)
                         : const Color(0xFFE8F0FF),
                 borderRadius:
-                    BorderRadius.circular(14),
+                    BorderRadius.circular(18),
                 border: Border.all(
                   color: notification.isRead
-                      ? Colors.transparent
+                      ? isDarkMode
+                          ? Colors.white
+                              .withOpacity(0.06)
+                          : Colors.transparent
                       : const Color(0xFF4A7FF7),
                   width:
-                      notification.isRead ? 0 : 1.5,
+                      notification.isRead ? 1 : 1.5,
                 ),
               ),
               child: Row(
@@ -619,7 +717,6 @@ class _NotificationTabState extends State<NotificationTab>
                                 ),
                               ),
                             ),
-
                             if (!notification.isRead)
                               Container(
                                 width: 9,
@@ -723,14 +820,16 @@ class _NotificationTabState extends State<NotificationTab>
 
               Container(
                 width: double.infinity,
-                color: isDarkMode
-                    ? const Color(0xFF212121)
-                    : const Color.fromARGB(
-                        255,
-                        72,
-                        119,
-                        247,
-                      ),
+                decoration: BoxDecoration(
+                  color: isDarkMode
+                      ? const Color(0xFF212121)
+                      : const Color.fromARGB(
+                          255,
+                          72,
+                          119,
+                          247,
+                        ),
+                ),
                 child: SafeArea(
                   bottom: false,
                   child: Padding(
@@ -819,9 +918,20 @@ class _NotificationTabState extends State<NotificationTab>
               // =================================================
 
               Container(
-                color: isDarkMode
-                    ? const Color(0xFF303030)
-                    : Colors.white,
+                decoration: BoxDecoration(
+                  color: isDarkMode
+                      ? const Color(0xFF303030)
+                      : Colors.white,
+                  border: Border(
+                    bottom: BorderSide(
+                      color: isDarkMode
+                          ? Colors.white
+                              .withOpacity(0.05)
+                          : Colors.grey
+                              .withOpacity(0.12),
+                    ),
+                  ),
+                ),
                 child: TabBar(
                   controller: _tabController,
                   labelColor:
@@ -832,6 +942,7 @@ class _NotificationTabState extends State<NotificationTab>
                           : Colors.grey[600],
                   indicatorColor:
                       const Color(0xFF4A7FF7),
+                  indicatorWeight: 2.5,
                   tabs: const [
                     Tab(
                       icon:

@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:curved_navigation_bar/curved_navigation_bar.dart';
@@ -29,8 +30,24 @@ const String testNotificationChannelId = 'test_alerts_v2';
 // =====================================================
 // UNREAD NOTIFICATION COUNT
 // =====================================================
+//
+// IMPORTANT:
+// Use the SAME notifier used by NotificationStorage.
+//
+// Previously there were TWO separate notifiers:
+// 1. NotificationStorage.unreadCountNotifier
+// 2. unreadNotificationCount
+//
+// That caused the NotificationTab to update while the
+// navbar badge stayed unchanged.
+//
+// This now points directly to the NotificationStorage
+// notifier so both the notification page and navbar
+// always use the same real-time value.
+//
 
-final ValueNotifier<int> unreadNotificationCount = ValueNotifier<int>(0);
+final ValueNotifier<int> unreadNotificationCount =
+    NotificationStorage.unreadCountNotifier;
 
 // =====================================================
 // REFRESH UNREAD NOTIFICATION COUNT
@@ -44,6 +61,7 @@ Future<void> refreshUnreadNotificationCount() async {
         .where((notification) => !notification.isRead)
         .length;
 
+    // This is now the SAME notifier used by the navbar.
     unreadNotificationCount.value = unreadCount;
 
     print('Unread notification count refreshed: $unreadCount');
@@ -60,7 +78,8 @@ Future<void> initializeLocalNotifications() async {
   const AndroidInitializationSettings androidSettings =
       AndroidInitializationSettings('@mipmap/ic_launcher');
 
-  const InitializationSettings initializationSettings = InitializationSettings(
+  const InitializationSettings initializationSettings =
+      InitializationSettings(
     android: androidSettings,
   );
 
@@ -71,8 +90,7 @@ Future<void> initializeLocalNotifications() async {
   final AndroidFlutterLocalNotificationsPlugin? androidPlugin =
       flutterLocalNotificationsPlugin
           .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin
-          >();
+              AndroidFlutterLocalNotificationsPlugin>();
 
   if (androidPlugin == null) {
     print('ANDROID LOCAL NOTIFICATIONS PLUGIN NOT AVAILABLE');
@@ -83,7 +101,8 @@ Future<void> initializeLocalNotifications() async {
   // CLASS ALERT CHANNEL
   // ===================================================
 
-  const AndroidNotificationChannel classChannel = AndroidNotificationChannel(
+  const AndroidNotificationChannel classChannel =
+      AndroidNotificationChannel(
     classNotificationChannelId,
     'Class Alerts',
     description: 'Notifications for class suspension announcements.',
@@ -97,7 +116,8 @@ Future<void> initializeLocalNotifications() async {
   // TEST ALERT CHANNEL
   // ===================================================
 
-  const AndroidNotificationChannel testChannel = AndroidNotificationChannel(
+  const AndroidNotificationChannel testChannel =
+      AndroidNotificationChannel(
     testNotificationChannelId,
     'Test Alerts',
     description: 'Custom sound notifications for DETECT-CO testing.',
@@ -171,7 +191,9 @@ Future<void> showLocalNotification({
 // =====================================================
 
 @pragma('vm:entry-point')
-Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+Future<void> firebaseMessagingBackgroundHandler(
+  RemoteMessage message,
+) async {
   print('================================');
   print('BACKGROUND FCM MESSAGE');
   print('================================');
@@ -194,26 +216,37 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // DETERMINE TYPE
   // ===================================================
 
-  final bool isTestNotification = message.data['type'] == 'test';
+  final bool isTestNotification =
+      message.data['type'] == 'test';
 
-  final String notificationType = message.data['type'] == 'alert'
-      ? 'alert'
-      : 'announcement';
+  final String notificationType =
+      message.data['type'] == 'alert'
+          ? 'alert'
+          : 'announcement';
 
   // ===================================================
   // SAVE NOTIFICATION TO LOCAL HISTORY
   // ===================================================
 
-  final RemoteNotification? notification = message.notification;
+  final RemoteNotification? notification =
+      message.notification;
 
   final String title =
-      notification?.title ?? message.data['title'] ?? 'DETECT-CO';
+      notification?.title ??
+      message.data['title'] ??
+      'DETECT-CO';
 
-  final String body = notification?.body ?? message.data['body'] ?? '';
+  final String body =
+      notification?.body ??
+      message.data['body'] ??
+      '';
 
   await NotificationStorage.saveNotification(
     AppNotification(
-      id: message.messageId ?? DateTime.now().millisecondsSinceEpoch.toString(),
+      id: message.messageId ??
+          DateTime.now()
+              .millisecondsSinceEpoch
+              .toString(),
       title: title,
       body: body,
       type: notificationType,
@@ -280,14 +313,16 @@ Future<void> initializeFirebaseMessagingServices() async {
   // FIREBASE MESSAGING
   // ===================================================
 
-  final FirebaseMessaging messaging = FirebaseMessaging.instance;
+  final FirebaseMessaging messaging =
+      FirebaseMessaging.instance;
 
   // ===================================================
   // REQUEST NOTIFICATION PERMISSION
   // ===================================================
 
   try {
-    final NotificationSettings settings = await messaging.requestPermission(
+    final NotificationSettings settings =
+        await messaging.requestPermission(
       alert: true,
       badge: true,
       sound: true,
@@ -306,9 +341,13 @@ Future<void> initializeFirebaseMessagingServices() async {
   // ===================================================
 
   try {
-    await messaging.subscribeToTopic('detect_co_announcements');
+    await messaging.subscribeToTopic(
+      'detect_co_announcements',
+    );
 
-    print('FCM: Subscribed to detect_co_announcements');
+    print(
+      'FCM: Subscribed to detect_co_announcements',
+    );
   } catch (e) {
     print('FCM TOPIC ERROR: $e');
   }
@@ -320,9 +359,13 @@ Future<void> initializeFirebaseMessagingServices() async {
   print('FCM: Getting token...');
 
   try {
-    final String? token = await messaging.getToken();
+    final String? token =
+        await messaging.getToken();
 
-    print('FCM: Token request completed.');
+    print(
+      'FCM: Token request completed.',
+    );
+
     print('FCM TOKEN: $token');
   } catch (e) {
     print('FCM TOKEN ERROR: $e');
@@ -332,107 +375,137 @@ Future<void> initializeFirebaseMessagingServices() async {
   // FOREGROUND FCM MESSAGE
   // ===================================================
 
-  FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
-    print('================================');
-    print('FOREGROUND FCM MESSAGE');
-    print('================================');
+  FirebaseMessaging.onMessage.listen(
+    (RemoteMessage message) async {
+      print('================================');
+      print('FOREGROUND FCM MESSAGE');
+      print('================================');
 
-    print('Title: ${message.notification?.title}');
+      print(
+        'Title: ${message.notification?.title}',
+      );
 
-    print('Body: ${message.notification?.body}');
+      print(
+        'Body: ${message.notification?.body}',
+      );
 
-    print('Type: ${message.data['type']}');
+      print(
+        'Type: ${message.data['type']}',
+      );
 
-    print('Data: ${message.data}');
+      print(
+        'Data: ${message.data}',
+      );
 
-    final RemoteNotification? notification = message.notification;
+      final RemoteNotification? notification =
+          message.notification;
 
-    // =================================================
-    // GET TITLE/BODY
-    // =================================================
+      // =================================================
+      // GET TITLE/BODY
+      // =================================================
 
-    final String title =
-        notification?.title ?? message.data['title'] ?? 'DETECT-CO';
+      final String title =
+          notification?.title ??
+          message.data['title'] ??
+          'DETECT-CO';
 
-    final String body = notification?.body ?? message.data['body'] ?? '';
+      final String body =
+          notification?.body ??
+          message.data['body'] ??
+          '';
 
-    // =================================================
-    // DETERMINE TEST NOTIFICATION
-    // =================================================
+      // =================================================
+      // DETERMINE TEST NOTIFICATION
+      // =================================================
 
-    final bool isTestNotification = message.data['type'] == 'test';
+      final bool isTestNotification =
+          message.data['type'] == 'test';
 
-    // =================================================
-    // DETERMINE HISTORY TYPE
-    // =================================================
+      // =================================================
+      // DETERMINE HISTORY TYPE
+      // =================================================
 
-    final String notificationType = message.data['type'] == 'alert'
-        ? 'alert'
-        : 'announcement';
+      final String notificationType =
+          message.data['type'] == 'alert'
+              ? 'alert'
+              : 'announcement';
 
-    // =================================================
-    // DEBUG
-    // =================================================
+      // =================================================
+      // DEBUG
+      // =================================================
 
-    if (isTestNotification) {
-      print('--------------------------------');
-      print('TEST NOTIFICATION DETECTED');
-      print('Channel: $testNotificationChannelId');
-      print('Sound: test_alert');
-      print('--------------------------------');
-    } else {
-      print('--------------------------------');
-      print('CLASS NOTIFICATION DETECTED');
-      print('Channel: $classNotificationChannelId');
-      print('Sound: DEFAULT');
-      print('--------------------------------');
-    }
+      if (isTestNotification) {
+        print('--------------------------------');
+        print('TEST NOTIFICATION DETECTED');
+        print(
+          'Channel: $testNotificationChannelId',
+        );
+        print('Sound: test_alert');
+        print('--------------------------------');
+      } else {
+        print('--------------------------------');
+        print('CLASS NOTIFICATION DETECTED');
+        print(
+          'Channel: $classNotificationChannelId',
+        );
+        print('Sound: DEFAULT');
+        print('--------------------------------');
+      }
 
-    // =================================================
-    // SAVE NOTIFICATION TO LOCAL HISTORY
-    // =================================================
+      // =================================================
+      // SAVE NOTIFICATION TO LOCAL HISTORY
+      // =================================================
 
-    await NotificationStorage.saveNotification(
-      AppNotification(
-        id:
-            message.messageId ??
-            DateTime.now().millisecondsSinceEpoch.toString(),
+      await NotificationStorage.saveNotification(
+        AppNotification(
+          id: message.messageId ??
+              DateTime.now()
+                  .millisecondsSinceEpoch
+                  .toString(),
+          title: title,
+          body: body,
+          type: notificationType,
+          timestamp: DateTime.now(),
+          isRead: false,
+        ),
+      );
+
+      // =================================================
+      // UPDATE UNREAD COUNT
+      // =================================================
+
+      await refreshUnreadNotificationCount();
+
+      print(
+        'Unread notification count: '
+        '${unreadNotificationCount.value}',
+      );
+
+      print(
+        'Notification saved to history!',
+      );
+
+      // =================================================
+      // SHOW LOCAL NOTIFICATION
+      // =================================================
+
+      await showLocalNotification(
+        id: message.messageId?.hashCode ??
+            DateTime.now()
+                .millisecondsSinceEpoch,
         title: title,
         body: body,
-        type: notificationType,
-        timestamp: DateTime.now(),
-        isRead: false,
-      ),
-    );
+        isTestNotification:
+            isTestNotification,
+      );
 
-    // =================================================
-    // UPDATE UNREAD COUNT
-    // =================================================
+      print(
+        'Local notification displayed.',
+      );
 
-    await refreshUnreadNotificationCount();
-
-    print(
-      'Unread notification count: '
-      '${unreadNotificationCount.value}',
-    );
-
-    print('Notification saved to history!');
-
-    // =================================================
-    // SHOW LOCAL NOTIFICATION
-    // =================================================
-
-    await showLocalNotification(
-      id: message.messageId?.hashCode ?? DateTime.now().millisecondsSinceEpoch,
-      title: title,
-      body: body,
-      isTestNotification: isTestNotification,
-    );
-
-    print('Local notification displayed.');
-
-    print('================================');
-  });
+      print('================================');
+    },
+  );
 }
 
 // =====================================================
@@ -452,7 +525,9 @@ void main() async {
   // REGISTER BACKGROUND HANDLER
   // ===================================================
 
-  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  FirebaseMessaging.onBackgroundMessage(
+    firebaseMessagingBackgroundHandler,
+  );
 
   // ===================================================
   // START APP
@@ -471,7 +546,8 @@ void main() async {
 // GLOBAL DARK MODE
 // =====================================================
 
-final ValueNotifier<bool> isDarkModeNotifier = ValueNotifier<bool>(true);
+final ValueNotifier<bool> isDarkModeNotifier =
+    ValueNotifier<bool>(true);
 
 // =====================================================
 // APP
@@ -489,14 +565,18 @@ class MyApp extends StatelessWidget {
       // =================================================
       // LOCAL AI TEST ROUTE
       // =================================================
-      routes: {'/local-ai-test': (context) => const LocalAiTestPage()},
+      routes: {
+        '/local-ai-test': (context) =>
+            const LocalAiTestPage(),
+      },
 
       // =================================================
       // DARK THEME ONLY
       // =================================================
       theme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF212121),
+        scaffoldBackgroundColor:
+            const Color(0xFF212121),
       ),
 
       // =================================================
@@ -517,10 +597,12 @@ class BottomNavPage extends StatefulWidget {
   const BottomNavPage({super.key});
 
   @override
-  State<BottomNavPage> createState() => _BottomNavPageState();
+  State<BottomNavPage> createState() =>
+      _BottomNavPageState();
 }
 
-class _BottomNavPageState extends State<BottomNavPage> {
+class _BottomNavPageState
+    extends State<BottomNavPage> {
   // ===================================================
   // START ON HOME
   //
@@ -533,7 +615,8 @@ class _BottomNavPageState extends State<BottomNavPage> {
 
   int _currentIndex = 2;
 
-  final GlobalKey<CurvedNavigationBarState> _navKey =
+  final GlobalKey<CurvedNavigationBarState>
+      _navKey =
       GlobalKey<CurvedNavigationBarState>();
 
   // ===================================================
@@ -546,7 +629,12 @@ class _BottomNavPageState extends State<BottomNavPage> {
   double? _focusLng;
   int _focusRequestId = 0;
 
-  void _goToEvacSiteOnMap(String name, String address, double lat, double lng) {
+  void _goToEvacSiteOnMap(
+    String name,
+    String address,
+    double lat,
+    double lng,
+  ) {
     setState(() {
       _focusName = name;
       _focusAddress = address;
@@ -562,18 +650,20 @@ class _BottomNavPageState extends State<BottomNavPage> {
   // ===================================================
 
   List<Widget> get _tabs => [
-    EvacuateTab(onGoToMap: _goToEvacSiteOnMap),
-    MapTab(
-      focusRequestId: _focusRequestId,
-      focusName: _focusName,
-      focusLat: _focusLat,
-      focusLng: _focusLng,
-      focusDescription: _focusAddress,
-    ),
-    const HomeTab(),
-    const NotificationTab(),
-    const MenuTab(),
-  ];
+        EvacuateTab(
+          onGoToMap: _goToEvacSiteOnMap,
+        ),
+        MapTab(
+          focusRequestId: _focusRequestId,
+          focusName: _focusName,
+          focusLat: _focusLat,
+          focusLng: _focusLng,
+          focusDescription: _focusAddress,
+        ),
+        const HomeTab(),
+        const NotificationTab(),
+        const MenuTab(),
+      ];
 
   @override
   Widget build(BuildContext context) {
@@ -581,9 +671,11 @@ class _BottomNavPageState extends State<BottomNavPage> {
     // NAVIGATION COLORS
     // =================================================
 
-    final Color navBackground = const Color(0xFF212121);
+    final Color navBackground =
+        const Color(0xFF212121);
 
-    final Color barColor = const Color(0xFF303030);
+    final Color barColor =
+        const Color(0xFF303030);
 
     // =================================================
     // ICON COLORS
@@ -595,9 +687,11 @@ class _BottomNavPageState extends State<BottomNavPage> {
     // SELECTED BUTTON
     // =================================================
 
-    final Color selectedButtonColor = const Color(0xFF424242);
+    final Color selectedButtonColor =
+        const Color(0xFF424242);
 
-    final Color selectedIconColor = Colors.white;
+    final Color selectedIconColor =
+        Colors.white;
 
     return Scaffold(
       backgroundColor: navBackground,
@@ -605,7 +699,10 @@ class _BottomNavPageState extends State<BottomNavPage> {
       // =================================================
       // CURRENT TAB
       // =================================================
-      body: IndexedStack(index: _currentIndex, children: _tabs),
+      body: IndexedStack(
+        index: _currentIndex,
+        children: _tabs,
+      ),
 
       // =================================================
       // BOTTOM NAVIGATION
@@ -633,21 +730,27 @@ class _BottomNavPageState extends State<BottomNavPage> {
 
                 height: 55,
 
-                backgroundColor: navBackground,
+                backgroundColor:
+                    navBackground,
 
                 color: barColor,
 
                 // =================================================
                 // SELECTED ICON CIRCLE
                 // =================================================
-                buttonBackgroundColor: selectedButtonColor,
+                buttonBackgroundColor:
+                    selectedButtonColor,
 
                 // =================================================
                 // ANIMATION
                 // =================================================
-                animationDuration: const Duration(milliseconds: 350),
+                animationDuration:
+                    const Duration(
+                  milliseconds: 350,
+                ),
 
-                animationCurve: Curves.easeInOut,
+                animationCurve:
+                    Curves.easeInOut,
 
                 // =================================================
                 // ICONS
@@ -661,7 +764,9 @@ class _BottomNavPageState extends State<BottomNavPage> {
                     'assets/icon/tools.png',
                     width: 26,
                     height: 26,
-                    color: _currentIndex == 0 ? selectedIconColor : iconColor,
+                    color: _currentIndex == 0
+                        ? selectedIconColor
+                        : iconColor,
                   ),
 
                   // =================================================
@@ -670,7 +775,9 @@ class _BottomNavPageState extends State<BottomNavPage> {
                   Icon(
                     Icons.map,
                     size: 26,
-                    color: _currentIndex == 1 ? selectedIconColor : iconColor,
+                    color: _currentIndex == 1
+                        ? selectedIconColor
+                        : iconColor,
                   ),
 
                   // =================================================
@@ -679,26 +786,36 @@ class _BottomNavPageState extends State<BottomNavPage> {
                   Icon(
                     Icons.home,
                     size: 26,
-                    color: _currentIndex == 2 ? selectedIconColor : iconColor,
+                    color: _currentIndex == 2
+                        ? selectedIconColor
+                        : iconColor,
                   ),
 
                   // =================================================
                   // NOTIFICATIONS
                   // =================================================
                   ValueListenableBuilder<int>(
-                    valueListenable: unreadNotificationCount,
+                    valueListenable:
+                        unreadNotificationCount,
 
-                    builder: (context, unreadCount, child) {
+                    builder: (
+                      context,
+                      unreadCount,
+                      child,
+                    ) {
                       return Stack(
-                        clipBehavior: Clip.none,
+                        clipBehavior:
+                            Clip.none,
 
                         children: [
                           Icon(
-                            Icons.notifications_none_rounded,
+                            Icons
+                                .notifications_none_rounded,
                             size: 26,
-                            color: _currentIndex == 3
-                                ? selectedIconColor
-                                : iconColor,
+                            color:
+                                _currentIndex == 3
+                                    ? selectedIconColor
+                                    : iconColor,
                           ),
 
                           // =================================================
@@ -710,22 +827,33 @@ class _BottomNavPageState extends State<BottomNavPage> {
                               top: -8,
 
                               child: Container(
-                                constraints: const BoxConstraints(
+                                constraints:
+                                    const BoxConstraints(
                                   minWidth: 18,
                                   minHeight: 18,
                                 ),
 
-                                padding: const EdgeInsets.symmetric(
+                                padding:
+                                    const EdgeInsets
+                                        .symmetric(
                                   horizontal: 4,
                                 ),
 
-                                decoration: BoxDecoration(
-                                  color: Colors.red,
+                                decoration:
+                                    BoxDecoration(
+                                  color:
+                                      Colors.red,
 
-                                  borderRadius: BorderRadius.circular(20),
+                                  borderRadius:
+                                      BorderRadius
+                                          .circular(
+                                    20,
+                                  ),
 
-                                  border: Border.all(
-                                    color: Colors.white,
+                                  border:
+                                      Border.all(
+                                    color:
+                                        Colors.white,
                                     width: 1.5,
                                   ),
                                 ),
@@ -733,14 +861,21 @@ class _BottomNavPageState extends State<BottomNavPage> {
                                 child: Text(
                                   unreadCount > 99
                                       ? '99+'
-                                      : unreadCount.toString(),
+                                      : unreadCount
+                                          .toString(),
 
-                                  textAlign: TextAlign.center,
+                                  textAlign:
+                                      TextAlign
+                                          .center,
 
-                                  style: const TextStyle(
-                                    color: Colors.white,
+                                  style:
+                                      const TextStyle(
+                                    color:
+                                        Colors.white,
                                     fontSize: 10,
-                                    fontWeight: FontWeight.bold,
+                                    fontWeight:
+                                        FontWeight
+                                            .bold,
                                   ),
                                 ),
                               ),
@@ -756,7 +891,9 @@ class _BottomNavPageState extends State<BottomNavPage> {
                   Icon(
                     Icons.menu_rounded,
                     size: 26,
-                    color: _currentIndex == 4 ? selectedIconColor : iconColor,
+                    color: _currentIndex == 4
+                        ? selectedIconColor
+                        : iconColor,
                   ),
                 ],
 
@@ -782,15 +919,40 @@ class _BottomNavPageState extends State<BottomNavPage> {
 
               child: Row(
                 children: [
-                  Expanded(child: _buildLabel('Tools', 0)),
+                  Expanded(
+                    child: _buildLabel(
+                      'Tools',
+                      0,
+                    ),
+                  ),
 
-                  Expanded(child: _buildLabel('Map', 1)),
+                  Expanded(
+                    child: _buildLabel(
+                      'Map',
+                      1,
+                    ),
+                  ),
 
-                  Expanded(child: _buildLabel('Home', 2)),
+                  Expanded(
+                    child: _buildLabel(
+                      'Home',
+                      2,
+                    ),
+                  ),
 
-                  Expanded(child: _buildLabel('Notifications', 3)),
+                  Expanded(
+                    child: _buildLabel(
+                      'Notifications',
+                      3,
+                    ),
+                  ),
 
-                  Expanded(child: _buildLabel('Menu', 4)),
+                  Expanded(
+                    child: _buildLabel(
+                      'Menu',
+                      4,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -804,8 +966,12 @@ class _BottomNavPageState extends State<BottomNavPage> {
   // NAVIGATION LABEL
   // =====================================================
 
-  Widget _buildLabel(String label, int index) {
-    final bool isSelected = _currentIndex == index;
+  Widget _buildLabel(
+    String label,
+    int index,
+  ) {
+    final bool isSelected =
+        _currentIndex == index;
 
     return Center(
       child: Text(
@@ -813,16 +979,22 @@ class _BottomNavPageState extends State<BottomNavPage> {
 
         maxLines: 1,
 
-        overflow: TextOverflow.ellipsis,
+        overflow:
+            TextOverflow.ellipsis,
 
-        textAlign: TextAlign.center,
+        textAlign:
+            TextAlign.center,
 
         style: TextStyle(
           fontSize: 10,
 
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+          fontWeight: isSelected
+              ? FontWeight.bold
+              : FontWeight.w500,
 
-          color: isSelected ? Colors.white : Colors.white70,
+          color: isSelected
+              ? Colors.white
+              : Colors.white70,
         ),
       ),
     );
