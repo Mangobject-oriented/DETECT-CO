@@ -10,6 +10,59 @@ import 'package:detectco/pages/menu.dart'; // change to your actual menu file na
 
 
 // =====================================================
+// DASHBOARD REFRESH RATE
+// =====================================================
+//
+// Controls how often the dashboard info (temperature, humidity,
+// water level and flood risk status) is allowed to change on
+// screen. This is separate from the original data refresh rate:
+// Firebase / ESP32 / API data keeps updating in the background
+// exactly as before, the screen just shows the latest value only
+// once per interval.
+//
+// Duration.zero = original behavior (real-time, no limit).
+//
+// From menu.dart, call:
+//   setHomeRefreshRate(const Duration(minutes: 1));
+//   setHomeRefreshRate(Duration.zero); // back to real-time
+
+final ValueNotifier<Duration> homeRefreshInterval =
+    ValueNotifier<Duration>(Duration.zero);
+
+void setHomeRefreshRate(Duration interval) {
+  homeRefreshInterval.value =
+      interval < Duration.zero ? Duration.zero : interval;
+}
+
+
+// =====================================================
+// WATER LITE MODE (NO WAVES, NO RUBBER DUCK)
+// =====================================================
+//
+// When true, the water level in the tube is drawn with a
+// straight, flat surface (no waving) and the rubber duck is
+// never shown. The wave animation is also stopped completely,
+// which removes the constant repaints and makes the dashboard
+// much lighter on weak devices.
+//
+// false = original behavior (waving water + floating duck).
+//
+// From menu.dart, call:
+//   setHomeWaterLiteMode(true);   // straight water, no duck
+//   setHomeWaterLiteMode(false);  // waves + duck (original)
+//
+// or bind a switch directly to the notifier:
+//   homeWaterLite.value = newValue;
+
+final ValueNotifier<bool> homeWaterLite =
+    ValueNotifier<bool>(false);
+
+void setHomeWaterLiteMode(bool enabled) {
+  homeWaterLite.value = enabled;
+}
+
+
+// =====================================================
 // GLASSMORPHISM CARD HELPER
 // =====================================================
 //
@@ -113,6 +166,18 @@ class _HomeTabState extends State<HomeTab>
   Timer? _esp32StatusTimer;
 
   // =====================================================
+  // DASHBOARD REFRESH RATE (DISPLAY THROTTLE)
+  // =====================================================
+  //
+  // Holds the values currently shown on the dashboard and the
+  // time they were last updated. When a refresh interval is set
+  // (see setHomeRefreshRate above), the dashboard keeps showing
+  // this snapshot until the interval has passed.
+
+  _DashboardSnapshot? _displayedSnapshot;
+  DateTime? _lastDashboardUpdate;
+
+  // =====================================================
   // OPEN-METEO FALLBACK WEATHER
   // =====================================================
 
@@ -186,10 +251,35 @@ class _HomeTabState extends State<HomeTab>
     super.initState();
 
     // Continuous water-wave animation.
+    // In water lite mode the animation is not started at all.
     _waterAnimationController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
-    )..repeat();
+    );
+
+    if (!homeWaterLite.value) {
+      _waterAnimationController.repeat();
+    }
+
+    // =====================================================
+    // WATER LITE MODE LISTENER
+    // =====================================================
+    //
+    // When the switch in menu.dart changes, the wave animation
+    // is stopped / restarted and the dashboard is rebuilt.
+
+    homeWaterLite.addListener(_onWaterLiteChanged);
+
+    // =====================================================
+    // DASHBOARD REFRESH RATE LISTENER
+    // =====================================================
+    //
+    // When the refresh rate is changed (from menu.dart), the
+    // dashboard immediately takes a fresh snapshot and then
+    // follows the new interval.
+
+    homeRefreshInterval.addListener(_onRefreshRateChanged);
+
     // =====================================================
     // MANILA TIME
     // =====================================================
@@ -248,12 +338,83 @@ class _HomeTabState extends State<HomeTab>
 
   @override
   void dispose() {
+    homeWaterLite.removeListener(_onWaterLiteChanged);
+    homeRefreshInterval.removeListener(_onRefreshRateChanged);
     _mlPredictionTimer?.cancel();
     _esp32StatusTimer?.cancel();
     _manilaTimeTimer?.cancel();
     _weatherConditionTimer?.cancel();
     _waterAnimationController.dispose();
     super.dispose();
+  }
+
+  // =====================================================
+  // WATER LITE MODE CHANGED
+  // =====================================================
+
+  // Called whenever the water lite switch is changed.
+  // ON  -> stop the wave animation (straight water, no duck).
+  // OFF -> restart the wave animation (waves + duck again).
+  void _onWaterLiteChanged() {
+    if (homeWaterLite.value) {
+      _waterAnimationController.stop();
+    } else {
+      if (!_waterAnimationController.isAnimating) {
+        _waterAnimationController.repeat();
+      }
+    }
+
+    if (!mounted) return;
+
+    setState(() {});
+  }
+
+  // =====================================================
+  // DASHBOARD REFRESH RATE
+  // =====================================================
+
+  // Called whenever the refresh rate is changed.
+  // Clears the held snapshot so the dashboard updates right away,
+  // then continues at the new interval.
+  void _onRefreshRateChanged() {
+    _displayedSnapshot = null;
+    _lastDashboardUpdate = null;
+
+    if (!mounted) return;
+
+    setState(() {});
+  }
+
+  // Returns the values the dashboard should display.
+  //
+  // - Interval is zero          -> live values (original behavior).
+  // - No data received yet      -> live values (so startup is not delayed).
+  // - Interval has passed       -> take a new snapshot of live values.
+  // - Interval has NOT passed   -> keep showing the previous snapshot.
+  _DashboardSnapshot _applyRefreshRate(
+    _DashboardSnapshot live,
+  ) {
+    final Duration interval = homeRefreshInterval.value;
+
+    if (interval <= Duration.zero || !_hasReceivedFirebaseData) {
+      _displayedSnapshot = live;
+      _lastDashboardUpdate = DateTime.now();
+      return live;
+    }
+
+    final DateTime now = DateTime.now();
+    final _DashboardSnapshot? cached = _displayedSnapshot;
+    final DateTime? last = _lastDashboardUpdate;
+
+    if (cached == null ||
+        last == null ||
+        now.difference(last) >= interval) {
+      _displayedSnapshot = live;
+      _lastDashboardUpdate = now;
+      return live;
+    }
+
+    return cached;
   }
 
   // =====================================================
@@ -1378,7 +1539,7 @@ class _HomeTabState extends State<HomeTab>
                             '',
                       );
 
-            final double? displayedTemperature =
+            double? displayedTemperature =
                 esp32Online
                     ? sensorTemperature
                     : _fallbackTemperature;
@@ -1398,11 +1559,43 @@ class _HomeTabState extends State<HomeTab>
                             '',
                       );
 
-            final double humidity =
+            double humidity =
                 (esp32Online
                         ? sensorHumidity
                         : _fallbackHumidity) ??
                     0;
+
+            // =====================================================
+            // DASHBOARD REFRESH RATE
+            // =====================================================
+            //
+            // The values above are always the live values. Here they
+            // are passed through the refresh-rate function so the
+            // dashboard (temperature, humidity, water level and flood
+            // risk status) only changes once per chosen interval.
+            // With the default interval (Duration.zero) the live
+            // values are used as-is, exactly like before.
+
+            final _DashboardSnapshot shown =
+                _applyRefreshRate(
+              _DashboardSnapshot(
+                waterLevel: waterLevel,
+                sensorActive: sensorActive,
+                esp32Online: esp32Online,
+                temperature: displayedTemperature,
+                humidity: humidity,
+                humidityAvailable: esp32Online ||
+                    _fallbackHumidity != null,
+              ),
+            );
+
+            waterLevel = shown.waterLevel;
+            sensorActive = shown.sensorActive;
+            esp32Online = shown.esp32Online;
+            displayedTemperature = shown.temperature;
+            humidity = shown.humidity;
+            final bool humidityAvailable =
+                shown.humidityAvailable;
 
             // =====================================================
             // SCREEN / HEADER
@@ -1770,8 +1963,7 @@ class _HomeTabState extends State<HomeTab>
                                             ),
                                             const SizedBox(height: 2),
                                             Text(
-                                              (esp32Online ||
-                                                      _fallbackHumidity != null)
+                                              humidityAvailable
                                                   ? '${humidity.toStringAsFixed(0)}%'
                                                   : '--%',
                                               style: const TextStyle(
@@ -2034,6 +2226,9 @@ class _HomeTabState extends State<HomeTab>
                                                         maxWaterLevel:
                                                             maxWaterLevel,
                                                         isDark: isDarkMode,
+                                                        lite:
+                                                            homeWaterLite
+                                                                .value,
                                                       ),
                                                     ),
                                                   ),
@@ -2389,6 +2584,32 @@ class _HomeTabState extends State<HomeTab>
       ),
     );
   }
+}
+
+// =====================================================
+// DASHBOARD SNAPSHOT
+// =====================================================
+//
+// The set of values shown on the dashboard at one moment.
+// Used by the refresh-rate function to hold the displayed
+// values between updates.
+
+class _DashboardSnapshot {
+  final double waterLevel;
+  final bool sensorActive;
+  final bool esp32Online;
+  final double? temperature;
+  final double humidity;
+  final bool humidityAvailable;
+
+  const _DashboardSnapshot({
+    required this.waterLevel,
+    required this.sensorActive,
+    required this.esp32Online,
+    required this.temperature,
+    required this.humidity,
+    required this.humidityAvailable,
+  });
 }
 
 // =====================================================
@@ -3652,6 +3873,10 @@ class _WaterWithDuck extends StatefulWidget {
   final double maxWaterLevel;
   final bool isDark;
 
+  // True = water lite mode: straight water surface (no waving)
+  // and no rubber duck.
+  final bool lite;
+
   const _WaterWithDuck({
     required this.width,
     required this.height,
@@ -3660,6 +3885,7 @@ class _WaterWithDuck extends StatefulWidget {
     required this.animationEnd,
     required this.maxWaterLevel,
     required this.isDark,
+    this.lite = false,
   });
 
   @override
@@ -3706,7 +3932,34 @@ class _WaterWithDuckState extends State<_WaterWithDuck>
       duration: const Duration(seconds: 10),
     );
 
-    _scheduleDuck();
+    // The duck is never scheduled in water lite mode.
+    if (!widget.lite) {
+      _scheduleDuck();
+    }
+  }
+
+  // =====================================================
+  // WATER LITE MODE SWITCHED WHILE THE SCREEN IS OPEN
+  // =====================================================
+
+  @override
+  void didUpdateWidget(
+    covariant _WaterWithDuck oldWidget,
+  ) {
+    super.didUpdateWidget(oldWidget);
+
+    if (widget.lite && !oldWidget.lite) {
+      // Lite turned ON: remove the duck immediately.
+      _duckTimer?.cancel();
+      _duckController.stop();
+
+      if (_showDuck) {
+        _showDuck = false;
+      }
+    } else if (!widget.lite && oldWidget.lite) {
+      // Lite turned OFF: let the duck appear again.
+      _scheduleDuck();
+    }
   }
 
   // =====================================================
@@ -3732,6 +3985,9 @@ class _WaterWithDuckState extends State<_WaterWithDuck>
   void _startDuck() {
     if (!mounted) return;
 
+    // Safety: never start the duck in water lite mode.
+    if (widget.lite) return;
+
     setState(() {
       _showDuck = true;
     });
@@ -3739,6 +3995,10 @@ class _WaterWithDuckState extends State<_WaterWithDuck>
     _duckController.forward(from: 0).then(
       (_) {
         if (!mounted) return;
+
+        // If lite was turned on while the duck was swimming,
+        // the controller was stopped and nothing more to do.
+        if (widget.lite) return;
 
         setState(() {
           _showDuck = false;
@@ -3802,6 +4062,7 @@ class _WaterWithDuckState extends State<_WaterWithDuck>
                         widget.animation.value *
                             math.pi *
                             2,
+                    straight: widget.lite,
                   ),
                 ),
               ),
@@ -3810,7 +4071,7 @@ class _WaterWithDuckState extends State<_WaterWithDuck>
               // DUCK
               // =================================================
 
-              if (_showDuck)
+              if (_showDuck && !widget.lite)
                 ClipPath(
                   clipper: _TubeInteriorClipper(),
                   child: _buildDuck(),
@@ -4410,11 +4671,15 @@ class _WaterBucketPainter
   final bool isDark;
   final double wavePhase;
 
+  // True = flat water surface (no waving).
+  final bool straight;
+
   _WaterBucketPainter({
     required this.level,
     required this.maxLevel,
     required this.isDark,
     required this.wavePhase,
+    this.straight = false,
   });
 
   @override
@@ -4546,7 +4811,9 @@ class _WaterBucketPainter
 
     final waterPath = Path();
 
-    final double waveHeight = 3.5;
+    // In straight (lite) mode the wave height is 0, so the
+    // water surface is a flat horizontal line.
+    final double waveHeight = straight ? 0.0 : 3.5;
     final double waveLength = tubeWidth;
 
     waterPath.moveTo(
@@ -4662,7 +4929,8 @@ class _WaterBucketPainter
       oldDelegate.level != level ||
       oldDelegate.maxLevel != maxLevel ||
       oldDelegate.isDark != isDark ||
-      oldDelegate.wavePhase != wavePhase;
+      oldDelegate.wavePhase != wavePhase ||
+      oldDelegate.straight != straight;
 }
 
 // =====================================================
