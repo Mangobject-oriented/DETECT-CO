@@ -14,8 +14,8 @@ async function sendTestNotification() {
       topic: "detect_co_announcements",
 
       notification: {
-        title: "Mj kay peter ",
-        body: "I don't love you",
+        title: "DETECT_CO ALERT NOTIFICATION",
+        body: "FLOOD IS HIGHLY LIKELY",
       },
 
       android: {
