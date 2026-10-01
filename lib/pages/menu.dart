@@ -1,4 +1,6 @@
+
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:detectco/main.dart';
 import 'package:detectco/pages/local_ai_test.dart';
 import 'package:detectco/pages/home.dart'; // change to your actual home file name (the file that contains setHomeRefreshRate)
@@ -45,7 +47,21 @@ enum HomeBgQuality {
 final ValueNotifier<HomeBgQuality> homeBgQuality =
     ValueNotifier<HomeBgQuality>(HomeBgQuality.high);
 
-// MenuTab is now a StatefulWidget so the Home Background card
+// =====================================================
+// MENU SETTINGS STORAGE
+// =====================================================
+//
+// These keys are used only for saving the Display Settings choices.
+// They allow the settings to survive a complete app close/reopen.
+
+const String _homeBgChoiceKey = 'detect_co_home_bg_choice';
+const String _homeBgQualityKey = 'detect_co_home_bg_quality';
+const String _homeRefreshRateKey = 'detect_co_home_refresh_rate';
+const String _homeWaterLiteKey = 'detect_co_home_water_lite';
+const String _homePerformanceModeKey =
+    'detect_co_home_performance_mode';
+
+// MenuTab is now a StatefulWidget so the Display Settings card
 // can remember whether it is expanded or collapsed.
 class MenuTab extends StatefulWidget {
   const MenuTab({super.key});
@@ -55,11 +71,177 @@ class MenuTab extends StatefulWidget {
 }
 
 class _MenuTabState extends State<MenuTab> {
-  // Whether the Home Background card is expanded (dropdowns visible).
+  // Whether the Display Settings card is expanded.
+  bool _displaySettingsExpanded = false;
+
+  // Whether the Home Background section inside Display Settings
+  // is expanded.
   bool _bgExpanded = false;
 
-  // Whether the Dashboard Refresh Rate card is expanded.
+  // Whether the Dashboard Refresh Rate section inside
+  // Display Settings is expanded.
   bool _refreshExpanded = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Restore the user's saved Display Settings.
+    _loadSavedDisplaySettings();
+  }
+
+  // =====================================================
+  // LOAD SAVED DISPLAY SETTINGS
+  // =====================================================
+
+  Future<void> _loadSavedDisplaySettings() async {
+    final SharedPreferences prefs =
+        await SharedPreferences.getInstance();
+
+    // -----------------------------------------------------
+    // HOME BACKGROUND
+    // -----------------------------------------------------
+
+    final int? savedBgChoice =
+        prefs.getInt(_homeBgChoiceKey);
+
+    if (savedBgChoice != null &&
+        savedBgChoice >= 0 &&
+        savedBgChoice < HomeBgChoice.values.length) {
+      homeBgChoice.value =
+          HomeBgChoice.values[savedBgChoice];
+    }
+
+    // -----------------------------------------------------
+    // HOME BACKGROUND QUALITY
+    // -----------------------------------------------------
+
+    final int? savedBgQuality =
+        prefs.getInt(_homeBgQualityKey);
+
+    if (savedBgQuality != null &&
+        savedBgQuality >= 0 &&
+        savedBgQuality < HomeBgQuality.values.length) {
+      homeBgQuality.value =
+          HomeBgQuality.values[savedBgQuality];
+    }
+
+    // -----------------------------------------------------
+    // DASHBOARD REFRESH RATE
+    // -----------------------------------------------------
+
+    final int? savedRefreshRate =
+        prefs.getInt(_homeRefreshRateKey);
+
+    if (savedRefreshRate != null) {
+      final Duration savedInterval =
+          Duration(milliseconds: savedRefreshRate);
+
+      setHomeRefreshRate(savedInterval);
+    }
+
+    // -----------------------------------------------------
+    // WATER LITE MODE
+    // -----------------------------------------------------
+
+    final bool? savedWaterLite =
+        prefs.getBool(_homeWaterLiteKey);
+
+    if (savedWaterLite != null) {
+      setHomeWaterLiteMode(savedWaterLite);
+    }
+
+    // -----------------------------------------------------
+    // LOW-END PERFORMANCE MODE
+    // -----------------------------------------------------
+
+    final bool? savedPerformanceMode =
+        prefs.getBool(_homePerformanceModeKey);
+
+    if (savedPerformanceMode != null) {
+      setHomePerformanceMode(savedPerformanceMode);
+    }
+  }
+
+  // =====================================================
+  // SAVE HOME BACKGROUND
+  // =====================================================
+
+  Future<void> _saveHomeBgChoice(
+    HomeBgChoice value,
+  ) async {
+    final SharedPreferences prefs =
+        await SharedPreferences.getInstance();
+
+    await prefs.setInt(
+      _homeBgChoiceKey,
+      value.index,
+    );
+  }
+
+  // =====================================================
+  // SAVE HOME BACKGROUND QUALITY
+  // =====================================================
+
+  Future<void> _saveHomeBgQuality(
+    HomeBgQuality value,
+  ) async {
+    final SharedPreferences prefs =
+        await SharedPreferences.getInstance();
+
+    await prefs.setInt(
+      _homeBgQualityKey,
+      value.index,
+    );
+  }
+
+  // =====================================================
+  // SAVE DASHBOARD REFRESH RATE
+  // =====================================================
+
+  Future<void> _saveRefreshRate(
+    Duration value,
+  ) async {
+    final SharedPreferences prefs =
+        await SharedPreferences.getInstance();
+
+    await prefs.setInt(
+      _homeRefreshRateKey,
+      value.inMilliseconds,
+    );
+  }
+
+  // =====================================================
+  // SAVE WATER LITE MODE
+  // =====================================================
+
+  Future<void> _saveWaterLiteMode(
+    bool value,
+  ) async {
+    final SharedPreferences prefs =
+        await SharedPreferences.getInstance();
+
+    await prefs.setBool(
+      _homeWaterLiteKey,
+      value,
+    );
+  }
+
+  // =====================================================
+  // SAVE LOW-END PERFORMANCE MODE
+  // =====================================================
+
+  Future<void> _savePerformanceMode(
+    bool value,
+  ) async {
+    final SharedPreferences prefs =
+        await SharedPreferences.getInstance();
+
+    await prefs.setBool(
+      _homePerformanceModeKey,
+      value,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -266,46 +448,10 @@ class _MenuTabState extends State<MenuTab> {
                     const SizedBox(height: 14),
 
                     // =================================================
-                    // HOME BACKGROUND (DEMO SELECTOR)
+                    // DISPLAY SETTINGS
                     // =================================================
 
-                    _buildBackgroundSelectorCard(
-                      isDarkMode: isDarkMode,
-                      cardColor: cardColor,
-                      textColor: textColor,
-                    ),
-
-                    const SizedBox(height: 14),
-
-                    // =================================================
-                    // DASHBOARD REFRESH RATE
-                    // =================================================
-
-                    _buildRefreshRateCard(
-                      isDarkMode: isDarkMode,
-                      cardColor: cardColor,
-                      textColor: textColor,
-                    ),
-
-                    const SizedBox(height: 14),
-
-                    // =================================================
-                    // WATER EFFECTS (LITE MODE SWITCH)
-                    // =================================================
-
-                    _buildWaterLiteCard(
-                      isDarkMode: isDarkMode,
-                      cardColor: cardColor,
-                      textColor: textColor,
-                    ),
-
-                    const SizedBox(height: 14),
-
-                    // =================================================
-                    // LOW-END PERFORMANCE MODE (SWITCH)
-                    // =================================================
-
-                    _buildPerformanceModeCard(
+                    _buildDisplaySettingsCard(
                       isDarkMode: isDarkMode,
                       cardColor: cardColor,
                       textColor: textColor,
@@ -474,19 +620,10 @@ class _MenuTabState extends State<MenuTab> {
   }
 
   // =====================================================
-  // HOME BACKGROUND SELECTOR CARD
+  // DISPLAY SETTINGS CARD
   // =====================================================
-  //
-  // Same look as the other menu cards: icon, title, subtitle and
-  // a ">" arrow on the right. Tapping the header expands the card
-  // (the arrow rotates down) and reveals the dropdowns. Default =
-  // live weather from the API; the other options force a
-  // background for demo purposes.
-  //
-  // A second dropdown below it selects the background quality
-  // (High / Low-end device).
 
-  Widget _buildBackgroundSelectorCard({
+  Widget _buildDisplaySettingsCard({
     required bool isDarkMode,
     required Color cardColor,
     required Color textColor,
@@ -531,7 +668,7 @@ class _MenuTabState extends State<MenuTab> {
         children: [
 
           // =================================================
-          // HEADER (TAP TO EXPAND / COLLAPSE)
+          // DISPLAY SETTINGS HEADER
           // =================================================
 
           Material(
@@ -543,7 +680,8 @@ class _MenuTabState extends State<MenuTab> {
 
               onTap: () {
                 setState(() {
-                  _bgExpanded = !_bgExpanded;
+                  _displaySettingsExpanded =
+                      !_displaySettingsExpanded;
                 });
               },
 
@@ -571,7 +709,7 @@ class _MenuTabState extends State<MenuTab> {
                       ),
 
                       child: Icon(
-                        Icons.wallpaper_rounded,
+                        Icons.display_settings_rounded,
                         size: 27,
 
                         color: isDarkMode
@@ -590,7 +728,7 @@ class _MenuTabState extends State<MenuTab> {
                         children: [
 
                           Text(
-                            'Home Background',
+                            'Display Settings',
 
                             style: TextStyle(
                               fontSize: 17,
@@ -603,7 +741,7 @@ class _MenuTabState extends State<MenuTab> {
                           const SizedBox(height: 4),
 
                           Text(
-                            'Choose the weather shown on Home',
+                            'Customize the Home display and performance',
 
                             style: TextStyle(
                               fontSize: 13,
@@ -617,11 +755,14 @@ class _MenuTabState extends State<MenuTab> {
                     ),
 
                     // =========================================
-                    // ARROW (ROTATES WHEN EXPANDED)
+                    // ARROW
                     // =========================================
 
                     AnimatedRotation(
-                      turns: _bgExpanded ? 0.25 : 0.0,
+                      turns:
+                          _displaySettingsExpanded
+                              ? 0.25
+                              : 0.0,
 
                       duration:
                           const Duration(milliseconds: 250),
@@ -643,7 +784,215 @@ class _MenuTabState extends State<MenuTab> {
           ),
 
           // =================================================
-          // EXPANDABLE DROPDOWN AREA
+          // DISPLAY SETTINGS CONTENT
+          // =================================================
+
+          AnimatedSize(
+            duration:
+                const Duration(milliseconds: 250),
+
+            curve: Curves.easeInOut,
+
+            alignment: Alignment.topCenter,
+
+            child: _displaySettingsExpanded
+                ? Padding(
+                    padding:
+                        const EdgeInsets.fromLTRB(
+                      18,
+                      0,
+                      18,
+                      18,
+                    ),
+
+                    child: Column(
+                      children: [
+
+                        // =================================================
+                        // HOME BACKGROUND
+                        // =================================================
+
+                        _buildBackgroundSelectorSection(
+                          isDarkMode: isDarkMode,
+                          textColor: textColor,
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        // =================================================
+                        // DASHBOARD REFRESH RATE
+                        // =================================================
+
+                        _buildRefreshRateSection(
+                          isDarkMode: isDarkMode,
+                          textColor: textColor,
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        // =================================================
+                        // WATER LITE MODE
+                        // =================================================
+
+                        _buildWaterLiteSection(
+                          isDarkMode: isDarkMode,
+                          textColor: textColor,
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        // =================================================
+                        // LOW-END PERFORMANCE MODE
+                        // =================================================
+
+                        _buildPerformanceModeSection(
+                          isDarkMode: isDarkMode,
+                          textColor: textColor,
+                        ),
+                      ],
+                    ),
+                  )
+                : const SizedBox(
+                    width: double.infinity,
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // =====================================================
+  // HOME BACKGROUND SECTION
+  // =====================================================
+
+  Widget _buildBackgroundSelectorSection({
+    required bool isDarkMode,
+    required Color textColor,
+  }) {
+    return Container(
+      width: double.infinity,
+
+      decoration: BoxDecoration(
+        color: const Color(0xFF383838),
+
+        borderRadius:
+            BorderRadius.circular(16),
+
+        border: Border.all(
+          color: Colors.white.withOpacity(0.08),
+        ),
+      ),
+
+      child: Column(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+
+        children: [
+
+          // =================================================
+          // HEADER
+          // =================================================
+
+          Material(
+            color: Colors.transparent,
+
+            child: InkWell(
+              borderRadius:
+                  BorderRadius.circular(16),
+
+              onTap: () {
+                setState(() {
+                  _bgExpanded = !_bgExpanded;
+                });
+              },
+
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 14,
+                ),
+
+                child: Row(
+                  children: [
+
+                    Container(
+                      width: 44,
+                      height: 44,
+
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF444444),
+
+                        borderRadius:
+                            BorderRadius.circular(13),
+                      ),
+
+                      child: const Icon(
+                        Icons.wallpaper_rounded,
+                        size: 23,
+                        color: Colors.white,
+                      ),
+                    ),
+
+                    const SizedBox(width: 13),
+
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
+
+                        children: [
+
+                          Text(
+                            'Home Background',
+
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight:
+                                  FontWeight.w600,
+                              color: textColor,
+                            ),
+                          ),
+
+                          const SizedBox(height: 3),
+
+                          Text(
+                            'Choose the weather shown on Home',
+
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDarkMode
+                                  ? Colors.white60
+                                  : Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    AnimatedRotation(
+                      turns:
+                          _bgExpanded
+                              ? 0.25
+                              : 0.0,
+
+                      duration:
+                          const Duration(milliseconds: 250),
+
+                      child: const Icon(
+                        Icons.chevron_right_rounded,
+                        size: 26,
+                        color: Colors.white54,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // =================================================
+          // BACKGROUND OPTIONS
           // =================================================
 
           AnimatedSize(
@@ -658,10 +1007,10 @@ class _MenuTabState extends State<MenuTab> {
                 ? Padding(
                     padding:
                         const EdgeInsets.fromLTRB(
-                      18,
+                      14,
                       0,
-                      18,
-                      18,
+                      14,
+                      14,
                     ),
 
                     child: Column(
@@ -671,7 +1020,7 @@ class _MenuTabState extends State<MenuTab> {
                       children: [
 
                         // =================================================
-                        // DROPDOWN
+                        // BACKGROUND DROPDOWN
                         // =================================================
 
                         ValueListenableBuilder<HomeBgChoice>(
@@ -689,7 +1038,7 @@ class _MenuTabState extends State<MenuTab> {
 
                               decoration: BoxDecoration(
                                 color:
-                                    const Color(0xFF383838),
+                                    const Color(0xFF303030),
 
                                 borderRadius:
                                     BorderRadius.circular(14),
@@ -722,7 +1071,8 @@ class _MenuTabState extends State<MenuTab> {
                                   style: const TextStyle(
                                     fontSize: 15,
                                     color: Colors.white,
-                                    fontWeight: FontWeight.w500,
+                                    fontWeight:
+                                        FontWeight.w500,
                                   ),
 
                                   items: [
@@ -756,7 +1106,12 @@ class _MenuTabState extends State<MenuTab> {
                                   onChanged: (value) {
                                     if (value == null) return;
 
-                                    homeBgChoice.value = value;
+                                    homeBgChoice.value =
+                                        value;
+
+                                    // Save the selection so it
+                                    // survives a full app restart.
+                                    _saveHomeBgChoice(value);
                                   },
                                 ),
                               ),
@@ -764,7 +1119,7 @@ class _MenuTabState extends State<MenuTab> {
                           },
                         ),
 
-                        const SizedBox(height: 18),
+                        const SizedBox(height: 14),
 
                         // =================================================
                         // QUALITY LABEL
@@ -775,7 +1130,8 @@ class _MenuTabState extends State<MenuTab> {
 
                           style: TextStyle(
                             fontSize: 14,
-                            fontWeight: FontWeight.w600,
+                            fontWeight:
+                                FontWeight.w600,
                             color: textColor,
                           ),
                         ),
@@ -800,9 +1156,11 @@ class _MenuTabState extends State<MenuTab> {
                         // =================================================
 
                         ValueListenableBuilder<HomeBgQuality>(
-                          valueListenable: homeBgQuality,
+                          valueListenable:
+                              homeBgQuality,
 
-                          builder: (context, quality, _) {
+                          builder:
+                              (context, quality, _) {
                             return Container(
                               width: double.infinity,
 
@@ -814,7 +1172,7 @@ class _MenuTabState extends State<MenuTab> {
 
                               decoration: BoxDecoration(
                                 color:
-                                    const Color(0xFF383838),
+                                    const Color(0xFF303030),
 
                                 borderRadius:
                                     BorderRadius.circular(14),
@@ -827,8 +1185,9 @@ class _MenuTabState extends State<MenuTab> {
 
                               child:
                                   DropdownButtonHideUnderline(
-                                child: DropdownButton<
-                                    HomeBgQuality>(
+                                child:
+                                    DropdownButton<
+                                        HomeBgQuality>(
                                   value: quality,
                                   isExpanded: true,
 
@@ -847,13 +1206,15 @@ class _MenuTabState extends State<MenuTab> {
                                   style: const TextStyle(
                                     fontSize: 15,
                                     color: Colors.white,
-                                    fontWeight: FontWeight.w500,
+                                    fontWeight:
+                                        FontWeight.w500,
                                   ),
 
                                   items: [
                                     _qualityItem(
                                       HomeBgQuality.high,
-                                      Icons.high_quality_rounded,
+                                      Icons
+                                          .high_quality_rounded,
                                       'High (Detailed animations)',
                                     ),
                                     _qualityItem(
@@ -864,9 +1225,16 @@ class _MenuTabState extends State<MenuTab> {
                                   ],
 
                                   onChanged: (value) {
-                                    if (value == null) return;
+                                    if (value == null) {
+                                      return;
+                                    }
 
-                                    homeBgQuality.value = value;
+                                    homeBgQuality.value =
+                                        value;
+
+                                    // Save the selection so it
+                                    // survives a full app restart.
+                                    _saveHomeBgQuality(value);
                                   },
                                 ),
                               ),
@@ -886,54 +1254,25 @@ class _MenuTabState extends State<MenuTab> {
   }
 
   // =====================================================
-  // DASHBOARD REFRESH RATE CARD
+  // DASHBOARD REFRESH RATE SECTION
   // =====================================================
-  //
-  // Same look as the Home Background card. Tapping the header
-  // expands it and reveals a dropdown. The selected value is sent
-  // to the Home tab through setHomeRefreshRate(), which controls
-  // how often the dashboard info (temperature, humidity, water
-  // level, flood risk status) changes on screen. The original
-  // data refresh rate is not affected.
-  //
-  // Real-time = original behavior (no limit).
 
-  Widget _buildRefreshRateCard({
+  Widget _buildRefreshRateSection({
     required bool isDarkMode,
-    required Color cardColor,
     required Color textColor,
   }) {
     return Container(
       width: double.infinity,
 
       decoration: BoxDecoration(
-        color: cardColor,
+        color: const Color(0xFF383838),
 
         borderRadius:
-            BorderRadius.circular(20),
+            BorderRadius.circular(16),
 
         border: Border.all(
-          color: isDarkMode
-              ? Colors.grey.shade800
-              : Colors.grey.shade200,
+          color: Colors.white.withOpacity(0.08),
         ),
-
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(
-              isDarkMode
-                  ? 0.25
-                  : 0.08,
-            ),
-
-            blurRadius: 6,
-
-            offset: const Offset(
-              0,
-              4,
-            ),
-          ),
-        ],
       ),
 
       child: Column(
@@ -943,7 +1282,7 @@ class _MenuTabState extends State<MenuTab> {
         children: [
 
           // =================================================
-          // HEADER (TAP TO EXPAND / COLLAPSE)
+          // HEADER
           // =================================================
 
           Material(
@@ -951,48 +1290,44 @@ class _MenuTabState extends State<MenuTab> {
 
             child: InkWell(
               borderRadius:
-                  BorderRadius.circular(20),
+                  BorderRadius.circular(16),
 
               onTap: () {
                 setState(() {
-                  _refreshExpanded = !_refreshExpanded;
+                  _refreshExpanded =
+                      !_refreshExpanded;
                 });
               },
 
               child: Padding(
                 padding:
                     const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 18,
+                  horizontal: 14,
+                  vertical: 14,
                 ),
 
                 child: Row(
                   children: [
 
                     Container(
-                      width: 52,
-                      height: 52,
+                      width: 44,
+                      height: 44,
 
                       decoration: BoxDecoration(
-                        color: isDarkMode
-                            ? const Color(0xFF383838)
-                            : const Color(0xFFEAF0FF),
+                        color: const Color(0xFF444444),
 
                         borderRadius:
-                            BorderRadius.circular(16),
+                            BorderRadius.circular(13),
                       ),
 
-                      child: Icon(
+                      child: const Icon(
                         Icons.update_rounded,
-                        size: 27,
-
-                        color: isDarkMode
-                            ? Colors.white
-                            : const Color(0xFF4877F7),
+                        size: 23,
+                        color: Colors.white,
                       ),
                     ),
 
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 13),
 
                     Expanded(
                       child: Column(
@@ -1005,20 +1340,20 @@ class _MenuTabState extends State<MenuTab> {
                             'Dashboard Refresh Rate',
 
                             style: TextStyle(
-                              fontSize: 17,
+                              fontSize: 16,
                               fontWeight:
                                   FontWeight.w600,
                               color: textColor,
                             ),
                           ),
 
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 3),
 
                           Text(
                             'Choose how often Home info updates',
 
                             style: TextStyle(
-                              fontSize: 13,
+                              fontSize: 12,
                               color: isDarkMode
                                   ? Colors.white60
                                   : Colors.grey.shade600,
@@ -1028,24 +1363,19 @@ class _MenuTabState extends State<MenuTab> {
                       ),
                     ),
 
-                    // =========================================
-                    // ARROW (ROTATES WHEN EXPANDED)
-                    // =========================================
-
                     AnimatedRotation(
-                      turns: _refreshExpanded ? 0.25 : 0.0,
+                      turns:
+                          _refreshExpanded
+                              ? 0.25
+                              : 0.0,
 
                       duration:
                           const Duration(milliseconds: 250),
 
-                      child: Icon(
+                      child: const Icon(
                         Icons.chevron_right_rounded,
-
-                        size: 28,
-
-                        color: isDarkMode
-                            ? Colors.white54
-                            : Colors.grey.shade500,
+                        size: 26,
+                        color: Colors.white54,
                       ),
                     ),
                   ],
@@ -1055,7 +1385,7 @@ class _MenuTabState extends State<MenuTab> {
           ),
 
           // =================================================
-          // EXPANDABLE DROPDOWN AREA
+          // REFRESH RATE OPTIONS
           // =================================================
 
           AnimatedSize(
@@ -1070,10 +1400,10 @@ class _MenuTabState extends State<MenuTab> {
                 ? Padding(
                     padding:
                         const EdgeInsets.fromLTRB(
-                      18,
+                      14,
                       0,
-                      18,
-                      18,
+                      14,
+                      14,
                     ),
 
                     child: Column(
@@ -1095,14 +1425,12 @@ class _MenuTabState extends State<MenuTab> {
 
                         const SizedBox(height: 10),
 
-                        // =================================================
-                        // REFRESH RATE DROPDOWN
-                        // =================================================
-
                         ValueListenableBuilder<Duration>(
-                          valueListenable: homeRefreshInterval,
+                          valueListenable:
+                              homeRefreshInterval,
 
-                          builder: (context, interval, _) {
+                          builder:
+                              (context, interval, _) {
                             return Container(
                               width: double.infinity,
 
@@ -1114,7 +1442,7 @@ class _MenuTabState extends State<MenuTab> {
 
                               decoration: BoxDecoration(
                                 color:
-                                    const Color(0xFF383838),
+                                    const Color(0xFF303030),
 
                                 borderRadius:
                                     BorderRadius.circular(14),
@@ -1147,7 +1475,8 @@ class _MenuTabState extends State<MenuTab> {
                                   style: const TextStyle(
                                     fontSize: 15,
                                     color: Colors.white,
-                                    fontWeight: FontWeight.w500,
+                                    fontWeight:
+                                        FontWeight.w500,
                                   ),
 
                                   items: [
@@ -1157,26 +1486,40 @@ class _MenuTabState extends State<MenuTab> {
                                       'Real-time (Default)',
                                     ),
                                     _refreshItem(
-                                      const Duration(seconds: 30),
+                                      const Duration(
+                                        seconds: 30,
+                                      ),
                                       Icons.timer_outlined,
                                       'Every 30 seconds',
                                     ),
                                     _refreshItem(
-                                      const Duration(minutes: 1),
+                                      const Duration(
+                                        minutes: 1,
+                                      ),
                                       Icons.timer_outlined,
                                       'Every 1 minute',
                                     ),
                                     _refreshItem(
-                                      const Duration(minutes: 5),
+                                      const Duration(
+                                        minutes: 5,
+                                      ),
                                       Icons.timer_outlined,
                                       'Every 5 minutes',
                                     ),
                                   ],
 
                                   onChanged: (value) {
-                                    if (value == null) return;
+                                    if (value == null) {
+                                      return;
+                                    }
 
-                                    setHomeRefreshRate(value);
+                                    setHomeRefreshRate(
+                                      value,
+                                    );
+
+                                    // Save the selection so it
+                                    // survives a full app restart.
+                                    _saveRefreshRate(value);
                                   },
                                 ),
                               ),
@@ -1196,23 +1539,11 @@ class _MenuTabState extends State<MenuTab> {
   }
 
   // =====================================================
-  // WATER EFFECTS CARD (LITE MODE SWITCH)
+  // WATER EFFECTS SECTION (LITE MODE SWITCH)
   // =====================================================
-  //
-  // Same look as the other menu cards, with a switch on the
-  // right instead of an arrow. The switch is bound directly to
-  // homeWaterLite (defined in home.dart):
-  //
-  //   OFF (default) = waving water + floating rubber duck.
-  //   ON            = straight water surface, no waves, no duck
-  //                   (stops the wave animation completely, so it
-  //                   is much lighter on low-end devices).
-  //
-  // Tapping anywhere on the card toggles the switch.
 
-  Widget _buildWaterLiteCard({
+  Widget _buildWaterLiteSection({
     required bool isDarkMode,
-    required Color cardColor,
     required Color textColor,
   }) {
     return ValueListenableBuilder<bool>(
@@ -1223,77 +1554,65 @@ class _MenuTabState extends State<MenuTab> {
           color: Colors.transparent,
 
           child: InkWell(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius:
+                BorderRadius.circular(16),
 
             onTap: () {
-              setHomeWaterLiteMode(!isLite);
+              final bool newValue = !isLite;
+
+              setHomeWaterLiteMode(
+                newValue,
+              );
+
+              // Save the selection so it survives
+              // a full app restart.
+              _saveWaterLiteMode(newValue);
             },
 
             child: Container(
               width: double.infinity,
 
-              padding: const EdgeInsets.symmetric(
-                horizontal: 18,
-                vertical: 18,
+              padding:
+                  const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 14,
               ),
 
               decoration: BoxDecoration(
-                color: cardColor,
+                color: const Color(0xFF383838),
 
                 borderRadius:
-                    BorderRadius.circular(20),
+                    BorderRadius.circular(16),
 
                 border: Border.all(
-                  color: isDarkMode
-                      ? Colors.grey.shade800
-                      : Colors.grey.shade200,
+                  color: Colors.white
+                      .withOpacity(0.08),
                 ),
-
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(
-                      isDarkMode
-                          ? 0.25
-                          : 0.08,
-                    ),
-
-                    blurRadius: 6,
-
-                    offset: const Offset(
-                      0,
-                      4,
-                    ),
-                  ),
-                ],
               ),
 
               child: Row(
                 children: [
 
                   Container(
-                    width: 52,
-                    height: 52,
+                    width: 44,
+                    height: 44,
 
                     decoration: BoxDecoration(
-                      color: isDarkMode
-                          ? const Color(0xFF383838)
-                          : const Color(0xFFEAF0FF),
+                      color:
+                          const Color(0xFF444444),
 
                       borderRadius:
-                          BorderRadius.circular(16),
+                          BorderRadius.circular(13),
                     ),
 
-                    child: Icon(
+                    child: const Icon(
                       Icons.waves_rounded,
-                      size: 27,
-
-                      color: isDarkMode
-                          ? Colors.white
-                          : const Color(0xFF4877F7),
+                      size: 23,
+                      color: Colors.white,
                     ),
                   ),
 
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 13),
 
                   Expanded(
                     child: Column(
@@ -1306,20 +1625,20 @@ class _MenuTabState extends State<MenuTab> {
                           'Water Lite Mode',
 
                           style: TextStyle(
-                            fontSize: 17,
+                            fontSize: 16,
                             fontWeight:
                                 FontWeight.w600,
                             color: textColor,
                           ),
                         ),
 
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 3),
 
                         Text(
                           'Straight water, no waves or rubber duck',
 
                           style: TextStyle(
-                            fontSize: 13,
+                            fontSize: 12,
                             color: isDarkMode
                                 ? Colors.white60
                                 : Colors.grey.shade600,
@@ -1334,10 +1653,17 @@ class _MenuTabState extends State<MenuTab> {
                   Switch(
                     value: isLite,
 
-                    activeColor: Colors.lightBlueAccent,
+                    activeColor:
+                        Colors.lightBlueAccent,
 
                     onChanged: (value) {
-                      setHomeWaterLiteMode(value);
+                      setHomeWaterLiteMode(
+                        value,
+                      );
+
+                      // Save the selection so it survives
+                      // a full app restart.
+                      _saveWaterLiteMode(value);
                     },
                   ),
                 ],
@@ -1350,103 +1676,81 @@ class _MenuTabState extends State<MenuTab> {
   }
 
   // =====================================================
-  // LOW-END PERFORMANCE MODE CARD (SWITCH)
+  // LOW-END PERFORMANCE MODE SECTION
   // =====================================================
-  //
-  // Same look as the Water Lite Mode card. The switch is bound
-  // directly to homePerformanceMode (defined in home.dart):
-  //
-  //   OFF (default) = original look and behavior.
-  //   ON            = low-end device mode: no blur on the cards,
-  //                   lightweight background, fewer repaints and
-  //                   rebuilds, and smaller decoded images.
-  //
-  // Tapping anywhere on the card toggles the switch.
 
-  Widget _buildPerformanceModeCard({
+  Widget _buildPerformanceModeSection({
     required bool isDarkMode,
-    required Color cardColor,
     required Color textColor,
   }) {
     return ValueListenableBuilder<bool>(
-      valueListenable: homePerformanceMode,
+      valueListenable:
+          homePerformanceMode,
 
       builder: (context, isPerf, _) {
         return Material(
           color: Colors.transparent,
 
           child: InkWell(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius:
+                BorderRadius.circular(16),
 
             onTap: () {
-              setHomePerformanceMode(!isPerf);
+              final bool newValue = !isPerf;
+
+              setHomePerformanceMode(
+                newValue,
+              );
+
+              // Save the selection so it survives
+              // a full app restart.
+              _savePerformanceMode(newValue);
             },
 
             child: Container(
               width: double.infinity,
 
-              padding: const EdgeInsets.symmetric(
-                horizontal: 18,
-                vertical: 18,
+              padding:
+                  const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 14,
               ),
 
               decoration: BoxDecoration(
-                color: cardColor,
+                color: const Color(0xFF383838),
 
                 borderRadius:
-                    BorderRadius.circular(20),
+                    BorderRadius.circular(16),
 
                 border: Border.all(
-                  color: isDarkMode
-                      ? Colors.grey.shade800
-                      : Colors.grey.shade200,
+                  color: Colors.white
+                      .withOpacity(0.08),
                 ),
-
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(
-                      isDarkMode
-                          ? 0.25
-                          : 0.08,
-                    ),
-
-                    blurRadius: 6,
-
-                    offset: const Offset(
-                      0,
-                      4,
-                    ),
-                  ),
-                ],
               ),
 
               child: Row(
                 children: [
 
                   Container(
-                    width: 52,
-                    height: 52,
+                    width: 44,
+                    height: 44,
 
                     decoration: BoxDecoration(
-                      color: isDarkMode
-                          ? const Color(0xFF383838)
-                          : const Color(0xFFEAF0FF),
+                      color:
+                          const Color(0xFF444444),
 
                       borderRadius:
-                          BorderRadius.circular(16),
+                          BorderRadius.circular(13),
                     ),
 
-                    child: Icon(
+                    child: const Icon(
                       Icons.speed_rounded,
-                      size: 27,
-
-                      color: isDarkMode
-                          ? Colors.white
-                          : const Color(0xFF4877F7),
+                      size: 23,
+                      color: Colors.white,
                     ),
                   ),
 
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 13),
 
                   Expanded(
                     child: Column(
@@ -1459,20 +1763,20 @@ class _MenuTabState extends State<MenuTab> {
                           'Low-End Performance Mode',
 
                           style: TextStyle(
-                            fontSize: 17,
+                            fontSize: 16,
                             fontWeight:
                                 FontWeight.w600,
                             color: textColor,
                           ),
                         ),
 
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 3),
 
                         Text(
                           'Smoother Home page on low-end devices',
 
                           style: TextStyle(
-                            fontSize: 13,
+                            fontSize: 12,
                             color: isDarkMode
                                 ? Colors.white60
                                 : Colors.grey.shade600,
@@ -1487,10 +1791,17 @@ class _MenuTabState extends State<MenuTab> {
                   Switch(
                     value: isPerf,
 
-                    activeColor: Colors.lightBlueAccent,
+                    activeColor:
+                        Colors.lightBlueAccent,
 
                     onChanged: (value) {
-                      setHomePerformanceMode(value);
+                      setHomePerformanceMode(
+                        value,
+                      );
+
+                      // Save the selection so it survives
+                      // a full app restart.
+                      _savePerformanceMode(value);
                     },
                   ),
                 ],
