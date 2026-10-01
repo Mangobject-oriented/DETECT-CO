@@ -63,6 +63,49 @@ void setHomeWaterLiteMode(bool enabled) {
 
 
 // =====================================================
+// LOW-END PERFORMANCE MODE
+// =====================================================
+//
+// One switch that turns on every extra performance
+// optimization for weak devices. When it is OFF (default) the
+// home page behaves exactly like the original.
+//
+// When it is ON:
+//   * Glass cards use a plain translucent fill instead of the
+//     expensive BackdropFilter blur, and each card is wrapped
+//     in its own RepaintBoundary.
+//   * The weather background always uses the lightweight
+//     ("lite") version, no matter what homeBgQuality says.
+//   * Water gauge: RepaintBoundary around the gauge, the human
+//     image is built once (not every animation frame), and the
+//     wave path is calculated with fewer points.
+//   * The 2-second ESP32 check only rebuilds the screen when the
+//     online/offline status really changes.
+//   * Network fetches no longer rebuild the screen just to show or
+//     hide a loading spinner (the spinners are hidden), and the
+//     weather-condition fetch only rebuilds when a value changed.
+//   * Images are decoded at the size they are displayed
+//     (cacheWidth / cacheHeight) instead of at full size.
+//
+// From menu.dart, call:
+//   setHomePerformanceMode(true);   // low-end device mode
+//   setHomePerformanceMode(false);  // original behavior
+//
+// or bind a switch directly to the notifier:
+//   homePerformanceMode.value = newValue;
+//
+// TIP: for the lightest result also turn on water lite mode:
+//   setHomeWaterLiteMode(true);
+
+final ValueNotifier<bool> homePerformanceMode =
+    ValueNotifier<bool>(false);
+
+void setHomePerformanceMode(bool enabled) {
+  homePerformanceMode.value = enabled;
+}
+
+
+// =====================================================
 // GLASSMORPHISM CARD HELPER
 // =====================================================
 //
@@ -70,6 +113,9 @@ void setHomeWaterLiteMode(bool enabled) {
 // dashboard UI. Semi-transparent background, subtle light
 // border, soft drop shadow, and an optional colored glow
 // border (used for the flood-risk card).
+//
+// In low-end performance mode the blur (BackdropFilter) is
+// skipped and the card is wrapped in a RepaintBoundary.
 
 Widget _glassCard({
   required Widget child,
@@ -80,6 +126,40 @@ Widget _glassCard({
   final BorderRadius radius =
       borderRadius ?? BorderRadius.circular(18);
 
+  // ---------------------------------------------------
+  // LOW-END VERSION (no blur)
+  // ---------------------------------------------------
+  if (homePerformanceMode.value) {
+    return RepaintBoundary(
+      child: Container(
+        padding: padding,
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          // More opaque than the blurred version so the card
+          // stays readable without the blur behind it.
+          color: Colors.black.withOpacity(0.32),
+          border: Border.all(
+            color: glowColor != null
+                ? glowColor.withOpacity(0.5)
+                : Colors.white.withOpacity(0.12),
+            width: glowColor != null ? 1.4 : 1,
+          ),
+          boxShadow: [
+            if (glowColor != null)
+              BoxShadow(
+                color: glowColor.withOpacity(0.22),
+                blurRadius: 8,
+              ),
+          ],
+        ),
+        child: child,
+      ),
+    );
+  }
+
+  // ---------------------------------------------------
+  // NORMAL VERSION (frosted glass)
+  // ---------------------------------------------------
   return ClipRRect(
     borderRadius: radius,
     child: BackdropFilter(
@@ -124,9 +204,10 @@ class HomeTab extends StatefulWidget {
 
 class _HomeTabState extends State<HomeTab>
     with SingleTickerProviderStateMixin {
-      String _selectedBarangay = 'Uwisan';
-      Timer? _manilaTimeTimer;
-      DateTime _manilaTime = DateTime.now().toUtc().add(const Duration(hours: 8));
+  String _selectedBarangay = 'Uwisan';
+
+  // Shortcut for the low-end performance switch.
+  bool get _perf => homePerformanceMode.value;
 
   // =====================================================
   // WATER SETTINGS
@@ -281,20 +362,14 @@ class _HomeTabState extends State<HomeTab>
     homeRefreshInterval.addListener(_onRefreshRateChanged);
 
     // =====================================================
-    // MANILA TIME
+    // LOW-END PERFORMANCE MODE LISTENER
     // =====================================================
+    //
+    // When the low-end switch in menu.dart changes, the whole
+    // dashboard is rebuilt with the matching (light / normal)
+    // widgets.
 
-    _manilaTimeTimer = Timer.periodic(
-      const Duration(seconds: 1),
-      (_) {
-        if (!mounted) return;
-
-        setState(() {
-          _manilaTime =
-              DateTime.now().toUtc().add(const Duration(hours: 8));
-        });
-      },
-    );
+    homePerformanceMode.addListener(_onPerformanceModeChanged);
 
     // =====================================================
     // START ML PREDICTION
@@ -340,9 +415,9 @@ class _HomeTabState extends State<HomeTab>
   void dispose() {
     homeWaterLite.removeListener(_onWaterLiteChanged);
     homeRefreshInterval.removeListener(_onRefreshRateChanged);
+    homePerformanceMode.removeListener(_onPerformanceModeChanged);
     _mlPredictionTimer?.cancel();
     _esp32StatusTimer?.cancel();
-    _manilaTimeTimer?.cancel();
     _weatherConditionTimer?.cancel();
     _waterAnimationController.dispose();
     super.dispose();
@@ -367,6 +442,38 @@ class _HomeTabState extends State<HomeTab>
     if (!mounted) return;
 
     setState(() {});
+  }
+
+  // =====================================================
+  // LOW-END PERFORMANCE MODE CHANGED
+  // =====================================================
+
+  // Called whenever the low-end performance switch is changed.
+  void _onPerformanceModeChanged() {
+    if (!mounted) return;
+
+    setState(() {});
+  }
+
+  // =====================================================
+  // LOADING-FLAG UPDATE (NETWORK FETCHES)
+  // =====================================================
+  //
+  // Normal mode: updates the flag with setState (the loading
+  // spinner appears / disappears, same as the original).
+  //
+  // Low-end mode: only changes the flag, WITHOUT rebuilding the
+  // screen. The flag still protects against overlapping requests,
+  // and the spinners are hidden in this mode, so nothing needs to
+  // be redrawn. This saves two rebuilds per network request.
+  void _loadingUpdate(VoidCallback change) {
+    if (!mounted) return;
+
+    if (_perf) {
+      change();
+    } else {
+      setState(change);
+    }
   }
 
   // =====================================================
@@ -459,13 +566,18 @@ class _HomeTabState extends State<HomeTab>
       if (!newOnlineStatus) {
         _scheduleFallbackWeather();
       }
-    } else {
+    } else if (!_perf) {
       // IMPORTANT:
       // Force the StreamBuilder UI to rebuild even when
       // Firebase itself is no longer sending events.
       //
       // This is what allows the old/stale ESP32 reading
       // to stop being displayed after 30 seconds.
+      //
+      // LOW-END MODE: this extra forced rebuild is skipped.
+      // The rebuild above already happens the moment the
+      // status changes (online -> offline), which is the only
+      // time the screen really needs to be refreshed.
       setState(() {});
     }
   }
@@ -491,12 +603,10 @@ class _HomeTabState extends State<HomeTab>
   Future<void> _fetchMLPrediction() async {
     if (_mlLoading) return;
 
-    if (mounted) {
-      setState(() {
-        _mlLoading = true;
-        _mlError = null;
-      });
-    }
+    _loadingUpdate(() {
+      _mlLoading = true;
+      _mlError = null;
+    });
 
     try {
       final response = await http
@@ -669,9 +779,7 @@ class _HomeTabState extends State<HomeTab>
 
       _fetchOpenMeteoRainfall();
     } finally {
-      if (!mounted) return;
-
-      setState(() {
+      _loadingUpdate(() {
         _mlLoading = false;
       });
     }
@@ -684,12 +792,10 @@ class _HomeTabState extends State<HomeTab>
   Future<void> _fetchFallbackWeather() async {
     if (_fallbackWeatherLoading) return;
 
-    if (mounted) {
-      setState(() {
-        _fallbackWeatherLoading = true;
-        _fallbackWeatherError = null;
-      });
-    }
+    _loadingUpdate(() {
+      _fallbackWeatherLoading = true;
+      _fallbackWeatherError = null;
+    });
 
     try {
       final uri = Uri.parse(
@@ -902,9 +1008,7 @@ class _HomeTabState extends State<HomeTab>
             'Unable to load Open-Meteo weather';
       });
     } finally {
-      if (!mounted) return;
-
-      setState(() {
+      _loadingUpdate(() {
         _fallbackWeatherLoading = false;
       });
     }
@@ -917,12 +1021,10 @@ class _HomeTabState extends State<HomeTab>
   Future<void> _fetchOpenMeteoRainfall() async {
     if (_openMeteoRainLoading) return;
 
-    if (mounted) {
-      setState(() {
-        _openMeteoRainLoading = true;
-        _openMeteoRainError = null;
-      });
-    }
+    _loadingUpdate(() {
+      _openMeteoRainLoading = true;
+      _openMeteoRainError = null;
+    });
 
     try {
       final uri = Uri.parse(
@@ -1090,9 +1192,7 @@ class _HomeTabState extends State<HomeTab>
             'Unable to load Open-Meteo rainfall';
       });
     } finally {
-      if (!mounted) return;
-
-      setState(() {
+      _loadingUpdate(() {
         _openMeteoRainLoading = false;
       });
     }
@@ -1169,6 +1269,20 @@ class _HomeTabState extends State<HomeTab>
           _parseDouble(current['cloud_cover']);
 
       if (!mounted) return;
+
+      // LOW-END MODE: skip the rebuild completely when
+      // nothing changed since the last fetch.
+      if (_perf) {
+        final bool codeSame = weatherCodeValue == null ||
+            weatherCodeValue.round() == _weatherCode;
+
+        final bool cloudSame = cloudCoverValue == null ||
+            cloudCoverValue == _cloudCover;
+
+        if (codeSame && cloudSame) {
+          return;
+        }
+      }
 
       setState(() {
         if (weatherCodeValue != null) {
@@ -1308,6 +1422,9 @@ class _HomeTabState extends State<HomeTab>
     // Dark mode is now the permanent, fixed UI for this app.
     const bool isDarkMode = true;
 
+    // Low-end performance switch (see homePerformanceMode).
+    final bool perf = _perf;
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
@@ -1341,6 +1458,8 @@ class _HomeTabState extends State<HomeTab>
             // changes (Default / Storm / Rain / Cloudy / Sunny),
             // and when the Menu's quality setting changes
             // (High / Low). The quality setting lives in menu.dart.
+            //
+            // LOW-END MODE: always uses the lite background.
             Positioned.fill(
               child: IgnorePointer(
                 child: RepaintBoundary(
@@ -1352,7 +1471,8 @@ class _HomeTabState extends State<HomeTab>
                         builder: (context, quality, _) {
                           return _RainBackground(
                             mode: _computeWeatherMode(),
-                            lite: quality == HomeBgQuality.low,
+                            lite: quality == HomeBgQuality.low ||
+                                homePerformanceMode.value,
                           );
                         },
                       );
@@ -1698,6 +1818,14 @@ class _HomeTabState extends State<HomeTab>
                                 height: 50,
                                 child: Image.asset(
                                   "assets/icon/detect-co_logo.png",
+                                  // LOW-END MODE: decode the logo at
+                                  // its displayed size only.
+                                  cacheWidth: perf
+                                      ? (50 *
+                                              MediaQuery.of(context)
+                                                  .devicePixelRatio)
+                                          .round()
+                                      : null,
                                 ),
                               ),
 
@@ -1763,8 +1891,12 @@ class _HomeTabState extends State<HomeTab>
                           ),
 
                           // =====================================
-                          // LOCATION / TIME
+                          // LOCATION
                           // =====================================
+                          //
+                          // The Manila clock was removed from this
+                          // row (it rebuilt the whole screen every
+                          // second).
 
                           Row(
                             children: [
@@ -1840,16 +1972,6 @@ class _HomeTabState extends State<HomeTab>
                                   ),
                                 ),
                               ),
-
-                              const Spacer(),
-
-                              Text(
-                                '${((_manilaTime.hour % 12) == 0 ? 12 : (_manilaTime.hour % 12)).toString().padLeft(2, '0')}:${_manilaTime.minute.toString().padLeft(2, '0')}:${_manilaTime.second.toString().padLeft(2, '0')} ${_manilaTime.hour >= 12 ? 'PM' : 'AM'}',
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.white70,
-                                ),
-                              ),
                             ],
                           ),
                         ],
@@ -1881,8 +2003,108 @@ class _HomeTabState extends State<HomeTab>
                         children: [
 
                           // =========================================
+                          // FLOOD RISK STATUS
+                          // =========================================
+                          //
+                          // LAYOUT FIX: slightly smaller (less vertical
+                          // padding, smaller badge, slightly smaller title).
+                          //
+                          // (Placed ABOVE the temperature + humidity row.)
+
+                          _glassCard(
+                            glowColor: floodColor,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 9,
+                            ),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 40,
+                                  height: 40,
+                                  child: Stack(
+                                    alignment: Alignment.center,
+                                    children: [
+                                      Container(
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color:
+                                              floodColor.withOpacity(0.18),
+                                          border: Border.all(
+                                            color:
+                                                floodColor.withOpacity(0.6),
+                                            width: 1.4,
+                                          ),
+                                        ),
+                                      ),
+                                      Icon(
+                                        Icons.shield_outlined,
+                                        color: floodColor,
+                                        size: 25,
+                                      ),
+                                      Positioned(
+                                        bottom: 7,
+                                        right: 7,
+                                        child: Icon(
+                                          Icons.check_circle,
+                                          color: floodColor,
+                                          size: 14,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'FLOOD RISK STATUS',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: 1.0,
+                                          color: Colors.white60,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        floodStatusText,
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w900,
+                                          color: floodColor,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        floodMessage,
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.white60,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Icon(
+                                  Icons.chevron_right_rounded,
+                                  color: Colors.white38,
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(height: 10),
+
+                          // =========================================
                           // TOP ROW: TEMPERATURE + HUMIDITY
                           // =========================================
+                          //
+                          // (Placed BELOW the flood risk status card.)
 
                           Row(
                             children: [
@@ -1985,102 +2207,6 @@ class _HomeTabState extends State<HomeTab>
                           const SizedBox(height: 10),
 
                           // =========================================
-                          // FLOOD RISK STATUS
-                          // =========================================
-                          //
-                          // LAYOUT FIX: slightly smaller (less vertical
-                          // padding, smaller badge, slightly smaller title).
-
-                          _glassCard(
-                            glowColor: floodColor,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 9,
-                            ),
-                            child: Row(
-                              children: [
-                                SizedBox(
-                                  width: 40,
-                                  height: 40,
-                                  child: Stack(
-                                    alignment: Alignment.center,
-                                    children: [
-                                      Container(
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          color:
-                                              floodColor.withOpacity(0.18),
-                                          border: Border.all(
-                                            color:
-                                                floodColor.withOpacity(0.6),
-                                            width: 1.4,
-                                          ),
-                                        ),
-                                      ),
-                                      Icon(
-                                        Icons.shield_outlined,
-                                        color: floodColor,
-                                        size: 25,
-                                      ),
-                                      Positioned(
-                                        bottom: 7,
-                                        right: 7,
-                                        child: Icon(
-                                          Icons.check_circle,
-                                          color: floodColor,
-                                          size: 14,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      const Text(
-                                        'FLOOD RISK STATUS',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w700,
-                                          letterSpacing: 1.0,
-                                          color: Colors.white60,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        floodStatusText,
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w900,
-                                          color: floodColor,
-                                          letterSpacing: 0.5,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        floodMessage,
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          color: Colors.white60,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const Icon(
-                                  Icons.chevron_right_rounded,
-                                  color: Colors.white38,
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          const SizedBox(height: 10),
-
-                          // =========================================
                           // WATER LEVEL
                           // =========================================
                           //
@@ -2128,6 +2254,25 @@ class _HomeTabState extends State<HomeTab>
                                                     1.3)
                                                 .clamp(6.0, 10.0)
                                                 .toDouble();
+
+                                        // The water gauge widget.
+                                        // LOW-END MODE: wrapped in its own
+                                        // RepaintBoundary so its animation
+                                        // never repaints the rest of the card.
+                                        final Widget waterGauge =
+                                            _WaterWithDuck(
+                                          width: tubeCanvasWidth,
+                                          height:
+                                              constraints.maxHeight - 40,
+                                          animation:
+                                              _waterAnimationController,
+                                          animationStart: animationStart,
+                                          animationEnd: animationEnd,
+                                          maxWaterLevel: maxWaterLevel,
+                                          isDark: isDarkMode,
+                                          lite: homeWaterLite.value,
+                                          performance: perf,
+                                        );
 
                                         return Row(
                                           mainAxisAlignment:
@@ -2210,26 +2355,12 @@ class _HomeTabState extends State<HomeTab>
 
                                                   Expanded(
                                                     child: Center(
-                                                      child: _WaterWithDuck(
-                                                        width:
-                                                            tubeCanvasWidth,
-                                                        height:
-                                                            constraints
-                                                                    .maxHeight -
-                                                                40,
-                                                        animation:
-                                                            _waterAnimationController,
-                                                        animationStart:
-                                                            animationStart,
-                                                        animationEnd:
-                                                            animationEnd,
-                                                        maxWaterLevel:
-                                                            maxWaterLevel,
-                                                        isDark: isDarkMode,
-                                                        lite:
-                                                            homeWaterLite
-                                                                .value,
-                                                      ),
+                                                      child: perf
+                                                          ? RepaintBoundary(
+                                                              child:
+                                                                  waterGauge,
+                                                            )
+                                                          : waterGauge,
                                                     ),
                                                   ),
                                                 ],
@@ -2400,6 +2531,9 @@ class _HomeTabState extends State<HomeTab>
                           // changes (ML vs Open-Meteo, extra lines, etc.).
                           // The content sits in a FittedBox(scaleDown) so it
                           // can never overflow the fixed height.
+                          //
+                          // LOW-END MODE: the loading spinners are hidden
+                          // (loading flags no longer trigger a rebuild).
 
                           SizedBox(
                             height: 108,
@@ -2434,7 +2568,8 @@ class _HomeTabState extends State<HomeTab>
                                           ),
                                         ),
                                       ),
-                                      if (_mlLoading &&
+                                      if (!perf &&
+                                          _mlLoading &&
                                           !_mlForecastIdle &&
                                           _mlError == null)
                                         const SizedBox(
@@ -2445,7 +2580,8 @@ class _HomeTabState extends State<HomeTab>
                                             strokeWidth: 2,
                                           ),
                                         )
-                                      else if (_openMeteoRainLoading)
+                                      else if (!perf &&
+                                          _openMeteoRainLoading)
                                         const SizedBox(
                                           width: 14,
                                           height: 14,
@@ -3877,6 +4013,14 @@ class _WaterWithDuck extends StatefulWidget {
   // and no rubber duck.
   final bool lite;
 
+  // True = low-end performance mode:
+  //   * the human image is built once (not every animation frame)
+  //     and kept in its own RepaintBoundary,
+  //   * the tube outline is kept in its own RepaintBoundary,
+  //   * the wave path uses fewer points,
+  //   * images are decoded at their displayed size.
+  final bool performance;
+
   const _WaterWithDuck({
     required this.width,
     required this.height,
@@ -3886,6 +4030,7 @@ class _WaterWithDuck extends StatefulWidget {
     required this.maxWaterLevel,
     required this.isDark,
     this.lite = false,
+    this.performance = false,
   });
 
   @override
@@ -4022,11 +4167,28 @@ class _WaterWithDuckState extends State<_WaterWithDuck>
 
   @override
   Widget build(BuildContext context) {
+    final bool perf = widget.performance;
+
+    // LOW-END MODE: the human never changes while the water
+    // animates, so it is built ONCE here and passed to the
+    // AnimatedBuilder as its `child` (Flutter does not rebuild
+    // the child on every animation frame). It also gets its own
+    // RepaintBoundary so it is not repainted every frame.
+    final Widget? cachedHuman = perf
+        ? RepaintBoundary(
+            child: ClipPath(
+              clipper: _TubeInteriorClipper(),
+              child: _buildHuman(),
+            ),
+          )
+        : null;
+
     return AnimatedBuilder(
       animation: Listenable.merge([
         widget.animation,
         _duckController,
       ]),
+      child: cachedHuman,
       builder: (context, child) {
         return SizedBox(
           width: widget.width,
@@ -4039,10 +4201,13 @@ class _WaterWithDuckState extends State<_WaterWithDuck>
               // HUMAN
               // =================================================
 
-              ClipPath(
-                clipper: _TubeInteriorClipper(),
-                child: _buildHuman(),
-              ),
+              if (perf && child != null)
+                child
+              else
+                ClipPath(
+                  clipper: _TubeInteriorClipper(),
+                  child: _buildHuman(),
+                ),
 
               // =================================================
               // WATER
@@ -4063,6 +4228,8 @@ class _WaterWithDuckState extends State<_WaterWithDuck>
                             math.pi *
                             2,
                     straight: widget.lite,
+                    // LOW-END MODE: fewer wave points.
+                    step: perf ? 4.0 : 2.0,
                   ),
                 ),
               ),
@@ -4083,9 +4250,15 @@ class _WaterWithDuckState extends State<_WaterWithDuck>
 
               Positioned.fill(
                 child: IgnorePointer(
-                  child: CustomPaint(
-                    painter: _TubeOutlinePainter(),
-                  ),
+                  child: perf
+                      ? RepaintBoundary(
+                          child: CustomPaint(
+                            painter: _TubeOutlinePainter(),
+                          ),
+                        )
+                      : CustomPaint(
+                          painter: _TubeOutlinePainter(),
+                        ),
                 ),
               ),
             ],
@@ -4124,6 +4297,13 @@ class _WaterWithDuckState extends State<_WaterWithDuck>
             (humanHeightCm /
                 widget.maxWaterLevel);
 
+    // LOW-END MODE: decode the PNG at the size it is shown.
+    final int? humanCacheHeight = widget.performance
+        ? (humanHeight *
+                MediaQuery.of(context).devicePixelRatio)
+            .round()
+        : null;
+
     return SizedBox(
       width: widget.width,
       height: widget.height,
@@ -4135,6 +4315,7 @@ class _WaterWithDuckState extends State<_WaterWithDuck>
             child: Image.asset(
               'assets/images/body.png',
               height: humanHeight,
+              cacheHeight: humanCacheHeight,
               fit: BoxFit.fitHeight,
               alignment: Alignment.bottomCenter,
             ),
@@ -4268,6 +4449,13 @@ class _WaterWithDuckState extends State<_WaterWithDuck>
             duckHeight +
             5;
 
+    // LOW-END MODE: decode the PNG at the size it is shown.
+    final int? duckCacheWidth = widget.performance
+        ? (duckWidth *
+                MediaQuery.of(context).devicePixelRatio)
+            .round()
+        : null;
+
     // =====================================================
     // DUCK
     // =====================================================
@@ -4288,6 +4476,7 @@ class _WaterWithDuckState extends State<_WaterWithDuck>
                 'assets/images/rubber-duck.png',
                 width: duckWidth,
                 height: duckHeight,
+                cacheWidth: duckCacheWidth,
                 fit: BoxFit.contain,
               ),
             ),
@@ -4674,12 +4863,18 @@ class _WaterBucketPainter
   // True = flat water surface (no waving).
   final bool straight;
 
+  // Horizontal distance (in pixels) between two points of the
+  // wave path. 2.0 = original smoothness; 4.0 = low-end mode
+  // (half as many points to calculate every frame).
+  final double step;
+
   _WaterBucketPainter({
     required this.level,
     required this.maxLevel,
     required this.isDark,
     required this.wavePhase,
     this.straight = false,
+    this.step = 2.0,
   });
 
   @override
@@ -4816,6 +5011,21 @@ class _WaterBucketPainter
     final double waveHeight = straight ? 0.0 : 3.5;
     final double waveLength = tubeWidth;
 
+    // Wave offset at a given x position.
+    double waveAt(double x) {
+      final double normalizedX =
+          (x - left) / waveLength;
+
+      return math.sin(
+            normalizedX *
+                    math.pi *
+                    2 *
+                    1.5 +
+                wavePhase,
+          ) *
+          waveHeight;
+    }
+
     waterPath.moveTo(
       left,
       fillTop,
@@ -4824,24 +5034,20 @@ class _WaterBucketPainter
     for (
       double x = left;
       x <= right;
-      x += 2
+      x += step
     ) {
-      final double normalizedX =
-          (x - left) / waveLength;
-
-      final double wave =
-          math.sin(
-                normalizedX *
-                        math.pi *
-                        2 *
-                        1.5 +
-                    wavePhase,
-              ) *
-              waveHeight;
-
       waterPath.lineTo(
         x,
-        fillTop + wave,
+        fillTop + waveAt(x),
+      );
+    }
+
+    // With a larger step the loop may stop a little before the
+    // right edge, so the last point is added explicitly.
+    if (step > 2.0) {
+      waterPath.lineTo(
+        right,
+        fillTop + waveAt(right),
       );
     }
 
@@ -4877,32 +5083,26 @@ class _WaterBucketPainter
     for (
       double x = left;
       x <= right;
-      x += 2
+      x += step
     ) {
-      final double normalizedX =
-          (x - left) / waveLength;
-
-      final double wave =
-          math.sin(
-                normalizedX *
-                        math.pi *
-                        2 *
-                        1.5 +
-                    wavePhase,
-              ) *
-              waveHeight;
-
       if (x == left) {
         highlightPath.moveTo(
           x,
-          fillTop + wave,
+          fillTop + waveAt(x),
         );
       } else {
         highlightPath.lineTo(
           x,
-          fillTop + wave,
+          fillTop + waveAt(x),
         );
       }
+    }
+
+    if (step > 2.0) {
+      highlightPath.lineTo(
+        right,
+        fillTop + waveAt(right),
+      );
     }
 
     canvas.drawPath(
@@ -4930,7 +5130,8 @@ class _WaterBucketPainter
       oldDelegate.maxLevel != maxLevel ||
       oldDelegate.isDark != isDark ||
       oldDelegate.wavePhase != wavePhase ||
-      oldDelegate.straight != straight;
+      oldDelegate.straight != straight ||
+      oldDelegate.step != step;
 }
 
 // =====================================================

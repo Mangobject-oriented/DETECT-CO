@@ -298,6 +298,18 @@ class _MenuTabState extends State<MenuTab> {
                       cardColor: cardColor,
                       textColor: textColor,
                     ),
+
+                    const SizedBox(height: 14),
+
+                    // =================================================
+                    // LOW-END PERFORMANCE MODE (SWITCH)
+                    // =================================================
+
+                    _buildPerformanceModeCard(
+                      isDarkMode: isDarkMode,
+                      cardColor: cardColor,
+                      textColor: textColor,
+                    ),
                   ],
                 ),
               ),
@@ -1326,6 +1338,159 @@ class _MenuTabState extends State<MenuTab> {
 
                     onChanged: (value) {
                       setHomeWaterLiteMode(value);
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // =====================================================
+  // LOW-END PERFORMANCE MODE CARD (SWITCH)
+  // =====================================================
+  //
+  // Same look as the Water Lite Mode card. The switch is bound
+  // directly to homePerformanceMode (defined in home.dart):
+  //
+  //   OFF (default) = original look and behavior.
+  //   ON            = low-end device mode: no blur on the cards,
+  //                   lightweight background, fewer repaints and
+  //                   rebuilds, and smaller decoded images.
+  //
+  // Tapping anywhere on the card toggles the switch.
+
+  Widget _buildPerformanceModeCard({
+    required bool isDarkMode,
+    required Color cardColor,
+    required Color textColor,
+  }) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: homePerformanceMode,
+
+      builder: (context, isPerf, _) {
+        return Material(
+          color: Colors.transparent,
+
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+
+            onTap: () {
+              setHomePerformanceMode(!isPerf);
+            },
+
+            child: Container(
+              width: double.infinity,
+
+              padding: const EdgeInsets.symmetric(
+                horizontal: 18,
+                vertical: 18,
+              ),
+
+              decoration: BoxDecoration(
+                color: cardColor,
+
+                borderRadius:
+                    BorderRadius.circular(20),
+
+                border: Border.all(
+                  color: isDarkMode
+                      ? Colors.grey.shade800
+                      : Colors.grey.shade200,
+                ),
+
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(
+                      isDarkMode
+                          ? 0.25
+                          : 0.08,
+                    ),
+
+                    blurRadius: 6,
+
+                    offset: const Offset(
+                      0,
+                      4,
+                    ),
+                  ),
+                ],
+              ),
+
+              child: Row(
+                children: [
+
+                  Container(
+                    width: 52,
+                    height: 52,
+
+                    decoration: BoxDecoration(
+                      color: isDarkMode
+                          ? const Color(0xFF383838)
+                          : const Color(0xFFEAF0FF),
+
+                      borderRadius:
+                          BorderRadius.circular(16),
+                    ),
+
+                    child: Icon(
+                      Icons.speed_rounded,
+                      size: 27,
+
+                      color: isDarkMode
+                          ? Colors.white
+                          : const Color(0xFF4877F7),
+                    ),
+                  ),
+
+                  const SizedBox(width: 16),
+
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
+
+                      children: [
+
+                        Text(
+                          'Low-End Performance Mode',
+
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight:
+                                FontWeight.w600,
+                            color: textColor,
+                          ),
+                        ),
+
+                        const SizedBox(height: 4),
+
+                        Text(
+                          'Smoother Home page on low-end devices',
+
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: isDarkMode
+                                ? Colors.white60
+                                : Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(width: 8),
+
+                  Switch(
+                    value: isPerf,
+
+                    activeColor: Colors.lightBlueAccent,
+
+                    onChanged: (value) {
+                      setHomePerformanceMode(value);
                     },
                   ),
                 ],
