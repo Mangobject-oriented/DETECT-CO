@@ -230,9 +230,15 @@ class _EvacuateTabState extends State<EvacuateTab> {
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 decoration: BoxDecoration(
-                  color: isSelected
-                      ? const Color.fromARGB(255, 72, 119, 247)
-                      : Colors.transparent,
+                  // Evacuation (0) = green, Emergency (1) = red,
+                  // Guides (2) = unchanged blue.
+                  color: !isSelected
+                      ? Colors.transparent
+                      : index == 0
+                          ? Colors.green
+                          : index == 1
+                              ? const Color(0xFFFF3035)
+                              : const Color.fromARGB(255, 72, 119, 247),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
