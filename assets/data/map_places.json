@@ -1,0 +1,751 @@
+[
+  {
+    "name": "Uwisan Brgy Hall Evacuation Site",
+    "description": "65PF+RC8, Looc Road, Calamba",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.23707209551028,
+    "longitude": 121.17340069445697,
+    "type": "evacuation"
+  },
+  {
+    "name": "Lingga Elementary School",
+    "description": "658J+7WC, Dany, Calamba, 4027 Laguna",
+    "image": "assets/images/evac2.png",
+    "latitude": 14.215765305050551,
+    "longitude": 121.18228271136698,
+    "type": "evacuation"
+  },
+  {
+    "name": "Palingon Elementary School",
+    "description": "658P+425, 202 Caballero St, Real, Calamba, 4027 Laguna",
+    "image": "assets/images/evac3.png",
+    "latitude": 14.215617735789499,
+    "longitude": 121.1861596967596,
+    "type": "evacuation"
+  },
+  {
+    "name": "Banlic Elementary School",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.231580655616623,
+    "longitude": 121.13694004166739,
+    "type": "evacuation"
+  },
+  {
+    "name": "Batino Covered Court",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.201319556660879,
+    "longitude": 121.1320245730881,
+    "type": "evacuation"
+  },
+  {
+    "name": "Bubuyan's Catholic Church",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.174504490904946,
+    "longitude": 121.1087250140898,
+    "type": "evacuation"
+  },
+  {
+    "name": "Bubuyan's Mystica Church",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.172963720486747,
+    "longitude": 121.10557921410229,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 4",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.172113482744315,
+    "longitude": 121.10432174218926,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 5",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.173410443862354,
+    "longitude": 121.10617123123323,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 6",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.191485471680968,
+    "longitude": 121.16396746679861,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 7",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.158661827191356,
+    "longitude": 121.0630947146171,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 8",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.1606442315348,
+    "longitude": 121.08255004753215,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 9",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.156989529900981,
+    "longitude": 121.06391365513119,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 10",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.16775961272474,
+    "longitude": 121.09698479793742,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 11",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.160582754167905,
+    "longitude": 121.09950677838401,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 12",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.15923043180585,
+    "longitude": 121.15055525970166,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 13",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.21619675699334,
+    "longitude": 121.10831864742113,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 14",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.19776321566352,
+    "longitude": 121.16026673606467,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 15",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.165501500947597,
+    "longitude": 121.06344732444332,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 16",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.165737720981518,
+    "longitude": 121.06336680143697,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 17",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.171235841465467,
+    "longitude": 121.06845088677825,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 18",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.16468392333159,
+    "longitude": 121.11166297009778,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 19",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.15841935848526,
+    "longitude": 121.10292031938356,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 20",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.163877304381243,
+    "longitude": 121.1193921217405,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 21",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.163682990151303,
+    "longitude": 121.11221407903564,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 22",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.242245636596444,
+    "longitude": 121.16112224477644,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 23",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.164067163693884,
+    "longitude": 121.12022194425536,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 24",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.163974321171965,
+    "longitude": 121.11967628696898,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 25",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.173841778034774,
+    "longitude": 121.08997796950078,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 26",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.173532087184581,
+    "longitude": 121.09044519284902,
+    "type": "evacuation"
+  },
+  {
+    "name": "Lamesa Elementary School",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.181175581767723,
+    "longitude": 121.15693980811848,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 28",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.18134448099071,
+    "longitude": 121.15551189061159,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 29",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.18116634694325,
+    "longitude": 121.15527879277391,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 30",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.210171931261318,
+    "longitude": 121.15006689273368,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 31",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.206790199579396,
+    "longitude": 121.14534787891243,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 32",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.20831709925985,
+    "longitude": 121.14122115513742,
+    "type": "evacuation"
+  },
+  {
+    "name": "Lecheria Elementary School",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.203316989780198,
+    "longitude": 121.16152022776481,
+    "type": "evacuation"
+  },
+  {
+    "name": "Lecheria Brgy. Hall",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.20293501289848,
+    "longitude": 121.16351836432413,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 35",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.215706295566287,
+    "longitude": 121.18229250422738,
+    "type": "evacuation"
+  },
+  {
+    "name": "Lingga Memorial Church",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.21500465075427,
+    "longitude": 121.18263593884583,
+    "type": "evacuation"
+  },
+  {
+    "name": "Looc Covered Court",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.226867070119598,
+    "longitude": 121.1791843408803,
+    "type": "evacuation"
+  },
+  {
+    "name": "Looc Elementary School",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.223606762143497,
+    "longitude": 121.17913294369943,
+    "type": "evacuation"
+  },
+  {
+    "name": "Saint Mary Magdalene Parish Church",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.227311567599813,
+    "longitude": 121.17801168719132,
+    "type": "evacuation"
+  },
+  {
+    "name": "Looc Brgy. Hall",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.22685715333503,
+    "longitude": 121.17931162113375,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 41",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.157609591385897,
+    "longitude": 121.03890866929824,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 42",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.157611381431051,
+    "longitude": 121.03837803346556,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 43",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.1577328195214,
+    "longitude": 121.03865463924586,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 45",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.194772931406085,
+    "longitude": 121.10653185321075,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 46",
+    "description": "Di sure",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.194675033800195,
+    "longitude": 121.10681863228403,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 47",
+    "description": "Di sure wala picture",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.217662466254062,
+    "longitude": 121.13031072145374,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 48",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.233286279876454,
+    "longitude": 121.12109842224699,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 49",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.182311694818134,
+    "longitude": 121.20046646919435,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 50",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.185232705776796,
+    "longitude": 121.20302471896639,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 51",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.169150712852536,
+    "longitude": 121.15392803071943,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 52",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.181345254262697,
+    "longitude": 121.15550795406192,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 53",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.18117897378228,
+    "longitude": 121.15693691953852,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 54",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.17255822267577,
+    "longitude": 121.15257389020832,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 55",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.21128116910972,
+    "longitude": 121.12683229027006,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 56",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.211349627395691,
+    "longitude": 121.1274426826303,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 57",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.209635996811041,
+    "longitude": 121.12946405931996,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 58",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.215181115082732,
+    "longitude": 121.11838198577026,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 59",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.175734135330105,
+    "longitude": 121.13707385200775,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 60",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.168667146420542,
+    "longitude": 121.13890417103521,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 61",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.16942375060053,
+    "longitude": 121.13784077220092,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 62",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.218842490643722,
+    "longitude": 121.1338802227567,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 63",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.216682570976168,
+    "longitude": 121.13684346719909,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 64",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.21561644928434,
+    "longitude": 121.18616123969663,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 65",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.215038052466918,
+    "longitude": 121.18625506138429,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 66",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.214198517822128,
+    "longitude": 121.18481769796186,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 67",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.184056579877563,
+    "longitude": 121.10727284773436,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 68",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.185505636435487,
+    "longitude": 121.10514984241068,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 69",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.183889286377417,
+    "longitude": 121.10469900997737,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 71",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.180415280449884,
+    "longitude": 121.17911049698672,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 72",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.179814627414459,
+    "longitude": 121.1788240508865,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 73",
+    "description": "Di sure",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.181286443258058,
+    "longitude": 121.18891086343608,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 74",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.180055211653634,
+    "longitude": 121.18543688551486,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 75",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.179378280325913,
+    "longitude": 121.183893714503,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 76",
+    "description": "Duplicate coordinate from supplied list",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.179378280325913,
+    "longitude": 121.183893714503,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 77",
+    "description": "Duplicate coordinate from supplied list",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.179378280325913,
+    "longitude": 121.183893714503,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 78",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.21515499619268,
+    "longitude": 121.15170035378777,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 79",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.200979717555436,
+    "longitude": 121.14041785088628,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 80",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.198048393372924,
+    "longitude": 121.14038347822171,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 81",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.195537976854325,
+    "longitude": 121.13676690730857,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 82",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.176778883054167,
+    "longitude": 121.11816022580918,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 83",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.177911835403494,
+    "longitude": 121.12109504450672,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 84",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.177816095642763,
+    "longitude": 121.12040321215873,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 85",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.178159590514435,
+    "longitude": 121.12114980633409,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 86",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.152360080307764,
+    "longitude": 121.16213341703335,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 87",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.15250353343479,
+    "longitude": 121.16224046555969,
+    "type": "evacuation"
+  },
+  {
+    "name": "Evacuation Center 88",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.152406304744268,
+    "longitude": 121.16264892494013,
+    "type": "evacuation"
+  },
+  {
+    "name": "Real Elementary School",
+    "description": "Supplied coordinate",
+    "image": "assets/images/evac1.png",
+    "latitude": 14.198555932678811,
+    "longitude": 121.14916166968749,
+    "type": "evacuation"
+  },
+  {
+    "name": "Calamba Doctors' Hospital",
+    "description": "Calamba City, Laguna",
+    "latitude": 14.217318179834948,
+    "longitude": 121.14191295757401,
+    "type": "hospital"
+  },
+  {
+    "name": "Calamba Medical Center",
+    "description": "Calamba City, Laguna",
+    "latitude": 14.206166437115906,
+    "longitude": 121.15238771423762,
+    "type": "hospital"
+  },
+  {
+    "name": "Gamez Hospital",
+    "description": "Calamba City, Laguna",
+    "latitude": 14.213035200419394,
+    "longitude": 121.16425984193856,
+    "type": "hospital"
+  }
+]

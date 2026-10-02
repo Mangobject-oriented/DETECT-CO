@@ -65,6 +65,7 @@ flutter:
     - assets/ai/detectco_knowledge.txt
     - assets/icon/
     - assets/images/
+    - assets/data/map_places.json
 
 flutter_launcher_icons:
   image_path: "assets/icon/detect-co_logo.png" 
