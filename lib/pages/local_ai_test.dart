@@ -72,7 +72,7 @@ class _LocalAiTestPageState extends State<LocalAiTestPage> {
   // =====================================================
 
   Future<void> _initializeModel() async {
-    if (_loading) return;
+    if (_loading || !mounted) return;
 
     setState(() {
       _loading = true;
@@ -115,6 +115,8 @@ class _LocalAiTestPageState extends State<LocalAiTestPage> {
   // =====================================================
 
   Future<void> _sendMessage() async {
+    if (!mounted) return;
+
     if (!_ai.isInitialized || _generating) return;
 
     final message = _messageController.text.trim();
@@ -189,6 +191,14 @@ class _LocalAiTestPageState extends State<LocalAiTestPage> {
       )) {
         if (!mounted) return;
 
+        if (_messages.isEmpty) return;
+
+        final lastMessage = _messages.last;
+
+        if (lastMessage['role'] != 'assistant') {
+          return;
+        }
+
         setState(() {
           _messages[_messages.length - 1]['content'] =
               '${_messages[_messages.length - 1]['content']}$token';
@@ -220,6 +230,8 @@ class _LocalAiTestPageState extends State<LocalAiTestPage> {
       });
     }
 
+    if (!mounted) return;
+
     _scrollToBottom();
   }
 
@@ -228,7 +240,11 @@ class _LocalAiTestPageState extends State<LocalAiTestPage> {
   // =====================================================
 
   void _scrollToBottom() {
+    if (!mounted) return;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
       if (!_scrollController.hasClients) return;
 
       _scrollController.animateTo(
@@ -661,6 +677,18 @@ class _LocalAiTestPageState extends State<LocalAiTestPage> {
         ),
       ),
     );
+  }
+
+  // =====================================================
+  // DISPOSE
+  // =====================================================
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    _scrollController.dispose();
+
+    super.dispose();
   }
 
   // =====================================================
