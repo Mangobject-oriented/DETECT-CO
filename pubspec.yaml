@@ -53,6 +53,7 @@ dependencies:
   flutter_ringtone_player: ^4.0.0+4
   llama_flutter_android: ^0.2.6
   path_provider: ^2.1.6
+  dropdown_button2: 3.1.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

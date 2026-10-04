@@ -210,6 +210,85 @@ class _HomeTabState extends State<HomeTab>
   bool get _perf => homePerformanceMode.value;
 
   // =====================================================
+  // BARANGAY PICKER (opens directly below the pill)
+  // =====================================================
+
+  static const List<String> _barangays = [
+    'Uwisan',
+    'Palingon',
+    'Lingga',
+  ];
+
+  Future<void> _showBarangayMenu(
+    BuildContext fieldContext,
+  ) async {
+    final RenderBox button =
+        fieldContext.findRenderObject() as RenderBox;
+
+    final RenderBox overlay =
+        Overlay.of(fieldContext).context.findRenderObject()
+            as RenderBox;
+
+    final Offset position = button.localToGlobal(
+      Offset.zero,
+      ancestor: overlay,
+    );
+
+    final String? selected = await showMenu<String>(
+      context: fieldContext,
+      color: const Color(0xFF303030),
+      elevation: 8,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      constraints: BoxConstraints(
+        minWidth: math.max(button.size.width, 200),
+        maxWidth: 260,
+      ),
+      position: RelativeRect.fromLTRB(
+        position.dx,
+        position.dy + button.size.height + 4,
+        overlay.size.width - position.dx - button.size.width,
+        0,
+      ),
+      items: _barangays.map((name) {
+        return PopupMenuItem<String>(
+          value: name,
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Barangay $name',
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              if (name == _selectedBarangay)
+                const Icon(
+                  Icons.check_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+
+    if (selected == null || !mounted) return;
+
+    setState(() {
+      _selectedBarangay = selected;
+    });
+  }
+
+  // =====================================================
   // WATER SETTINGS
   // =====================================================
 
@@ -1309,19 +1388,20 @@ class _HomeTabState extends State<HomeTab>
   // which background animation to show.
 
   _WeatherBackgroundMode _computeWeatherMode() {
-    
-      switch (homeBgChoice.value) {
-    case HomeBgChoice.storm:
-      return _WeatherBackgroundMode.storm;
-    case HomeBgChoice.rain:
-      return _WeatherBackgroundMode.rain;
-    case HomeBgChoice.cloudy:
-      return _WeatherBackgroundMode.cloudy;
-    case HomeBgChoice.sunny:
-      return _WeatherBackgroundMode.sunny;
-    case HomeBgChoice.auto:
-      break; // fall through to the API-based logic below
-  }
+
+    switch (homeBgChoice.value) {
+      case HomeBgChoice.storm:
+        return _WeatherBackgroundMode.storm;
+      case HomeBgChoice.rain:
+        return _WeatherBackgroundMode.rain;
+      case HomeBgChoice.cloudy:
+        return _WeatherBackgroundMode.cloudy;
+      case HomeBgChoice.sunny:
+        return _WeatherBackgroundMode.sunny;
+      case HomeBgChoice.auto:
+        break; // fall through to the API-based logic below
+    }
+
     final int? code = _weatherCode;
 
     final bool isThunderCode =
@@ -1912,65 +1992,67 @@ class _HomeTabState extends State<HomeTab>
                                 width: 4,
                               ),
 
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.025),
-                                  borderRadius: BorderRadius.circular(18),
-                                  border: Border.all(
-                                    color: Colors.white.withOpacity(0.12),
-                                    width: 1,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.22),
-                                      blurRadius: 12,
-                                      offset: const Offset(0, 5),
-                                    ),
-                                  ],
-                                ),
-                                child: DropdownButtonHideUnderline(
-                                  child: DropdownButton<String>(
-                                    value: _selectedBarangay,
-                                    isDense: true,
-                                    borderRadius: BorderRadius.circular(16),
-                                    dropdownColor: const Color(0xFF303030),
-                                    icon: const Icon(
-                                      Icons.keyboard_arrow_down_rounded,
-                                      color: Colors.white70,
-                                      size: 20,
-                                    ),
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                    items: const [
-                                      DropdownMenuItem(
-                                        value: 'Uwisan',
-                                        child: Text('Barangay Uwisan'),
-                                      ),
-                                      DropdownMenuItem(
-                                        value: 'Palingon',
-                                        child: Text('Barangay Palingon'),
-                                      ),
-                                      DropdownMenuItem(
-                                        value: 'Lingga',
-                                        child: Text('Barangay Lingga'),
-                                      ),
-                                    ],
-                                    onChanged: (value) {
-                                      if (value == null) return;
+                              // =================================
+                              // BARANGAY PICKER
+                              // =================================
+                              //
+                              // Custom popup (showMenu) so the menu
+                              // always opens directly below the pill.
 
-                                      setState(() {
-                                        _selectedBarangay = value;
-                                      });
-                                    },
-                                  ),
-                                ),
+                              Builder(
+                                builder: (fieldContext) {
+                                  return Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.025),
+                                      borderRadius: BorderRadius.circular(18),
+                                      border: Border.all(
+                                        color: Colors.white.withOpacity(0.12),
+                                        width: 1,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.22),
+                                          blurRadius: 12,
+                                          offset: const Offset(0, 5),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Material(
+                                      color: Colors.transparent,
+                                      child: InkWell(
+                                        borderRadius: BorderRadius.circular(18),
+                                        onTap: () =>
+                                            _showBarangayMenu(fieldContext),
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 4,
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                'Barangay $_selectedBarangay',
+                                                style: const TextStyle(
+                                                  fontSize: 14,
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 6),
+                                              const Icon(
+                                                Icons
+                                                    .keyboard_arrow_down_rounded,
+                                                color: Colors.white70,
+                                                size: 20,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
                               ),
                             ],
                           ),
