@@ -4,8 +4,8 @@ import 'package:torch_flashlight/torch_flashlight.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 
 import 'package:detectco/main.dart'; // for isDarkModeNotifier
-import 'package:detectco/pages/survival_kit_prep.dart';
 import 'package:detectco/pages/during_after_flood.dart';
+import 'package:detectco/pages/flood_prep_checklist.dart';
 
 class EvacuateTab extends StatefulWidget {
   const EvacuateTab({super.key, this.onGoToMap});
@@ -923,18 +923,19 @@ class _EvacuateTabState extends State<EvacuateTab> {
       _emergencyAlarmCard(isDarkMode),
 
       _guideCard(
-        'Survival Kit Preparation',
+        'Flood Preparation Checklist',
         isDarkMode,
         () {
           Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) =>
-                  const SurvivalKitPreparation(),
+                  const FloodPreparationChecklist(),
             ),
           );
         },
       ),
+
       _guideCard(
         'During and After Flood',
         isDarkMode,
