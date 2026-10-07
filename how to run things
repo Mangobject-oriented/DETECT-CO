@@ -1,0 +1,18 @@
+to turn on website 
+
+cd ~/DETECT-CO/admin_web
+npm install
+npm run dev
+
+
+to turn on ml 
+
+cd ~/DETECT-CO-ML
+source venv/bin/activate
+uvicorn api:app --host 0.0.0.0 --port 8000
+
+
+to turn on notif 
+
+cd ~/DETECT-CO
+node functions/announcement-listener.js

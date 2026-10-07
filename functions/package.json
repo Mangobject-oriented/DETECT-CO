@@ -1,12 +1,9 @@
 {
   "name": "functions",
-  "description": "Cloud Functions for Firebase",
+  "description": "Local DETECT-CO Firebase notification tools",
   "scripts": {
-    "serve": "firebase emulators:start --only functions",
-    "shell": "firebase functions:shell",
-    "start": "npm run shell",
-    "deploy": "firebase deploy --only functions",
-    "logs": "firebase functions:log"
+    "announcement-listener": "node announcement-listener.js",
+    "test-notification": "node test-notification.js"
   },
   "engines": {
     "node": "22"

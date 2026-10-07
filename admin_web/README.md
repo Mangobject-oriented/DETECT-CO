@@ -1,8 +1,8 @@
 # DETECT-CO Barangay Emergency Monitor
 
-A small, read-only Vite dashboard that listens to Firebase Realtime Database
-`emergency_sessions` and displays unexpired active sessions on Leaflet and
-OpenStreetMap.
+A small Vite dashboard that listens to Firebase Realtime Database
+`emergency_sessions`, displays unexpired active sessions, and writes one-way
+announcements to `/announcements`.
 
 ## Firebase web configuration
 
@@ -17,11 +17,18 @@ These `VITE_FIREBASE_*` values are browser client configuration. They are not
 service-account credentials and cannot be used to bypass Realtime Database
 rules. Never put a service-account JSON file or private key in this directory.
 
-The app listens to `emergency_sessions` and filters to records whose
+The emergency monitor listens to `emergency_sessions` and filters to records whose
 `status` is exactly `active` and whose `expiresAt` is later than the browser's
 current time. `startedAt`, `updatedAt`, and `expiresAt` are Unix milliseconds,
 matching the Flutter implementation. Location records without `updatedAt`
 show that no location update has arrived yet.
+
+The Announcements panel writes title, message, type, priority, and Unix
+millisecond timestamp to `/announcements/{announcementId}`. The browser uses
+only the Firebase Web SDK and has no FCM credentials. Run the local FCM listener
+from the repository root with `node functions/announcement-listener.js`; the
+computer running it must remain online to send announcement pushes. See
+`functions/README.md` for setup and testing.
 
 ## Access and privacy
 
