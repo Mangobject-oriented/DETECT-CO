@@ -6,7 +6,292 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:detectco/pages/menu.dart'; // change to your actual menu file name
+
+
+// =====================================================
+// ONE-TIME DEVICE LOCATION (FOR OPEN-METEO)
+// =====================================================
+//
+// The device location is looked up ONLY ONCE per app session.
+//
+//   * First call  -> checks / requests the normal foreground
+//                    location permission, then gets the current
+//                    position ONE TIME and stores it in memory.
+//   * Later calls -> reuse the stored latitude / longitude. The
+//                    device location is never requested again.
+//
+// There is NO location stream, NO tracking, NO background or
+// foreground service. If permission is denied, location services
+// are off, GPS fails, or the request times out, the existing fixed
+// Calamba coordinates are used instead (and no retry is made).
+//
+// These variables live at file level (not inside the State), so
+// they survive the Home page being rebuilt / re-opened. They are
+// only reset when the app process is completely restarted.
+
+// Existing fixed Calamba coordinates (fallback).
+const double _fallbackLatitude = 14.15;
+const double _fallbackLongitude = 121.05;
+
+// Coordinates stored in memory for the current app session.
+double? _sessionLatitude;
+double? _sessionLongitude;
+
+// True once the one-time lookup has finished (success or not).
+bool _sessionLocationDone = false;
+
+// Shared in-flight lookup, so several weather fetches that start at
+// the same time all wait for the SAME single lookup.
+Future<void>? _sessionLocationFuture;
+
+// Latitude used by every Open-Meteo request.
+double get _weatherLatitude =>
+    _sessionLatitude ?? _fallbackLatitude;
+
+// Longitude used by every Open-Meteo request.
+double get _weatherLongitude =>
+    _sessionLongitude ?? _fallbackLongitude;
+
+// Makes sure the one-time lookup has happened. Safe to call as many
+// times as you like: the real lookup only ever runs once.
+Future<void> _ensureSessionLocation() {
+  if (_sessionLocationDone) {
+    return Future<void>.value();
+  }
+
+  return _sessionLocationFuture ??= _lookupSessionLocationOnce();
+}
+
+Future<void> _lookupSessionLocationOnce() async {
+  try {
+    // Normal Android location permission dialog (only shown
+    // when permission has not been decided yet).
+    LocationPermission permission =
+        await Geolocator.checkPermission();
+
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+
+    final bool permissionGranted =
+        permission == LocationPermission.whileInUse ||
+            permission == LocationPermission.always;
+
+    if (permissionGranted) {
+      final bool servicesEnabled =
+          await Geolocator.isLocationServiceEnabled();
+
+      if (servicesEnabled) {
+        // ONE single position request (not a stream).
+        final Position position =
+            await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.low,
+            timeLimit: Duration(seconds: 15),
+          ),
+        ).timeout(
+          const Duration(seconds: 20),
+        );
+
+        if (position.latitude.isFinite &&
+            position.longitude.isFinite) {
+          _sessionLatitude = position.latitude;
+          _sessionLongitude = position.longitude;
+        }
+      }
+    }
+  } catch (e) {
+    // Any location error -> keep the Calamba fallback.
+    // No retry is made.
+  } finally {
+    _sessionLocationDone = true;
+  }
+}
+
+
+// =====================================================
+// OPEN-METEO HOURLY ROW MATCHING (CURRENT LOCAL HOUR)
+// =====================================================
+//
+// The Open-Meteo request uses timezone=auto, so every timestamp in
+// the response (current.time and hourly.time[]) is expressed in the
+// LOCAL time of the requested coordinates. The request asks for
+// forecast_days=2, so hourly.* starts at 00:00 of the local day.
+//
+// Instead of assuming "index 0 = now", the hourly row is found by
+// matching current.time (floored to the hour) against hourly.time[].
+// The rain probability, hourly rainfall and the rainfall forecast
+// sums are all read from that same row, so they describe the same
+// period as the current temperature / humidity.
+
+double? _toDouble(dynamic value) {
+  if (value is num) {
+    return value.toDouble();
+  }
+
+  return double.tryParse(
+    value?.toString() ?? '',
+  );
+}
+
+// Converts an Open-Meteo local timestamp such as "2026-10-07T15:30"
+// into a timezone-free value floored to the hour, so two timestamps
+// can be compared by their local wall-clock hour only.
+DateTime? _localHour(dynamic raw) {
+  if (raw == null) return null;
+
+  final DateTime? parsed = DateTime.tryParse(raw.toString());
+
+  if (parsed == null) return null;
+
+  return DateTime.utc(
+    parsed.year,
+    parsed.month,
+    parsed.day,
+    parsed.hour,
+  );
+}
+
+// Index of the hourly row that matches the current local hour.
+int _currentHourlyIndex(
+  Map<String, dynamic> result,
+  Map<String, dynamic>? current,
+  List<dynamic> hourlyTimes,
+) {
+  if (hourlyTimes.isEmpty) return 0;
+
+  DateTime? nowLocalHour = _localHour(current?['time']);
+
+  // Fallback: build the local hour from the UTC offset that
+  // Open-Meteo returns for the requested coordinates.
+  if (nowLocalHour == null) {
+    final int offsetSeconds =
+        (_toDouble(result['utc_offset_seconds']) ?? 0).round();
+
+    final DateTime shifted = DateTime.now()
+        .toUtc()
+        .add(Duration(seconds: offsetSeconds));
+
+    nowLocalHour = DateTime.utc(
+      shifted.year,
+      shifted.month,
+      shifted.day,
+      shifted.hour,
+    );
+  }
+
+  // The matching row is the last hourly timestamp that is not
+  // later than the current local hour.
+  int match = -1;
+
+  for (int i = 0; i < hourlyTimes.length; i++) {
+    final DateTime? t = _localHour(hourlyTimes[i]);
+
+    if (t == null) continue;
+
+    if (t.isAfter(nowLocalHour)) break;
+
+    match = i;
+  }
+
+  return match < 0 ? 0 : match;
+}
+
+class _HourlyRainReading {
+  // Rainfall (mm) summed from the current hourly row onward.
+  final double rainfall1h;
+  final double rainfall3h;
+  final double rainfall6h;
+  final double rainfall12h;
+  final double rainfall24h;
+
+  // Hourly precipitation (mm) of the current hourly row.
+  final double? rainNow;
+
+  // Precipitation probability (%) of the current hourly row.
+  final double? probabilityNow;
+
+  const _HourlyRainReading({
+    required this.rainfall1h,
+    required this.rainfall3h,
+    required this.rainfall6h,
+    required this.rainfall12h,
+    required this.rainfall24h,
+    required this.rainNow,
+    required this.probabilityNow,
+  });
+}
+
+_HourlyRainReading _readHourlyRain({
+  required Map<String, dynamic> result,
+  required Map<String, dynamic>? current,
+  required Map<String, dynamic>? hourly,
+}) {
+  if (hourly == null) {
+    return const _HourlyRainReading(
+      rainfall1h: 0,
+      rainfall3h: 0,
+      rainfall6h: 0,
+      rainfall12h: 0,
+      rainfall24h: 0,
+      rainNow: null,
+      probabilityNow: null,
+    );
+  }
+
+  final List<dynamic> times =
+      hourly['time'] is List ? hourly['time'] as List : [];
+
+  final List<dynamic> precipitationValues =
+      hourly['precipitation'] is List
+          ? hourly['precipitation'] as List
+          : [];
+
+  final List<dynamic> probabilityValues =
+      hourly['precipitation_probability'] is List
+          ? hourly['precipitation_probability'] as List
+          : [];
+
+  final int start =
+      _currentHourlyIndex(result, current, times);
+
+  double sumRainfall(int count) {
+    final int end =
+        math.min(start + count, precipitationValues.length);
+
+    double total = 0;
+
+    for (int i = start; i < end; i++) {
+      total += _toDouble(precipitationValues[i]) ?? 0;
+    }
+
+    return total;
+  }
+
+  double? probabilityNow;
+
+  if (start < probabilityValues.length) {
+    probabilityNow = _toDouble(probabilityValues[start]);
+  }
+
+  double? rainNow;
+
+  if (start < precipitationValues.length) {
+    rainNow = _toDouble(precipitationValues[start]);
+  }
+
+  return _HourlyRainReading(
+    rainfall1h: sumRainfall(1),
+    rainfall3h: sumRainfall(3),
+    rainfall6h: sumRainfall(6),
+    rainfall12h: sumRainfall(12),
+    rainfall24h: sumRainfall(24),
+    rainNow: rainNow,
+    probabilityNow: probabilityNow,
+  );
+}
 
 
 // =====================================================
@@ -451,6 +736,17 @@ class _HomeTabState extends State<HomeTab>
     homePerformanceMode.addListener(_onPerformanceModeChanged);
 
     // =====================================================
+    // ONE-TIME DEVICE LOCATION
+    // =====================================================
+    //
+    // Starts the one-time location lookup (only if it has not
+    // already happened during this app session). The weather
+    // fetches below also wait for the same single lookup, so
+    // the device location is never requested more than once.
+
+    _ensureSessionLocation();
+
+    // =====================================================
     // START ML PREDICTION
     // =====================================================
 
@@ -877,14 +1173,18 @@ class _HomeTabState extends State<HomeTab>
     });
 
     try {
+      // Wait for the one-time location lookup (already done
+      // after the first time). Never requests location again.
+      await _ensureSessionLocation();
+
       final uri = Uri.parse(
         'https://api.open-meteo.com/v1/forecast'
-        '?latitude=14.15'
-        '&longitude=121.05'
-        '&current=temperature_2m,relative_humidity_2m,rain,precipitation,precipitation_probability'
+        '?latitude=$_weatherLatitude'
+        '&longitude=$_weatherLongitude'
+        '&current=temperature_2m,relative_humidity_2m,rain,precipitation'
         '&hourly=precipitation,rain,precipitation_probability'
-        '&forecast_hours=24'
-        '&timezone=Asia%2FManila',
+        '&forecast_days=2'
+        '&timezone=auto',
       );
 
       final response = await http
@@ -943,11 +1243,6 @@ class _HomeTabState extends State<HomeTab>
       final double? currentPrecipitation =
           _parseDouble(current['precipitation']);
 
-      final double? currentProbability =
-          _parseDouble(
-        current['precipitation_probability'],
-      );
-
       final Map<String, dynamic>? hourly =
           result['hourly'] is Map
               ? Map<String, dynamic>.from(
@@ -955,94 +1250,20 @@ class _HomeTabState extends State<HomeTab>
                 )
               : null;
 
-      double rainfall1h = 0;
-      double rainfall3h = 0;
-      double rainfall6h = 0;
-      double rainfall12h = 0;
-      double rainfall24h = 0;
+      // Read rainfall + probability from the hourly row that
+      // matches the CURRENT LOCAL HOUR (see _readHourlyRain).
+      final _HourlyRainReading hourlyReading =
+          _readHourlyRain(
+        result: result,
+        current: current,
+        hourly: hourly,
+      );
 
-      double probability1h = 0;
-      double probability3h = 0;
-      double probability6h = 0;
-      double probability12h = 0;
-      double probability24h = 0;
-
-      if (hourly != null) {
-        final List<dynamic> precipitationValues =
-            hourly['precipitation'] is List
-                ? hourly['precipitation'] as List
-                : [];
-
-        final List<dynamic> probabilityValues =
-            hourly['precipitation_probability'] is List
-                ? hourly['precipitation_probability'] as List
-                : [];
-
-        double sumRainfall(int count) {
-          final int limit =
-              math.min(
-            count,
-            precipitationValues.length,
-          );
-
-          double total = 0;
-
-          for (int i = 0; i < limit; i++) {
-            total +=
-                _parseDouble(
-                      precipitationValues[i],
-                    ) ??
-                    0;
-          }
-
-          return total;
-        }
-
-        double averageProbability(int count) {
-          final int limit =
-              math.min(
-            count,
-            probabilityValues.length,
-          );
-
-          if (limit == 0) {
-            return 0;
-          }
-
-          double total = 0;
-
-          for (int i = 0; i < limit; i++) {
-            total +=
-                _parseDouble(
-                      probabilityValues[i],
-                    ) ??
-                    0;
-          }
-
-          return total / limit;
-        }
-
-        rainfall1h = sumRainfall(1);
-        rainfall3h = sumRainfall(3);
-        rainfall6h = sumRainfall(6);
-        rainfall12h = sumRainfall(12);
-        rainfall24h = sumRainfall(24);
-
-        probability1h =
-            averageProbability(1);
-
-        probability3h =
-            averageProbability(3);
-
-        probability6h =
-            averageProbability(6);
-
-        probability12h =
-            averageProbability(12);
-
-        probability24h =
-            averageProbability(24);
-      }
+      final double rainfall1h = hourlyReading.rainfall1h;
+      final double rainfall3h = hourlyReading.rainfall3h;
+      final double rainfall6h = hourlyReading.rainfall6h;
+      final double rainfall12h = hourlyReading.rainfall12h;
+      final double rainfall24h = hourlyReading.rainfall24h;
 
       if (!mounted) return;
 
@@ -1058,7 +1279,8 @@ class _HomeTabState extends State<HomeTab>
 
         _openMeteoCurrentRainfall =
             currentRain ??
-                currentPrecipitation;
+                currentPrecipitation ??
+                hourlyReading.rainNow;
 
         _openMeteoRainfall1h =
             rainfall1h;
@@ -1076,8 +1298,7 @@ class _HomeTabState extends State<HomeTab>
             rainfall24h;
 
         _openMeteoRainProbability =
-            currentProbability ??
-                probability1h;
+            hourlyReading.probabilityNow;
       });
     } catch (e) {
       if (!mounted) return;
@@ -1106,14 +1327,18 @@ class _HomeTabState extends State<HomeTab>
     });
 
     try {
+      // Wait for the one-time location lookup (already done
+      // after the first time). Never requests location again.
+      await _ensureSessionLocation();
+
       final uri = Uri.parse(
         'https://api.open-meteo.com/v1/forecast'
-        '?latitude=14.15'
-        '&longitude=121.05'
-        '&current=rain,precipitation,precipitation_probability'
+        '?latitude=$_weatherLatitude'
+        '&longitude=$_weatherLongitude'
+        '&current=rain,precipitation'
         '&hourly=precipitation,rain,precipitation_probability'
-        '&forecast_hours=24'
-        '&timezone=Asia%2FManila',
+        '&forecast_days=2'
+        '&timezone=auto',
       );
 
       final response = await http
@@ -1150,11 +1375,6 @@ class _HomeTabState extends State<HomeTab>
       final double? currentPrecipitation =
           _parseDouble(current['precipitation']);
 
-      final double? currentProbability =
-          _parseDouble(
-        current['precipitation_probability'],
-      );
-
       final Map<String, dynamic>? hourly =
           result['hourly'] is Map
               ? Map<String, dynamic>.from(
@@ -1162,85 +1382,28 @@ class _HomeTabState extends State<HomeTab>
                 )
               : null;
 
-      double rainfall1h = 0;
-      double rainfall3h = 0;
-      double rainfall6h = 0;
-      double rainfall12h = 0;
-      double rainfall24h = 0;
+      // Read rainfall + probability from the hourly row that
+      // matches the CURRENT LOCAL HOUR (see _readHourlyRain).
+      final _HourlyRainReading hourlyReading =
+          _readHourlyRain(
+        result: result,
+        current: current,
+        hourly: hourly,
+      );
 
-      double probability1h = 0;
-
-      if (hourly != null) {
-        final List<dynamic> precipitationValues =
-            hourly['precipitation'] is List
-                ? hourly['precipitation'] as List
-                : [];
-
-        final List<dynamic> probabilityValues =
-            hourly['precipitation_probability'] is List
-                ? hourly['precipitation_probability'] as List
-                : [];
-
-        double sumRainfall(int count) {
-          final int limit =
-              math.min(
-            count,
-            precipitationValues.length,
-          );
-
-          double total = 0;
-
-          for (int i = 0; i < limit; i++) {
-            total +=
-                _parseDouble(
-                      precipitationValues[i],
-                    ) ??
-                    0;
-          }
-
-          return total;
-        }
-
-        double averageProbability(int count) {
-          final int limit =
-              math.min(
-            count,
-            probabilityValues.length,
-          );
-
-          if (limit == 0) {
-            return 0;
-          }
-
-          double total = 0;
-
-          for (int i = 0; i < limit; i++) {
-            total +=
-                _parseDouble(
-                      probabilityValues[i],
-                    ) ??
-                    0;
-          }
-
-          return total / limit;
-        }
-
-        rainfall1h = sumRainfall(1);
-        rainfall3h = sumRainfall(3);
-        rainfall6h = sumRainfall(6);
-        rainfall12h = sumRainfall(12);
-        rainfall24h = sumRainfall(24);
-
-        probability1h =
-            averageProbability(1);
-      }
+      final double rainfall1h = hourlyReading.rainfall1h;
+      final double rainfall3h = hourlyReading.rainfall3h;
+      final double rainfall6h = hourlyReading.rainfall6h;
+      final double rainfall12h = hourlyReading.rainfall12h;
+      final double rainfall24h = hourlyReading.rainfall24h;
 
       if (!mounted) return;
 
       setState(() {
         _openMeteoCurrentRainfall =
             currentRain ??
-                currentPrecipitation;
+                currentPrecipitation ??
+                hourlyReading.rainNow;
 
         _openMeteoRainfall1h =
             rainfall1h;
@@ -1258,8 +1421,7 @@ class _HomeTabState extends State<HomeTab>
             rainfall24h;
 
         _openMeteoRainProbability =
-            currentProbability ??
-                probability1h;
+            hourlyReading.probabilityNow;
 
         _openMeteoRainError = null;
       });
@@ -1309,12 +1471,16 @@ class _HomeTabState extends State<HomeTab>
 
   Future<void> _fetchWeatherCondition() async {
     try {
+      // Wait for the one-time location lookup (already done
+      // after the first time). Never requests location again.
+      await _ensureSessionLocation();
+
       final uri = Uri.parse(
         'https://api.open-meteo.com/v1/forecast'
-        '?latitude=14.15'
-        '&longitude=121.05'
+        '?latitude=$_weatherLatitude'
+        '&longitude=$_weatherLongitude'
         '&current=weather_code,cloud_cover'
-        '&timezone=Asia%2FManila',
+        '&timezone=auto',
       );
 
       final response = await http

@@ -39,7 +39,7 @@ dependencies:
   # Maps and location
   flutter_map: ^6.0.0
   latlong2: ^0.9.0
-  geolocator: ^10.1.0
+  geolocator: ^14.1.1
   permission_handler: ^11.0.0
   flutter_native_splash: ^2.4.7
 
@@ -69,7 +69,7 @@ flutter:
     - assets/data/map_places.json
 
 flutter_launcher_icons:
-  image_path: "assets/icon/detect-co_logo.png" 
+  image_path: "assets/icon/logo.png"
   android: true
   ios: true
   remove_alpha_ios: true

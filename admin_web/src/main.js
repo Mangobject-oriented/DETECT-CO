@@ -3,7 +3,7 @@ import 'leaflet/dist/leaflet.css';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
-import { onValue, push, ref, set, update } from 'firebase/database';
+import { onValue, push, ref, remove, set, update } from 'firebase/database';
 import { database, firebaseConfigError } from './firebase.js';
 import './styles.css';
 
@@ -31,6 +31,10 @@ const message = document.querySelector('#message');
 const details = document.querySelector('#details');
 const detailsTitle = document.querySelector('#details-title');
 const detailsGrid = document.querySelector('#details-grid');
+const emergencyPage = document.querySelector('#emergency-page');
+const notificationsPage = document.querySelector('#notifications-page');
+const pageTitle = document.querySelector('#page-title');
+const pageNavigationButtons = document.querySelectorAll('[data-page]');
 const announcementForm = document.querySelector('#announcement-form');
 const announcementTitle = document.querySelector('#announcement-title');
 const announcementBody = document.querySelector('#announcement-body');
@@ -41,7 +45,39 @@ const announcementList = document.querySelector('#announcement-list');
 const announcementCaption = document.querySelector('#announcement-caption');
 const announcementConfirmation = document.querySelector('#announcement-confirmation');
 const confirmSendAnnouncement = document.querySelector('#confirm-send-announcement');
+const clearHistoryButton = document.querySelector('#clear-history-button');
+const clearHistoryConfirmation = document.querySelector('#clear-history-confirmation');
+const confirmClearHistoryButton = document.querySelector('#confirm-clear-history');
 let pendingAnnouncement = null;
+
+function updatePriorityAppearance() {
+  announcementPriority.dataset.priority = announcementPriority.value;
+}
+
+announcementPriority.addEventListener('change', updatePriorityAppearance);
+updatePriorityAppearance();
+
+function showPage(page) {
+  const showEmergency = page === 'emergency';
+  emergencyPage.hidden = !showEmergency;
+  notificationsPage.hidden = showEmergency;
+  pageTitle.textContent = showEmergency ? 'Emergency Map' : 'Notifications';
+
+  pageNavigationButtons.forEach((button) => {
+    const selected = button.dataset.page === page;
+    button.classList.toggle('selected', selected);
+    if (selected) button.setAttribute('aria-current', 'page');
+    else button.removeAttribute('aria-current');
+  });
+
+  if (showEmergency) {
+    requestAnimationFrame(() => map.invalidateSize());
+  }
+}
+
+pageNavigationButtons.forEach((button) => {
+  button.addEventListener('click', () => showPage(button.dataset.page));
+});
 
 const presets = {
   rain: {
@@ -123,6 +159,7 @@ document.querySelectorAll('[data-preset]').forEach((button) => {
     announcementBody.value = preset.message;
     announcementType.value = preset.type;
     announcementPriority.value = preset.priority;
+    updatePriorityAppearance();
     announcementTitle.focus();
   });
 });
@@ -155,6 +192,7 @@ confirmSendAnnouncement.addEventListener('click', async () => {
     });
     announcementConfirmation.close();
     announcementForm.reset();
+    updatePriorityAppearance();
     pendingAnnouncement = null;
     showAnnouncementMessage('Notification sent successfully.');
   } catch (error) {
@@ -162,6 +200,34 @@ confirmSendAnnouncement.addEventListener('click', async () => {
     showAnnouncementMessage(`Could not send notification: ${error.message}`, true);
   } finally {
     confirmSendAnnouncement.disabled = false;
+  }
+});
+
+clearHistoryButton.addEventListener('click', () => {
+  if (!database) {
+    showAnnouncementMessage('Cannot clear history while Firebase is unavailable.', true);
+    return;
+  }
+  clearHistoryConfirmation.showModal();
+});
+
+document.querySelector('#cancel-clear-history').addEventListener('click', () => {
+  clearHistoryConfirmation.close();
+});
+
+confirmClearHistoryButton.addEventListener('click', async () => {
+  if (!database) return;
+  confirmClearHistoryButton.disabled = true;
+  try {
+    await remove(ref(database, 'announcements'));
+    renderAnnouncements(null);
+    clearHistoryConfirmation.close();
+    showAnnouncementMessage('Announcement history cleared.');
+  } catch (error) {
+    clearHistoryConfirmation.close();
+    showAnnouncementMessage(`Could not clear announcement history: ${error.message}`, true);
+  } finally {
+    confirmClearHistoryButton.disabled = false;
   }
 });
 

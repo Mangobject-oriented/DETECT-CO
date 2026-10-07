@@ -174,6 +174,7 @@ Future<void> showLocalNotification({
         channelId,
         channelName,
         channelDescription: channelDescription,
+        icon: 'ic_stat_detect_co',
         importance: Importance.max,
         priority: Priority.high,
         playSound: true,

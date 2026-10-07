@@ -3,22 +3,35 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#102b46" />
+    <meta name="theme-color" content="#212121" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
     <title>DETECT-CO Barangay Emergency Monitor</title>
   </head>
   <body>
     <div id="app">
       <header class="topbar">
-        <div>
-          <p class="eyebrow">DETECT-CO · BARANGAY RESPONSE</p>
-          <h1>Emergency location monitor</h1>
+        <div class="brand-block">
+          <img class="brand-logo" src="/detect-co-logo.png" alt="DETECT-CO logo" />
+          <div>
+          <p class="eyebrow">DETECT-CO · BARANGAY ADMIN</p>
+          <h1 id="page-title">Emergency Map</h1>
+          </div>
         </div>
+        <nav class="page-navigation" aria-label="Admin pages">
+          <button class="page-nav-button selected" type="button" data-page="emergency" aria-current="page">
+            <span aria-hidden="true">🗺️</span> Emergency Map
+          </button>
+          <button class="page-nav-button" type="button" data-page="notifications">
+            <span aria-hidden="true">🔔</span> Notifications
+          </button>
+        </nav>
         <div id="connection-state" class="connection-state connecting" role="status">
           Connecting...
         </div>
       </header>
 
       <main>
+        <section id="emergency-page" class="page-section" aria-label="Emergency Map">
         <section class="summary-row" aria-label="Emergency summary">
           <div id="summary-card" class="summary-card normal">
             <span class="summary-label">ACTIVE EMERGENCIES:</span>
@@ -68,7 +81,9 @@
           </div>
           <dl id="details-grid" class="details-grid"></dl>
         </section>
+        </section>
 
+        <section id="notifications-page" class="page-section" aria-label="Notifications" hidden>
         <section class="announcements panel" aria-label="Announcements">
           <div class="panel-heading">
             <div>
@@ -93,9 +108,28 @@
               <button id="send-announcement" class="send-announcement" type="submit">Send Notification</button>
             </div>
           </form>
-          <div class="recent-heading"><h2>Recently sent</h2><span id="announcement-caption">Loading…</span></div>
+          <div class="recent-heading">
+            <h2>Recently sent</h2>
+            <div class="recent-actions">
+              <span id="announcement-caption">Loading…</span>
+              <button id="clear-history-button" class="clear-history-button" type="button">
+                Clear History
+              </button>
+            </div>
+          </div>
           <div id="announcement-list" class="announcement-list" aria-live="polite"></div>
         </section>
+
+        <dialog id="clear-history-confirmation" class="confirmation-dialog">
+          <div>
+            <h2>Clear announcement history?</h2>
+            <p>This permanently removes all records under <code>/announcements</code>. Emergency sessions and other Firebase data will not be changed.</p>
+            <div class="announcement-options">
+              <button id="cancel-clear-history" class="quiet-button" type="button">Cancel</button>
+              <button id="confirm-clear-history" class="clear-history-confirm" type="button">Clear History</button>
+            </div>
+          </div>
+        </dialog>
 
         <dialog id="announcement-confirmation" class="confirmation-dialog">
           <div>
@@ -107,6 +141,7 @@
             </div>
           </div>
         </dialog>
+        </section>
       </main>
 
       <footer>
