@@ -18,8 +18,11 @@ flutter_native_splash:
     icon_background_color: "#ffffff"
 
 dependencies:
+  connectivity_plus: ^6.0.5
   flutter:
     sdk: flutter
+
+
 
   # Icons and SVG support
   cupertino_icons: ^1.0.8

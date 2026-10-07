@@ -1,11 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:math' as math;
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart';
+
+// Offline tile cache + connectivity (new)
+import 'package:path_provider/path_provider.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 // Firebase Realtime Database
 import 'package:firebase_database/firebase_database.dart';
@@ -190,6 +200,859 @@ class _EvacCandidate {
   });
 }
 
+// =====================================================
+// OFFLINE TILE CACHE (NEW)
+//
+// A tiny disk cache that sits behind the existing
+// OpenStreetMap TileLayer:
+//   * a tile already on disk is read from disk (no network)
+//   * otherwise it is downloaded once, shown, and saved
+//   * when the device is offline an uncached tile simply
+//     fails (the existing tile-error handler shows one
+//     gentle message) and the rest of the map keeps working
+//
+// No extra map package is needed, so the existing
+// flutter_map setup is untouched.
+// =====================================================
+
+class _TileUnavailable implements Exception {
+  const _TileUnavailable();
+
+  @override
+  String toString() => 'Tile not cached and device is offline';
+}
+
+class _CachedFileInfo {
+  final File file;
+  final int size;
+  final DateTime modified;
+
+  const _CachedFileInfo(this.file, this.size, this.modified);
+}
+
+class _OfflineTileProvider extends TileProvider {
+  _OfflineTileProvider();
+
+  // Set once the cache folder is ready. Until then tiles
+  // simply load from the network without being saved.
+  String? cachePath;
+
+  // Updated from the connectivity listener. While true,
+  // uncached tiles fail immediately instead of waiting for
+  // a network timeout.
+  bool offline = false;
+
+  final http.Client _client = http.Client();
+
+  Map<String, String> get _requestHeaders {
+    final Map<String, String> h = Map<String, String>.from(headers);
+    h.putIfAbsent('User-Agent', () => 'flutter_map (com.detectco.app)');
+    return h;
+  }
+
+  File? fileFor(int z, int x, int y) {
+    final String? p = cachePath;
+    if (p == null) return null;
+    return File('$p/${z}_${x}_$y.png');
+  }
+
+  @override
+  ImageProvider getImage(TileCoordinates coordinates, TileLayer options) {
+    return _CachedTileImage(
+      url: getTileUrl(coordinates, options),
+      file: fileFor(coordinates.z, coordinates.x, coordinates.y),
+      provider: this,
+    );
+  }
+
+  Future<Uint8List> download(String url, File? file) async {
+    final http.Response resp = await _client
+        .get(Uri.parse(url), headers: _requestHeaders)
+        .timeout(const Duration(seconds: 15));
+
+    final String contentType = resp.headers['content-type'] ?? '';
+
+    if (resp.statusCode != 200 ||
+        resp.bodyBytes.isEmpty ||
+        !contentType.startsWith('image')) {
+      throw HttpException('Tile request failed (${resp.statusCode})');
+    }
+
+    final Uint8List bytes = resp.bodyBytes;
+
+    if (file != null) {
+      await _store(file, bytes);
+    }
+
+    return bytes;
+  }
+
+  Future<void> _store(File file, Uint8List bytes) async {
+    final File tmp = File(
+      '${file.path}.${DateTime.now().microsecondsSinceEpoch}.tmp',
+    );
+
+    try {
+      await tmp.writeAsBytes(bytes, flush: true);
+      await tmp.rename(file.path);
+    } catch (e) {
+      debugPrint('Tile cache write error: $e');
+      try {
+        if (await tmp.exists()) await tmp.delete();
+      } catch (_) {}
+    }
+  }
+
+  // Used by the one-time prefetch. Never throws; returns true
+  // when the tile is on disk afterwards.
+  Future<bool> ensureTile(int z, int x, int y) async {
+    final File? f = fileFor(z, x, y);
+    if (f == null) return false;
+
+    try {
+      if (await f.exists()) return true;
+
+      await download('https://tile.openstreetmap.org/$z/$x/$y.png', f);
+      return true;
+    } catch (e) {
+      debugPrint('Tile prefetch error: $e');
+      return false;
+    }
+  }
+
+  // Keeps the on-demand high-zoom tiles (z17) from growing
+  // without limit. The prefetched area (z12-16) is never
+  // touched.
+  Future<void> trimDetailTiles({
+    int maxBytes = 60 * 1024 * 1024,
+    int targetBytes = 40 * 1024 * 1024,
+  }) async {
+    final String? p = cachePath;
+    if (p == null) return;
+
+    try {
+      final List<_CachedFileInfo> detail = [];
+      int total = 0;
+
+      await for (final FileSystemEntity e in Directory(p).list()) {
+        if (e is! File) continue;
+
+        final String name = e.uri.pathSegments.last;
+        if (!name.startsWith('17_') || !name.endsWith('.png')) continue;
+
+        final FileStat stat = await e.stat();
+        detail.add(_CachedFileInfo(e, stat.size, stat.modified));
+        total += stat.size;
+      }
+
+      if (total <= maxBytes) return;
+
+      detail.sort((a, b) => a.modified.compareTo(b.modified));
+
+      for (final info in detail) {
+        if (total <= targetBytes) break;
+
+        try {
+          await info.file.delete();
+          total -= info.size;
+        } catch (_) {}
+      }
+    } catch (e) {
+      debugPrint('Tile cache trim error: $e');
+    }
+  }
+
+  void close() {
+    _client.close();
+  }
+}
+
+class _CachedTileImage extends ImageProvider<_CachedTileImage> {
+  const _CachedTileImage({
+    required this.url,
+    required this.file,
+    required this.provider,
+  });
+
+  final String url;
+  final File? file;
+  final _OfflineTileProvider provider;
+
+  @override
+  Future<_CachedTileImage> obtainKey(ImageConfiguration configuration) {
+    return SynchronousFuture<_CachedTileImage>(this);
+  }
+
+  @override
+  ImageStreamCompleter loadImage(
+    _CachedTileImage key,
+    ImageDecoderCallback decode,
+  ) {
+    return MultiFrameImageStreamCompleter(
+      codec: _load(decode),
+      scale: 1.0,
+      debugLabel: url,
+    );
+  }
+
+  Future<ui.Codec> _load(ImageDecoderCallback decode) async {
+    final File? f = file;
+
+    // 1) Disk first.
+    if (f != null) {
+      try {
+        if (await f.exists()) {
+          final Uint8List bytes = await f.readAsBytes();
+
+          if (bytes.isNotEmpty) {
+            try {
+              return await decode(
+                await ui.ImmutableBuffer.fromUint8List(bytes),
+              );
+            } catch (_) {
+              // Corrupt cached file: drop it and fall back to network.
+              try {
+                await f.delete();
+              } catch (_) {}
+            }
+          }
+        }
+      } catch (_) {
+        // Fall through to the network.
+      }
+    }
+
+    // 2) Known offline and not cached: fail fast, no request.
+    if (provider.offline) {
+      throw const _TileUnavailable();
+    }
+
+    // 3) Network, then save to disk.
+    final Uint8List bytes = await provider.download(url, f);
+
+    return decode(await ui.ImmutableBuffer.fromUint8List(bytes));
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is _CachedTileImage && other.url == url;
+  }
+
+  @override
+  int get hashCode => url.hashCode;
+}
+
+// =====================================================
+// WEATHER VISUAL MODEL (NEW)
+//
+// Open-Meteo "weather_code" (WMO) values are mapped to a
+// small set of effects. Unknown codes show no effect.
+// =====================================================
+
+enum _WxKind {
+  none,
+  clear,
+  partly,
+  cloudy,
+  fog,
+  drizzle,
+  rain,
+  thunder,
+  snow,
+}
+
+@immutable
+class _WxVisual {
+  final _WxKind kind;
+
+  // 1 = light, 2 = moderate, 3 = heavy
+  final int level;
+  final bool isDay;
+
+  const _WxVisual(this.kind, this.level, this.isDay);
+
+  static const _WxVisual none = _WxVisual(_WxKind.none, 1, true);
+
+  @override
+  bool operator ==(Object other) {
+    return other is _WxVisual &&
+        other.kind == kind &&
+        other.level == level &&
+        other.isDay == isDay;
+  }
+
+  @override
+  int get hashCode => Object.hash(kind, level, isDay);
+}
+
+_WxVisual _visualForCode(int code, bool isDay) {
+  switch (code) {
+    case 0:
+      // Clear sky: sunlight only makes sense in daytime.
+      return isDay ? _WxVisual(_WxKind.clear, 2, isDay) : _WxVisual.none;
+    case 1:
+      return isDay ? _WxVisual(_WxKind.clear, 1, isDay) : _WxVisual.none;
+    case 2:
+      return _WxVisual(_WxKind.partly, 1, isDay);
+    case 3:
+      return _WxVisual(_WxKind.cloudy, 2, isDay);
+    case 45:
+    case 48:
+      return _WxVisual(_WxKind.fog, 1, isDay);
+    case 51:
+      return _WxVisual(_WxKind.drizzle, 1, isDay);
+    case 53:
+    case 56:
+    case 57:
+      return _WxVisual(_WxKind.drizzle, 2, isDay);
+    case 55:
+      return _WxVisual(_WxKind.drizzle, 3, isDay);
+    case 61:
+    case 80:
+      return _WxVisual(_WxKind.rain, 1, isDay);
+    case 63:
+    case 66:
+    case 81:
+      return _WxVisual(_WxKind.rain, 2, isDay);
+    case 65:
+    case 67:
+    case 82:
+      return _WxVisual(_WxKind.rain, 3, isDay);
+    case 71:
+    case 77:
+      return _WxVisual(_WxKind.snow, 1, isDay);
+    case 73:
+    case 85:
+      return _WxVisual(_WxKind.snow, 2, isDay);
+    case 75:
+    case 86:
+      return _WxVisual(_WxKind.snow, 3, isDay);
+    case 95:
+      return _WxVisual(_WxKind.thunder, 2, isDay);
+    case 96:
+    case 99:
+      return _WxVisual(_WxKind.thunder, 3, isDay);
+    default:
+      return _WxVisual.none;
+  }
+}
+
+bool _isOfflineResult(dynamic result) {
+  // connectivity_plus 6.x returns a List, 5.x a single value.
+  if (result is List) {
+    return result.isEmpty ||
+        result.every((e) => e == ConnectivityResult.none);
+  }
+  return result == ConnectivityResult.none;
+}
+
+// =====================================================
+// WEATHER OVERLAY WIDGET (NEW)
+//
+// One CustomPainter, a handful of reusable particles
+// (fixed arrays, no widgets), its own RepaintBoundary and
+// a throttled ticker (about 8-25 fps depending on effect).
+// Wrapped in IgnorePointer so it never touches gestures.
+// The ticker stops completely when there is no effect, and
+// Flutter mutes it automatically when the tab is not shown.
+// =====================================================
+
+class _WxClock extends ChangeNotifier {
+  double seconds = 0;
+
+  void tick(double s) {
+    seconds = s;
+    notifyListeners();
+  }
+}
+
+class _WeatherOverlay extends StatefulWidget {
+  const _WeatherOverlay({required this.visual});
+
+  final _WxVisual visual;
+
+  @override
+  State<_WeatherOverlay> createState() => _WeatherOverlayState();
+}
+
+class _WeatherOverlayState extends State<_WeatherOverlay>
+    with SingleTickerProviderStateMixin {
+  late final Ticker _ticker;
+  final _WxClock _clock = _WxClock();
+  late _WeatherPainter _painter;
+
+  Duration _lastTick = Duration.zero;
+  int _minMs = 120;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = createTicker(_onTick);
+    _setup();
+  }
+
+  @override
+  void didUpdateWidget(covariant _WeatherOverlay oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.visual != widget.visual) {
+      _setup();
+    }
+  }
+
+  void _setup() {
+    _painter = _WeatherPainter(widget.visual, _clock);
+
+    switch (widget.visual.kind) {
+      case _WxKind.rain:
+      case _WxKind.drizzle:
+      case _WxKind.thunder:
+        _minMs = 40;
+        break;
+      case _WxKind.snow:
+        _minMs = 50;
+        break;
+      default:
+        _minMs = 120;
+    }
+
+    _lastTick = Duration.zero;
+
+    if (widget.visual.kind == _WxKind.none) {
+      if (_ticker.isActive) _ticker.stop();
+    } else {
+      if (!_ticker.isActive) _ticker.start();
+    }
+  }
+
+  void _onTick(Duration elapsed) {
+    if ((elapsed - _lastTick).inMilliseconds < _minMs) return;
+
+    _lastTick = elapsed;
+    _clock.tick(elapsed.inMicroseconds / 1000000.0);
+  }
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    _clock.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.visual.kind == _WxKind.none) {
+      return const SizedBox.shrink();
+    }
+
+    return IgnorePointer(
+      child: SizedBox.expand(
+        child: RepaintBoundary(
+          child: CustomPaint(
+            painter: _painter,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WeatherPainter extends CustomPainter {
+  _WeatherPainter(this.visual, this._clock) : super(repaint: _clock) {
+    _buildParticles();
+  }
+
+  final _WxVisual visual;
+  final _WxClock _clock;
+
+  // Particle seeds (normalized 0..1), created once.
+  late final int _count;
+  late final Float32List _sx;
+  late final Float32List _sy;
+  late final Float32List _sp;
+  late final Float32List _sl;
+
+  // Reused drawing buffers (no per-frame allocation).
+  late final Float32List _buf;
+  late final Float32List _bufSmall;
+  late final Float32List _bufLarge;
+
+  Size _size = Size.zero;
+
+  Paint? _sunPaint;
+  Paint? _cloudPaint;
+  Paint? _fogPaint;
+
+  final Paint _fill = Paint();
+
+  final Paint _linePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round;
+
+  final Paint _dotPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round;
+
+  void _buildParticles() {
+    final int idx = math.max(0, math.min(2, visual.level - 1));
+
+    int n = 0;
+
+    switch (visual.kind) {
+      case _WxKind.rain:
+        n = const [38, 52, 68][idx];
+        break;
+      case _WxKind.thunder:
+        n = const [50, 64, 76][idx];
+        break;
+      case _WxKind.drizzle:
+        n = const [16, 22, 28][idx];
+        break;
+      case _WxKind.snow:
+        n = const [26, 38, 50][idx];
+        break;
+      default:
+        n = 0;
+    }
+
+    _count = n;
+
+    final math.Random rng = math.Random(11 + visual.kind.index);
+
+    _sx = Float32List(n);
+    _sy = Float32List(n);
+    _sp = Float32List(n);
+    _sl = Float32List(n);
+
+    for (int i = 0; i < n; i++) {
+      _sx[i] = rng.nextDouble();
+      _sy[i] = rng.nextDouble();
+      _sl[i] = rng.nextDouble();
+
+      switch (visual.kind) {
+        case _WxKind.drizzle:
+          _sp[i] = 0.45 + rng.nextDouble() * 0.2;
+          break;
+        case _WxKind.snow:
+          _sp[i] = 0.07 + rng.nextDouble() * 0.07;
+          break;
+        default:
+          _sp[i] = 0.40 + rng.nextDouble() * 0.25;
+      }
+    }
+
+    final bool snow = visual.kind == _WxKind.snow;
+    final int half = n ~/ 2;
+
+    _buf = Float32List(snow ? 0 : n * 4);
+    _bufSmall = Float32List(snow ? half * 2 : 0);
+    _bufLarge = Float32List(snow ? (n - half) * 2 : 0);
+  }
+
+  void _tint(Canvas canvas, Size size, Color color, double alpha) {
+    _fill.color = color.withOpacity(alpha.clamp(0.0, 1.0));
+    canvas.drawRect(Offset.zero & size, _fill);
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty) return;
+
+    if (size != _size) {
+      _size = size;
+      _sunPaint = null;
+      _cloudPaint = null;
+      _fogPaint = null;
+    }
+
+    final double t = _clock.seconds;
+
+    switch (visual.kind) {
+      case _WxKind.clear:
+        _paintSun(canvas, size, t, visual.level >= 2 ? 1.0 : 0.6);
+        break;
+
+      case _WxKind.partly:
+        if (visual.isDay) _paintSun(canvas, size, t, 0.45);
+        _paintClouds(canvas, size, t, 0.55, 2, 0.03);
+        break;
+
+      case _WxKind.cloudy:
+        _paintClouds(canvas, size, t, 0.85, 3, 0.07);
+        break;
+
+      case _WxKind.fog:
+        _paintFog(canvas, size, t);
+        break;
+
+      case _WxKind.drizzle:
+        _tint(canvas, size, const Color(0xFF78909C), 0.04);
+        _paintRain(
+          canvas,
+          size,
+          t,
+          alpha: 0.26 + 0.04 * (visual.level - 1),
+          width: 0.9,
+          minLen: 8,
+          maxLen: 13,
+        );
+        break;
+
+      case _WxKind.rain:
+        _tint(canvas, size, const Color(0xFF78909C), 0.06);
+        _paintRain(
+          canvas,
+          size,
+          t,
+          alpha: 0.34 + 0.04 * (visual.level - 1),
+          width: 1.3,
+          minLen: 14,
+          maxLen: 24,
+        );
+        break;
+
+      case _WxKind.thunder:
+        _tint(canvas, size, const Color(0xFF263238), 0.10);
+        _paintRain(
+          canvas,
+          size,
+          t,
+          alpha: 0.38,
+          width: 1.4,
+          minLen: 15,
+          maxLen: 26,
+        );
+
+        final double f = _flash(t);
+        if (f > 0) {
+          _fill.color = Color.fromRGBO(255, 255, 255, 0.20 * f);
+          canvas.drawRect(Offset.zero & size, _fill);
+        }
+        break;
+
+      case _WxKind.snow:
+        _paintSnow(canvas, size, t);
+        break;
+
+      case _WxKind.none:
+        break;
+    }
+  }
+
+  // ---------------------------------------------------
+  // SUN: soft warm glow from the top-right corner.
+  // ---------------------------------------------------
+
+  void _paintSun(Canvas canvas, Size size, double t, double strength) {
+    _tint(canvas, size, const Color(0xFFFFE9A8), 0.035 * strength);
+
+    _sunPaint ??= Paint()
+      ..shader = ui.Gradient.radial(
+        Offset(size.width * 0.88, size.height * 0.02),
+        size.width * 1.1,
+        const [Color(0x4DFFE08A), Color(0x00FFE08A)],
+        const [0.0, 1.0],
+      );
+
+    final double pulse = 0.82 + 0.18 * math.sin(t * 0.9);
+
+    _sunPaint!.color = Color.fromRGBO(
+      255,
+      255,
+      255,
+      (strength * pulse).clamp(0.0, 1.0),
+    );
+
+    canvas.drawRect(Offset.zero & size, _sunPaint!);
+  }
+
+  // ---------------------------------------------------
+  // CLOUDS: faint gray wash + a few slowly drifting
+  // soft blobs (cached radial gradient, no blur filter).
+  // ---------------------------------------------------
+
+  void _paintClouds(
+    Canvas canvas,
+    Size size,
+    double t,
+    double rel,
+    int count,
+    double tintAlpha,
+  ) {
+    _tint(canvas, size, const Color(0xFF78909C), tintAlpha);
+
+    final double r = size.width * 0.42;
+
+    _cloudPaint ??= Paint()
+      ..shader = ui.Gradient.radial(
+        Offset.zero,
+        r,
+        const [Color(0x7390A4AE), Color(0x0090A4AE)],
+        const [0.0, 1.0],
+      );
+
+    _cloudPaint!.color = Color.fromRGBO(
+      255,
+      255,
+      255,
+      rel.clamp(0.0, 1.0),
+    );
+
+    final double span = size.width + 2 * r;
+
+    for (int i = 0; i < count; i++) {
+      final double x =
+          ((i * 0.41 + t * (0.006 + 0.002 * i)) % 1.0) * span - r;
+      final double y = size.height * (0.16 + 0.30 * i);
+
+      canvas.save();
+      canvas.translate(x, y);
+      canvas.scale(1.0, 0.42);
+      canvas.drawCircle(Offset.zero, r, _cloudPaint!);
+      canvas.restore();
+    }
+  }
+
+  // ---------------------------------------------------
+  // FOG: thin white wash + three slowly sliding bands.
+  // ---------------------------------------------------
+
+  void _paintFog(Canvas canvas, Size size, double t) {
+    _tint(canvas, size, const Color(0xFFFFFFFF), 0.10);
+
+    final double bandH = size.height * 0.34;
+
+    _fogPaint ??= Paint()
+      ..shader = ui.Gradient.linear(
+        Offset.zero,
+        Offset(0, bandH),
+        const [Color(0x00FFFFFF), Color(0x44FFFFFF), Color(0x00FFFFFF)],
+        const [0.0, 0.5, 1.0],
+      );
+
+    for (int i = 0; i < 3; i++) {
+      final double dx =
+          math.sin(t * 0.07 + i * 2.1) * size.width * 0.10;
+      final double y = size.height * (0.02 + 0.32 * i);
+
+      canvas.save();
+      canvas.translate(dx, y);
+      canvas.drawRect(
+        Rect.fromLTWH(-size.width * 0.15, 0, size.width * 1.3, bandH),
+        _fogPaint!,
+      );
+      canvas.restore();
+    }
+  }
+
+  // ---------------------------------------------------
+  // RAIN: every streak goes into one reusable buffer and is
+  // drawn with a single drawRawPoints call.
+  // ---------------------------------------------------
+
+  void _paintRain(
+    Canvas canvas,
+    Size size,
+    double t, {
+    required double alpha,
+    required double width,
+    required double minLen,
+    required double maxLen,
+  }) {
+    final double w = size.width;
+    final double h = size.height;
+
+    const double slant = 0.18;
+
+    for (int i = 0; i < _count; i++) {
+      final double len = minLen + (maxLen - minLen) * _sl[i];
+      final double fy = (_sy[i] + t * _sp[i]) % 1.0;
+      final double y = fy * (h + len) - len;
+      final double x = (_sx[i] * 1.3 - 0.3) * w + y * slant;
+
+      final int o = i * 4;
+      _buf[o] = x;
+      _buf[o + 1] = y;
+      _buf[o + 2] = x + len * slant;
+      _buf[o + 3] = y + len;
+    }
+
+    _linePaint
+      ..strokeWidth = width
+      ..color = const Color(0xFF546E7A).withOpacity(alpha.clamp(0.0, 1.0));
+
+    canvas.drawRawPoints(ui.PointMode.lines, _buf, _linePaint);
+  }
+
+  // ---------------------------------------------------
+  // LIGHTNING: at most one short double-flash every ~17 s,
+  // soft (max 20% white), never rapid.
+  // ---------------------------------------------------
+
+  double _flash(double t) {
+    const double cycle = 17.0;
+
+    final int n = (t / cycle).floor();
+    final double offset = 2.0 + ((n * 7919) % 100) / 100.0 * 11.0;
+    final double p = t - n * cycle - offset;
+
+    if (p < 0 || p > 0.6) return 0;
+
+    double tri(double x, double c, double w) {
+      final double d = (x - c).abs();
+      return d >= w ? 0 : 1 - d / w;
+    }
+
+    return math.max(tri(p, 0.06, 0.06), 0.55 * tri(p, 0.30, 0.10));
+  }
+
+  // ---------------------------------------------------
+  // SNOW: two flake sizes, each drawn in one call, with a
+  // faint outline so white flakes stay visible on the map.
+  // ---------------------------------------------------
+
+  void _paintSnow(Canvas canvas, Size size, double t) {
+    _tint(canvas, size, const Color(0xFF90A4AE), 0.04);
+
+    final double w = size.width;
+    final double h = size.height;
+    final int half = _count ~/ 2;
+
+    for (int i = 0; i < _count; i++) {
+      final double fy = (_sy[i] + t * _sp[i]) % 1.0;
+      final double y = fy * (h + 10) - 5;
+      final double x =
+          _sx[i] * w + math.sin(t * 0.7 + _sl[i] * 6.283) * 10;
+
+      if (i < half) {
+        _bufSmall[i * 2] = x;
+        _bufSmall[i * 2 + 1] = y;
+      } else {
+        final int j = i - half;
+        _bufLarge[j * 2] = x;
+        _bufLarge[j * 2 + 1] = y;
+      }
+    }
+
+    _dotPaint.color = const Color(0x40607D8B);
+    _dotPaint.strokeWidth = 4.4;
+    canvas.drawRawPoints(ui.PointMode.points, _bufSmall, _dotPaint);
+    _dotPaint.strokeWidth = 6.0;
+    canvas.drawRawPoints(ui.PointMode.points, _bufLarge, _dotPaint);
+
+    _dotPaint.color = const Color(0xE6FFFFFF);
+    _dotPaint.strokeWidth = 2.6;
+    canvas.drawRawPoints(ui.PointMode.points, _bufSmall, _dotPaint);
+    _dotPaint.strokeWidth = 4.0;
+    canvas.drawRawPoints(ui.PointMode.points, _bufLarge, _dotPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _WeatherPainter oldDelegate) {
+    return oldDelegate.visual != visual;
+  }
+}
+
 class _MapTabState extends State<MapTab> {
   final mapController = MapController();
 
@@ -220,6 +1083,9 @@ class _MapTabState extends State<MapTab> {
   // markers near the northern edge can be panned clear of
   // them.
   // =====================================================
+    // TEMP DEBUG: set to a WMO code (e.g. 63 = rain, 95 = thunder, 45 = fog)
+  // to force an effect. Set back to null when done.
+  static const int? _debugForceCode = 63;
 
   static const double _boundsPadNorth = 0.010; // ~1.1 km
   static const double _boundsPadOther = 0.004; // ~0.45 km
@@ -284,6 +1150,33 @@ class _MapTabState extends State<MapTab> {
   String? _lastMessage;
   DateTime? _lastMessageAt;
   DateTime? _lastTileErrorAt;
+
+  // =====================================================
+  // OFFLINE MAP + WEATHER STATE (NEW)
+  // =====================================================
+
+  // Zoom range cached ahead of time for the DETECT-CO area.
+  // z12-16 is roughly 1,000 tiles (about 10-20 MB). Zoom 17 is
+  // saved only for places the user actually views, and is
+  // trimmed if it grows large. Deeper zoom reuses z17 tiles.
+  static const int _prefetchMinZoom = 12;
+  static const int _prefetchMaxZoom = 16;
+  static const int _tileMaxNativeZoom = 17;
+
+  // Weather is refreshed rarely and never while offline.
+  static const Duration _weatherRefreshEvery = Duration(minutes: 20);
+  static const Duration _weatherMaxCachedAge = Duration(hours: 6);
+
+  final _OfflineTileProvider _tileProvider = _OfflineTileProvider();
+
+  bool _offline = false;
+  bool _prefetching = false;
+  bool _fetchingWeather = false;
+
+  _WxVisual _weatherVisual = _WxVisual.none;
+
+  Timer? _weatherTimer;
+  StreamSubscription<dynamic>? _connectivitySub;
 
   // =====================================================
   // LIGHTWEIGHT "GLASS" SURFACE FOR FLOATING CONTROLS
@@ -384,10 +1277,290 @@ class _MapTabState extends State<MapTab> {
 
     debugPrint('Map tile error: $error');
 
+    if (_offline) {
+      _showMessage(
+        'You are offline. This part of the map has not been saved '
+        'for offline use. Places and search still work.',
+      );
+      return;
+    }
+
     _showMessage(
       'Map tiles could not be loaded. Check your internet '
       'connection. Places and search still work.',
     );
+  }
+
+  // =====================================================
+  // OFFLINE SUPPORT SETUP (NEW)
+  //
+  // Prepares the tile cache folder, restores the last known
+  // weather, starts watching connectivity and, when online,
+  // refreshes the weather and fills the cache for the
+  // DETECT-CO area once.
+  // =====================================================
+
+  void _setOffline(bool value) {
+    _offline = value;
+    _tileProvider.offline = value;
+  }
+
+  Future<void> _initOfflineSupport() async {
+    try {
+      final Directory base = await getApplicationSupportDirectory();
+      final Directory dir = Directory('${base.path}/detectco_map_cache');
+
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      }
+
+      _tileProvider.cachePath = dir.path;
+    } catch (e) {
+      // Map still works online without a disk cache.
+      debugPrint('Tile cache folder error: $e');
+    }
+
+    if (!mounted) return;
+
+    await _loadSavedWeather();
+
+    try {
+      final dynamic result = await Connectivity().checkConnectivity();
+      _setOffline(_isOfflineResult(result));
+    } catch (e) {
+      debugPrint('Connectivity check error: $e');
+    }
+
+    if (!mounted) return;
+
+    try {
+      _connectivitySub =
+          Connectivity().onConnectivityChanged.listen((dynamic result) {
+        final bool wasOffline = _offline;
+        final bool nowOffline = _isOfflineResult(result);
+
+        _setOffline(nowOffline);
+
+        // Only react when we actually come back online.
+        if (!nowOffline && wasOffline) {
+          _refreshWeather();
+          _schedulePrefetch();
+        }
+      });
+    } catch (e) {
+      debugPrint('Connectivity listener error: $e');
+    }
+
+    _weatherTimer = Timer.periodic(_weatherRefreshEvery, (_) {
+      _refreshWeather();
+    });
+
+    if (!_offline) {
+      _refreshWeather();
+      _schedulePrefetch();
+    }
+
+    _tileProvider.trimDetailTiles();
+  }
+
+  // =====================================================
+  // WEATHER (NEW)
+  //
+  // One small Open-Meteo request for the map center. It is
+  // skipped while offline, and the last good result is kept
+  // (in memory and in a tiny file) so the effect keeps
+  // showing offline.
+  // =====================================================
+
+  Future<void> _loadSavedWeather() async {
+    final String? root = _tileProvider.cachePath;
+    if (root == null) return;
+
+    try {
+      final File f = File('$root/weather.json');
+      if (!await f.exists()) return;
+
+      final dynamic data = jsonDecode(await f.readAsString());
+
+      final DateTime saved = DateTime.fromMillisecondsSinceEpoch(
+        (data['ts'] as num).toInt(),
+      );
+
+      if (DateTime.now().difference(saved) > _weatherMaxCachedAge) {
+        return;
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _weatherVisual = _visualForCode(
+          (data['code'] as num).toInt(),
+          data['isDay'] == true,
+        );
+      });
+    } catch (e) {
+      debugPrint('Saved weather read error: $e');
+    }
+  }
+
+  Future<void> _saveWeather(int code, bool isDay) async {
+    final String? root = _tileProvider.cachePath;
+    if (root == null) return;
+
+    try {
+      await File('$root/weather.json').writeAsString(
+        jsonEncode({
+          'code': code,
+          'isDay': isDay,
+          'ts': DateTime.now().millisecondsSinceEpoch,
+        }),
+      );
+    } catch (e) {
+      debugPrint('Weather save error: $e');
+    }
+  }
+
+  Future<void> _refreshWeather() async {
+    if (!mounted || _offline || _fetchingWeather) return;
+
+    _fetchingWeather = true;
+
+    try {
+      final Uri uri = Uri.parse(
+        'https://api.open-meteo.com/v1/forecast'
+        '?latitude=${calambaCenter.latitude.toStringAsFixed(4)}'
+        '&longitude=${calambaCenter.longitude.toStringAsFixed(4)}'
+        '&current=weather_code,is_day'
+        '&timezone=auto',
+      );
+
+      final http.Response response =
+          await http.get(uri).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode != 200) {
+        throw HttpException('Weather status ${response.statusCode}');
+      }
+
+      final dynamic data = jsonDecode(response.body);
+      final dynamic current = data['current'];
+
+      final int code = (current['weather_code'] as num).toInt();
+      final bool isDay = ((current['is_day'] as num?)?.toInt() ?? 1) == 1;
+
+      _saveWeather(code, isDay);
+
+      if (!mounted) return;
+
+      debugPrint('Weather code=$code isDay=$isDay');
+
+      final _WxVisual next = _visualForCode(_debugForceCode ?? code, true);
+
+      if (next != _weatherVisual) {
+        setState(() {
+          _weatherVisual = next;
+        });
+      }
+    } catch (e) {
+      // Keep the last known weather. The next attempt is the
+      // periodic timer or the next time the connection returns.
+      debugPrint('Weather fetch error: $e');
+    } finally {
+      _fetchingWeather = false;
+    }
+  }
+
+  // =====================================================
+  // ONE-TIME TILE PREFETCH FOR THE DETECT-CO AREA (NEW)
+  //
+  // Only the original swCorner/neCorner area, zoom 12-16,
+  // two tiles at a time with a short pause. Already-saved
+  // tiles are skipped, so it resumes after interruptions and
+  // is marked done once everything is on disk.
+  // =====================================================
+
+  int _lonToTileX(double lon, int z) {
+    return ((lon + 180.0) / 360.0 * (1 << z)).floor();
+  }
+
+  int _latToTileY(double lat, int z) {
+    final double r = lat * math.pi / 180.0;
+
+    return ((1.0 - math.log(math.tan(r) + 1.0 / math.cos(r)) / math.pi) /
+            2.0 *
+            (1 << z))
+        .floor();
+  }
+
+  List<List<int>> _tilesToPrefetch() {
+    final List<List<int>> tiles = [];
+
+    for (int z = _prefetchMinZoom; z <= _prefetchMaxZoom; z++) {
+      final int xMin = _lonToTileX(swCorner.longitude, z);
+      final int xMax = _lonToTileX(neCorner.longitude, z);
+      final int yMin = _latToTileY(neCorner.latitude, z);
+      final int yMax = _latToTileY(swCorner.latitude, z);
+
+      for (int x = xMin; x <= xMax; x++) {
+        for (int y = yMin; y <= yMax; y++) {
+          tiles.add([z, x, y]);
+        }
+      }
+    }
+
+    return tiles;
+  }
+
+  void _schedulePrefetch() {
+    Future.delayed(const Duration(seconds: 5), _prefetchTiles);
+  }
+
+  Future<void> _prefetchTiles() async {
+    if (!mounted || _prefetching || _offline) return;
+
+    final String? root = _tileProvider.cachePath;
+    if (root == null) return;
+
+    final File marker = File('$root/prefetch_v1.done');
+
+    try {
+      if (await marker.exists()) return;
+    } catch (_) {
+      return;
+    }
+
+    _prefetching = true;
+
+    try {
+      final List<List<int>> tiles = _tilesToPrefetch();
+
+      int failures = 0;
+
+      for (int i = 0; i < tiles.length; i += 2) {
+        if (!mounted || _offline) return;
+
+        final List<bool> results = await Future.wait(
+          tiles.skip(i).take(2).map(
+                (t) => _tileProvider.ensureTile(t[0], t[1], t[2]),
+              ),
+        );
+
+        failures += results.where((ok) => !ok).length;
+
+        // Give up for now; it resumes on the next app start or
+        // when the connection returns.
+        if (failures >= 5) return;
+
+        await Future.delayed(const Duration(milliseconds: 250));
+      }
+
+      if (failures == 0) {
+        await marker.writeAsString('ok');
+      }
+    } catch (e) {
+      debugPrint('Tile prefetch error: $e');
+    } finally {
+      _prefetching = false;
+    }
   }
 
   // =====================================================
@@ -570,6 +1743,9 @@ class _MapTabState extends State<MapTab> {
     _loadMapPlaces();
     _listenForEvacStatus();
 
+    // Offline tile cache + last-known weather + connectivity.
+    _initOfflineSupport();
+
     _firebaseSub = dbRef.onValue.listen(
       (event) {
         final data =
@@ -634,6 +1810,9 @@ class _MapTabState extends State<MapTab> {
     _firebaseSub.cancel();
     _statusSub?.cancel();
     _positionStream?.cancel();
+    _connectivitySub?.cancel();
+    _weatherTimer?.cancel();
+    _tileProvider.close();
     _searchController.dispose();
     super.dispose();
   }
@@ -2225,6 +3404,11 @@ class _MapTabState extends State<MapTab> {
                       children: [
                         // =================================================
                         // OPENSTREETMAP TILES
+                        //
+                        // Same OSM source as before, now read through the
+                        // small disk cache so visited/prefetched tiles keep
+                        // working offline. Zoom levels above 17 reuse the
+                        // cached z17 tiles instead of requesting new ones.
                         // =================================================
 
                         TileLayer(
@@ -2232,8 +3416,21 @@ class _MapTabState extends State<MapTab> {
                               'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                           userAgentPackageName:
                               'com.detectco.app',
+                          tileProvider: _tileProvider,
+                          maxNativeZoom: _tileMaxNativeZoom,
                           errorTileCallback: _onTileError,
                         ),
+
+                        // =================================================
+                        // WEATHER EFFECT (NEW)
+                        //
+                        // Sits above the tiles but below flood circles,
+                        // route and markers. IgnorePointer + its own
+                        // RepaintBoundary: it never blocks gestures and
+                        // never repaints the map.
+                        // =================================================
+
+                        _WeatherOverlay(visual: _weatherVisual),
 
                         // =================================================
                         // FLOOD ZONES (toggled by the "Flood Areas" filter)
