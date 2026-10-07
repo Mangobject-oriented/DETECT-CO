@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#102b46" />
+    <title>DETECT-CO Barangay Emergency Monitor</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">DETECT-CO · BARANGAY RESPONSE</p>
+          <h1>Emergency location monitor</h1>
+        </div>
+        <div id="connection-state" class="connection-state connecting" role="status">
+          Connecting...
+        </div>
+      </header>
+
+      <main>
+        <section class="summary-row" aria-label="Emergency summary">
+          <div id="summary-card" class="summary-card normal">
+            <span class="summary-label">ACTIVE EMERGENCIES:</span>
+            <strong id="active-count">—</strong>
+          </div>
+          <p id="dashboard-status" class="dashboard-status normal" role="status">
+            Waiting for emergency session data…
+          </p>
+          <p class="privacy-note">
+            Location details are sensitive. Keep this monitor on an authorized,
+            private device.
+          </p>
+        </section>
+
+        <section class="dashboard" aria-label="Active emergency locations">
+          <div class="map-panel panel">
+            <div class="panel-heading">
+              <div>
+                <h2>Live map</h2>
+                <p>Markers update automatically as GPS reports arrive.</p>
+              </div>
+            </div>
+            <div id="map" aria-label="Map of active emergency sessions"></div>
+          </div>
+
+          <aside class="list-panel panel">
+            <div class="panel-heading">
+              <div>
+                <h2>Active emergencies</h2>
+                <p id="list-caption">Waiting for session data…</p>
+              </div>
+            </div>
+            <div id="message" class="message" role="status" hidden></div>
+            <div id="emergency-list" class="emergency-list" aria-live="polite"></div>
+          </aside>
+        </section>
+
+        <section id="details" class="details-panel panel" hidden>
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">SELECTED SESSION</p>
+              <h2 id="details-title">Emergency details</h2>
+            </div>
+            <button id="close-details" class="quiet-button" type="button">
+              Close
+            </button>
+          </div>
+          <dl id="details-grid" class="details-grid"></dl>
+        </section>
+
+        <section class="announcements panel" aria-label="Announcements">
+          <div class="panel-heading">
+            <div>
+              <h2>Announcements</h2>
+              <p>Send a one-way notification to DETECT-CO users.</p>
+            </div>
+          </div>
+          <div id="announcement-message" class="message" role="status" hidden></div>
+          <div class="preset-buttons" aria-label="Notification presets">
+            <button type="button" data-preset="rain">🌧️ Heavy Rainfall Warning</button>
+            <button type="button" data-preset="flood">🌊 Flood Warning</button>
+            <button type="button" data-preset="evacuation">🚨 Evacuation Notice</button>
+            <button type="button" data-preset="advisory">📢 General Advisory</button>
+            <button type="button" data-preset="classes">🏫 Class Suspension</button>
+          </div>
+          <form id="announcement-form" class="announcement-form">
+            <label>Title<input id="announcement-title" name="title" maxlength="120" required /></label>
+            <label>Message<textarea id="announcement-body" name="message" rows="4" maxlength="1000" required></textarea></label>
+            <div class="announcement-options">
+              <label>Type<select id="announcement-type" name="type"><option value="announcement">Announcement</option><option value="alert">Alert</option></select></label>
+              <label>Priority<select id="announcement-priority" name="priority"><option value="normal">Normal</option><option value="important">Important</option><option value="emergency">Emergency</option></select></label>
+              <button id="send-announcement" class="send-announcement" type="submit">Send Notification</button>
+            </div>
+          </form>
+          <div class="recent-heading"><h2>Recently sent</h2><span id="announcement-caption">Loading…</span></div>
+          <div id="announcement-list" class="announcement-list" aria-live="polite"></div>
+        </section>
+
+        <dialog id="announcement-confirmation" class="confirmation-dialog">
+          <div>
+            <h2>Confirm notification</h2>
+            <p>Send this notification to DETECT-CO users?</p>
+            <div class="announcement-options">
+              <button id="cancel-send-announcement" class="quiet-button" type="button">Cancel</button>
+              <button id="confirm-send-announcement" class="send-announcement" type="button">Send</button>
+            </div>
+          </div>
+        </dialog>
+      </main>
+
+      <footer>
+        Map tiles © OpenStreetMap contributors. This page only displays live
+        emergency sessions and sends one-way announcements; it does not dispatch responders.
+      </footer>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

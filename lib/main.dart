@@ -243,7 +243,8 @@ Future<void> firebaseMessagingBackgroundHandler(
 
   await NotificationStorage.saveNotification(
     AppNotification(
-      id: message.messageId ??
+      id: message.data['announcementId']?.toString() ??
+          message.messageId ??
           DateTime.now()
               .millisecondsSinceEpoch
               .toString(),
@@ -458,7 +459,8 @@ Future<void> initializeFirebaseMessagingServices() async {
 
       await NotificationStorage.saveNotification(
         AppNotification(
-          id: message.messageId ??
+          id: message.data['announcementId']?.toString() ??
+              message.messageId ??
               DateTime.now()
                   .millisecondsSinceEpoch
                   .toString(),

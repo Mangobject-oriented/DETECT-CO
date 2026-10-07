@@ -1,84 +1,40 @@
-const Parser = require("rss-parser");
 const admin = require("firebase-admin");
+const { onValueCreated } = require("firebase-functions/v2/database");
+const logger = require("firebase-functions/logger");
 
-const parser = new Parser();
+admin.initializeApp();
 
-const RSS_URL =
-  "https://rss.app/feeds/m1CSSfCzGvUQp26H.xml";
-
-// Firebase service account will come from an environment variable
-const serviceAccount = JSON.parse(
-  process.env.FIREBASE_SERVICE_ACCOUNT
-);
-
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-});
-
-// FCM topic for all DETECT-CO devices
 const FCM_TOPIC = "detect_co_announcements";
 
-async function checkAnnouncements() {
-  try {
-    console.log("Checking RSS feed...");
+exports.sendAnnouncementNotification = onValueCreated(
+  "/announcements/{announcementId}",
+  async (event) => {
+    const announcement = event.data.val();
+    if (!announcement || typeof announcement !== "object") return;
 
-    const feed = await parser.parseURL(RSS_URL);
-
-    if (!feed.items || feed.items.length === 0) {
-      console.log("No posts found.");
+    const title = String(announcement.title || "").trim();
+    const body = String(announcement.message || "").trim();
+    const type = announcement.type === "alert" ? "alert" : "announcement";
+    if (!title || !body) {
+      logger.warn("Skipping incomplete announcement", {
+        announcementId: event.params.announcementId,
+      });
       return;
     }
-
-    const newestPost = feed.items[0];
-
-    const title = newestPost.title || "";
-    const content =
-      newestPost.contentSnippet ||
-      newestPost.content ||
-      "";
-
-    const text = `${title} ${content}`.toLowerCase();
-
-    console.log("Newest post:");
-    console.log(title);
-    console.log(newestPost.link);
-
-    const isSuspension =
-      text.includes("walang pasok") ||
-      text.includes("no classes") ||
-      text.includes("classes are suspended") ||
-      text.includes("suspension of classes");
-
-    if (!isSuspension) {
-      console.log("No class suspension detected.");
-      return;
-    }
-
-    console.log("CLASS SUSPENSION DETECTED!");
 
     await admin.messaging().send({
       topic: FCM_TOPIC,
-
-      notification: {
-        title: "⚠️ NO CLASSES",
-        body: "Class suspension announcement detected.",
-      },
-
+      notification: { title, body },
       data: {
-        type: "class_suspension",
-        link: newestPost.link || "",
+        announcementId: event.params.announcementId,
+        title,
+        body,
+        type,
+        priority: String(announcement.priority || "normal"),
       },
     });
-
-    console.log(
-      "FCM notification sent successfully to all DETECT-CO devices."
-    );
-
-  } catch (error) {
-    console.error("ERROR:");
-    console.error(error);
-    process.exit(1);
-  }
-}
-
-checkAnnouncements();
+    logger.info("Announcement notification sent", {
+      announcementId: event.params.announcementId,
+    });
+  },
+);

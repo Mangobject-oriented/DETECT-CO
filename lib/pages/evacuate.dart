@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:detectco/services/emergency_location_service.dart';
 import 'package:torch_flashlight/torch_flashlight.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 
@@ -19,12 +20,113 @@ class EvacuateTab extends StatefulWidget {
   State<EvacuateTab> createState() => _EvacuateTabState();
 }
 
-class _EvacuateTabState extends State<EvacuateTab> {
+class _EvacuateTabState extends State<EvacuateTab>
+    with WidgetsBindingObserver {
   // 0 = Evacuation Centers, 1 = Emergency Numbers, 2 = Flood Prep Guides
   int _selectedSection = 0;
 
   late final PageController _pageController =
       PageController(initialPage: _selectedSection);
+
+  final EmergencyLocationService _emergencyLocationService =
+      EmergencyLocationService();
+  EmergencyLocationSession? _emergencySession;
+  bool _startingEmergencySession = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkEmergencySessionExpiry();
+    }
+  }
+
+  Future<void> _checkEmergencySessionExpiry() async {
+    final expired = await _emergencyLocationService.expireIfNeeded();
+    if (expired && mounted) {
+      setState(() => _emergencySession = null);
+      _showEmergencyMessage('Emergency location sharing has expired.');
+    }
+  }
+
+  Future<void> _startEmergencyLocation() async {
+    if (_startingEmergencySession) return;
+    if (_emergencySession != null) {
+      if (DateTime.now().isBefore(_emergencySession!.expiresAt)) return;
+      await _checkEmergencySessionExpiry();
+      if (!mounted) return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Share your emergency location?'),
+        content: const Text(
+          'Your current GPS location and updates will be temporarily shared '
+          'with authorized emergency responders for up to 30 minutes. '
+          'You can stop sharing at any time.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Share location'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _startingEmergencySession = true);
+    try {
+      final session = await _emergencyLocationService.start(
+        onExpired: () {
+          if (!mounted) return;
+          setState(() => _emergencySession = null);
+          _showEmergencyMessage('Emergency location sharing has expired.');
+        },
+      );
+      if (mounted) setState(() => _emergencySession = session);
+    } catch (error) {
+      if (!mounted) return;
+      _showEmergencyMessage(
+        error is EmergencyLocationException
+            ? error.message
+            : 'Could not start emergency location sharing. Check your connection and try again.',
+      );
+    } finally {
+      if (mounted) setState(() => _startingEmergencySession = false);
+    }
+  }
+
+  Future<void> _stopEmergencyLocation() async {
+    try {
+      await _emergencyLocationService.stop();
+      if (!mounted) return;
+      setState(() => _emergencySession = null);
+      _showEmergencyMessage('Emergency location sharing stopped.');
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _emergencySession = null);
+      _showEmergencyMessage(
+        'Sharing stopped on this device, but the session status could not be updated. Please check your connection.',
+      );
+    }
+  }
+
+  void _showEmergencyMessage(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
 
   // =====================================================
   // SOS FLASHLIGHT
@@ -149,6 +251,7 @@ class _EvacuateTabState extends State<EvacuateTab> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     TorchFlashlight.stopSOS();
     FlutterRingtonePlayer().stop();
     _pageController.dispose();
@@ -910,6 +1013,8 @@ class _EvacuateTabState extends State<EvacuateTab> {
         isDarkMode,
       ),
 
+      _emergencyLocationCard(isDarkMode),
+
       // =====================================================
       // SOS FLASHLIGHT
       // =====================================================
@@ -950,6 +1055,132 @@ class _EvacuateTabState extends State<EvacuateTab> {
         },
       ),
     ];
+  }
+
+  Widget _emergencyLocationCard(bool isDarkMode) {
+    final session = _emergencySession;
+    final active = session != null &&
+        DateTime.now().isBefore(session.expiresAt);
+    final expiryLabel = session == null
+        ? ''
+        : TimeOfDay.fromDateTime(session.expiresAt).format(context);
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDarkMode
+            ? const Color(0xFF303030)
+            : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: active
+            ? Border.all(color: const Color(0xFFFF3035), width: 1.5)
+            : null,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.20),
+            blurRadius: 8,
+            offset: const Offset(4, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: active
+                      ? const Color(0xFFFF3035)
+                      : const Color(0xFF2867F5),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.location_on,
+                  color: Colors.white,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Emergency Locate Me',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: isDarkMode
+                            ? Colors.white
+                            : const Color(0xFF1D2B4A),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      active
+                          ? 'LOCATION SHARING ACTIVE · Expires $expiryLabel'
+                          : 'Temporarily share your GPS location with emergency responders',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: active
+                            ? const Color(0xFFFF6B6B)
+                            : (isDarkMode
+                                ? Colors.grey[400]
+                                : const Color(0xFF8194BB)),
+                        fontWeight:
+                            active ? FontWeight.w600 : FontWeight.normal,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton.icon(
+              onPressed: _startingEmergencySession
+                  ? null
+                  : (active
+                      ? _stopEmergencyLocation
+                      : _startEmergencyLocation),
+              icon: _startingEmergencySession
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(active ? Icons.stop_circle : Icons.my_location),
+              label: Text(
+                _startingEmergencySession
+                    ? 'GETTING LOCATION…'
+                    : (active
+                        ? 'STOP EMERGENCY'
+                        : 'EMERGENCY LOCATE ME'),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: active
+                    ? const Color(0xFFFF3035)
+                    : const Color(0xFF2867F5),
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: Colors.blueGrey,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   // =====================================================
