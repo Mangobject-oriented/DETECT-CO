@@ -2176,10 +2176,6 @@ class _MapTabState extends State<MapTab> {
                         // LOGO
 
                         GestureDetector(
-                          onDoubleTap: () {
-                            isDarkModeNotifier.value =
-                                !isDarkModeNotifier.value;
-                          },
                           child: SizedBox(
                             width: 40,
                             height: 40,

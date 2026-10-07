@@ -1227,10 +1227,6 @@ class _EvacuateTabState extends State<EvacuateTab>
                     child: Row(
                       children: [
                         GestureDetector(
-                          onDoubleTap: () {
-                            isDarkModeNotifier.value =
-                                !isDarkModeNotifier.value;
-                          },
                           child: SizedBox(
                             width: 50,
                             height: 50,
@@ -1333,3 +1329,4 @@ class _EvacuateTabState extends State<EvacuateTab>
     );
   }
 }
+
