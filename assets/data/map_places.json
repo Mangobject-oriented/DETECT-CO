@@ -56,7 +56,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 4",
+    "name": "Bubuyan's National High School",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.172113482744315,
@@ -64,15 +64,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 5",
-    "description": "Supplied coordinate",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.173410443862354,
-    "longitude": 121.10617123123323,
-    "type": "evacuation"
-  },
-  {
-    "name": "Evacuation Center 6",
+    "name": "Bucal Church",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.191485471680968,
@@ -80,7 +72,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 7",
+    "name": "Bunggo National High School",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.158661827191356,
@@ -88,7 +80,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 8",
+    "name": "Bunggo Chapel",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.1606442315348,
@@ -96,7 +88,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 9",
+    "name": "Bunggo Gitna Chapel",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.156989529900981,
@@ -104,7 +96,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 10",
+    "name": "Burol Barangay Hall",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.16775961272474,
@@ -112,7 +104,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 11",
+    "name": "Burol Elementary School",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.160582754167905,
@@ -120,7 +112,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 12",
+    "name": "Camaligan Barangay Hall",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.15923043180585,
@@ -128,7 +120,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 13",
+    "name": "Canlubang Church",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.21619675699334,
@@ -136,7 +128,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 14",
+    "name": "Halang Elementary School",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.19776321566352,
@@ -144,15 +136,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 15",
-    "description": "Supplied coordinate",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.165501500947597,
-    "longitude": 121.06344732444332,
-    "type": "evacuation"
-  },
-  {
-    "name": "Evacuation Center 16",
+    "name": "Hornalan Church",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.165737720981518,
@@ -160,7 +144,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 17",
+    "name": "Hornalan Elementary School",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.171235841465467,
@@ -168,7 +152,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 18",
+    "name": "Immanuel Church",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.16468392333159,
@@ -176,7 +160,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 19",
+    "name": "Jesus is Lord Church - Villa La Prinza",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.15841935848526,
@@ -184,15 +168,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 20",
-    "description": "Supplied coordinate",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.163877304381243,
-    "longitude": 121.1193921217405,
-    "type": "evacuation"
-  },
-  {
-    "name": "Evacuation Center 21",
+    "name": "Southville Greenfields Academy of Learning Inc.",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.163682990151303,
@@ -200,7 +176,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 22",
+    "name": "Southville 6 Elementary School",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.242245636596444,
@@ -208,7 +184,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 23",
+    "name": "Kay Anlog Basketball Court",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.164067163693884,
@@ -216,15 +192,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 24",
-    "description": "Supplied coordinate",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.163974321171965,
-    "longitude": 121.11967628696898,
-    "type": "evacuation"
-  },
-  {
-    "name": "Evacuation Center 25",
+    "name": "Laguerta Elementary School",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.173841778034774,
@@ -232,15 +200,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 26",
-    "description": "Supplied coordinate",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.173532087184581,
-    "longitude": 121.09044519284902,
-    "type": "evacuation"
-  },
-  {
-    "name": "Lamesa Elementary School",
+    "name": "La Mesa Elementary School",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.181175581767723,
@@ -248,7 +208,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 28",
+    "name": "Brgy. La Mesa Covered Court",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.18134448099071,
@@ -256,15 +216,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 29",
-    "description": "Supplied coordinate",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.18116634694325,
-    "longitude": 121.15527879277391,
-    "type": "evacuation"
-  },
-  {
-    "name": "Evacuation Center 30",
+    "name": "Our Lady of Fatima Church - Lawa",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.210171931261318,
@@ -272,7 +224,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 31",
+    "name": "Lawa Elementary School",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.206790199579396,
@@ -280,7 +232,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 32",
+    "name": "Lawa National High Schol",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.20831709925985,
@@ -301,14 +253,6 @@
     "image": "assets/images/evac1.png",
     "latitude": 14.20293501289848,
     "longitude": 121.16351836432413,
-    "type": "evacuation"
-  },
-  {
-    "name": "Evacuation Center 35",
-    "description": "Supplied coordinate",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.215706295566287,
-    "longitude": 121.18229250422738,
     "type": "evacuation"
   },
   {
@@ -352,23 +296,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 41",
-    "description": "Supplied coordinate",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.157609591385897,
-    "longitude": 121.03890866929824,
-    "type": "evacuation"
-  },
-  {
-    "name": "Evacuation Center 42",
-    "description": "Supplied coordinate",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.157611381431051,
-    "longitude": 121.03837803346556,
-    "type": "evacuation"
-  },
-  {
-    "name": "Evacuation Center 43",
+    "name": "Mabato Elementary School",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.1577328195214,
@@ -376,7 +304,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 45",
+    "name": "Majada Out Elementary School",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.194772931406085,
@@ -384,23 +312,15 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 46",
-    "description": "Di sure",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.194675033800195,
-    "longitude": 121.10681863228403,
-    "type": "evacuation"
-  },
-  {
-    "name": "Evacuation Center 47",
-    "description": "Di sure wala picture",
+    "name": "Mapagong Elementary School",
+    "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.217662466254062,
     "longitude": 121.13031072145374,
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 48",
+    "name": "Latian Elementary School",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.233286279876454,
@@ -408,7 +328,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 49",
+    "name": "Tiyani National High School - Masili",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.182311694818134,
@@ -416,7 +336,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 50",
+    "name": "Masili Barangay Hall",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.185232705776796,
@@ -424,7 +344,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 51",
+    "name": "Maunong Elemtary School",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.169150712852536,
@@ -432,23 +352,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 52",
-    "description": "Supplied coordinate",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.181345254262697,
-    "longitude": 121.15550795406192,
-    "type": "evacuation"
-  },
-  {
-    "name": "Evacuation Center 53",
-    "description": "Supplied coordinate",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.18117897378228,
-    "longitude": 121.15693691953852,
-    "type": "evacuation"
-  },
-  {
-    "name": "Evacuation Center 54",
+    "name": "Maunong Barangay Hall",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.17255822267577,
@@ -456,7 +360,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 55",
+    "name": "Mayapa Barangay Hall",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.21128116910972,
@@ -464,15 +368,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 56",
-    "description": "Supplied coordinate",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.211349627395691,
-    "longitude": 121.1274426826303,
-    "type": "evacuation"
-  },
-  {
-    "name": "Evacuation Center 57",
+    "name": "ACC Quadrangle - Mayapa ",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.209635996811041,
@@ -480,7 +376,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 58",
+    "name": "FNTI Basketball Court - Mayapa",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.215181115082732,
@@ -488,7 +384,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 59",
+    "name": "Milagrosa Elementary School",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.175734135330105,
@@ -496,7 +392,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 60",
+    "name": "Brgy. Milagrosa Basketball Court",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.168667146420542,
@@ -504,7 +400,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 61",
+    "name": "Iglesia ni Cristo - Milagrosa",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.16942375060053,
@@ -512,7 +408,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 62",
+    "name": "Marivel Basketball court - Paciano",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.218842490643722,
@@ -520,7 +416,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 63",
+    "name": "Paciano Elementary School",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.216682570976168,
@@ -528,7 +424,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 64",
+    "name": "Calamba Bayside Integrated School",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.21561644928434,
@@ -536,15 +432,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 65",
-    "description": "Supplied coordinate",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.215038052466918,
-    "longitude": 121.18625506138429,
-    "type": "evacuation"
-  },
-  {
-    "name": "Evacuation Center 66",
+    "name": "Palingon Barangay Hall",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.214198517822128,
@@ -552,7 +440,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 67",
+    "name": "Palo Alto Elementary School",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.184056579877563,
@@ -560,7 +448,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 68",
+    "name": "Hacienda Hills Court - Palo Alto",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.185505636435487,
@@ -568,7 +456,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 69",
+    "name": "Basketball Court 1 - Palo Alto",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.183889286377417,
@@ -576,7 +464,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 71",
+    "name": "E. Barreto Sr. Elementary School - Pansol",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.180415280449884,
@@ -584,7 +472,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 72",
+    "name": "E. Barreto Sr. National High School - Pansol",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.179814627414459,
@@ -592,15 +480,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 73",
-    "description": "Di sure",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.181286443258058,
-    "longitude": 121.18891086343608,
-    "type": "evacuation"
-  },
-  {
-    "name": "Evacuation Center 74",
+    "name": "Holy Trinity Parish Church - Pansol",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.180055211653634,
@@ -608,7 +488,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 75",
+    "name": "Pansol Barangay Hall",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.179378280325913,
@@ -616,23 +496,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 76",
-    "description": "Duplicate coordinate from supplied list",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.179378280325913,
-    "longitude": 121.183893714503,
-    "type": "evacuation"
-  },
-  {
-    "name": "Evacuation Center 77",
-    "description": "Duplicate coordinate from supplied list",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.179378280325913,
-    "longitude": 121.183893714503,
-    "type": "evacuation"
-  },
-  {
-    "name": "Evacuation Center 78",
+    "name": "Farcon Ville Half Court - Pansol",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.21515499619268,
@@ -640,7 +504,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 79",
+    "name": "Calamba City SPED center - Prinza",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.200979717555436,
@@ -648,7 +512,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 80",
+    "name": "Prinza Basketball Court",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.198048393372924,
@@ -656,7 +520,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 81",
+    "name": "Prinza Barangay Hall",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.195537976854325,
@@ -664,7 +528,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 82",
+    "name": "Punta Elementary School",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.176778883054167,
@@ -672,7 +536,7 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 83",
+    "name": "San Isidro Church - Punta",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.177911835403494,
@@ -680,43 +544,11 @@
     "type": "evacuation"
   },
   {
-    "name": "Evacuation Center 84",
-    "description": "Supplied coordinate",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.177816095642763,
-    "longitude": 121.12040321215873,
-    "type": "evacuation"
-  },
-  {
-    "name": "Evacuation Center 85",
-    "description": "Supplied coordinate",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.178159590514435,
-    "longitude": 121.12114980633409,
-    "type": "evacuation"
-  },
-  {
-    "name": "Evacuation Center 86",
+    "name": "Puting Lupa Basketball Court",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.152360080307764,
     "longitude": 121.16213341703335,
-    "type": "evacuation"
-  },
-  {
-    "name": "Evacuation Center 87",
-    "description": "Supplied coordinate",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.15250353343479,
-    "longitude": 121.16224046555969,
-    "type": "evacuation"
-  },
-  {
-    "name": "Evacuation Center 88",
-    "description": "Supplied coordinate",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.152406304744268,
-    "longitude": 121.16264892494013,
     "type": "evacuation"
   },
   {
