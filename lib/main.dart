@@ -11,13 +11,14 @@ import 'package:detectco/pages/evacuate.dart';
 import 'package:detectco/pages/notification.dart';
 import 'package:detectco/pages/menu.dart';
 import 'package:detectco/pages/local_ai_test.dart';
+import 'package:detectco/services/emergency_location_service.dart';
 
 // =====================================================
 // LOCAL NOTIFICATIONS
 // =====================================================
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-    FlutterLocalNotificationsPlugin();
+    EmergencyLocationService.notificationPlugin;
 
 // =====================================================
 // NOTIFICATION CHANNEL IDs
@@ -85,6 +86,10 @@ Future<void> initializeLocalNotifications() async {
 
   await flutterLocalNotificationsPlugin.initialize(
     settings: initializationSettings,
+    onDidReceiveNotificationResponse:
+        emergencyLocationNotificationResponse,
+    onDidReceiveBackgroundNotificationResponse:
+        emergencyLocationNotificationBackgroundResponse,
   );
 
   final AndroidFlutterLocalNotificationsPlugin? androidPlugin =
@@ -127,6 +132,19 @@ Future<void> initializeLocalNotifications() async {
   );
 
   await androidPlugin.createNotificationChannel(testChannel);
+
+  const AndroidNotificationChannel emergencyLocationChannel =
+      AndroidNotificationChannel(
+    emergencyLocationNotificationChannelId,
+    'Emergency Location Sharing',
+    description:
+        'Shows while Emergency Locate Me is sharing your location.',
+    importance: Importance.high,
+    playSound: false,
+    enableVibration: false,
+  );
+
+  await androidPlugin.createNotificationChannel(emergencyLocationChannel);
 
   print('LOCAL NOTIFICATIONS INITIALIZED');
   print('Test notification channel: $testNotificationChannelId');
@@ -710,12 +728,13 @@ class _BottomNavPageState
       // =================================================
       // BOTTOM NAVIGATION
       // =================================================
-      bottomNavigationBar: Container(
-        height: 75,
-        color: barColor,
-
-        child: Stack(
-          children: [
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          height: 75,
+          color: barColor,
+          child: Stack(
+            children: [
             // =================================================
             // CURVED NAVIGATION BAR
             // =================================================
@@ -959,7 +978,8 @@ class _BottomNavPageState
                 ],
               ),
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );

@@ -34,13 +34,14 @@ class _EvacuateTabState extends State<EvacuateTab>
 
   final EmergencyLocationService _emergencyLocationService =
       EmergencyLocationService();
-  EmergencyLocationSession? _emergencySession;
   bool _startingEmergencySession = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _emergencyLocationService.addListener(_handleEmergencySessionChanged);
+    unawaited(_restoreEmergencySession());
   }
 
   @override
@@ -52,16 +53,34 @@ class _EvacuateTabState extends State<EvacuateTab>
 
   Future<void> _checkEmergencySessionExpiry() async {
     final expired = await _emergencyLocationService.expireIfNeeded();
-    if (expired && mounted) {
-      setState(() => _emergencySession = null);
-      _showEmergencyMessage('Emergency location sharing has expired.');
+    if (expired) return;
+    await _restoreEmergencySession();
+  }
+
+  Future<void> _restoreEmergencySession() async {
+    try {
+      await _emergencyLocationService.restoreActiveSession(
+        onExpired: () {
+          if (mounted) {
+            _showEmergencyMessage('Emergency location sharing has expired.');
+          }
+        },
+      );
+    } catch (_) {
+      // Keep the page usable if the device is offline; the stored expiry and
+      // existing notification remain available for a later retry.
     }
+  }
+
+  void _handleEmergencySessionChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _startEmergencyLocation() async {
     if (_startingEmergencySession) return;
-    if (_emergencySession != null) {
-      if (DateTime.now().isBefore(_emergencySession!.expiresAt)) return;
+    final session = _emergencyLocationService.session;
+    if (session != null) {
+      if (DateTime.now().isBefore(session.expiresAt)) return;
       await _checkEmergencySessionExpiry();
       if (!mounted) return;
     }
@@ -114,14 +133,12 @@ class _EvacuateTabState extends State<EvacuateTab>
 
     setState(() => _startingEmergencySession = true);
     try {
-      final session = await _emergencyLocationService.start(
+      await _emergencyLocationService.start(
         onExpired: () {
           if (!mounted) return;
-          setState(() => _emergencySession = null);
           _showEmergencyMessage('Emergency location sharing has expired.');
         },
       );
-      if (mounted) setState(() => _emergencySession = session);
     } catch (error) {
       if (!mounted) return;
       _showEmergencyMessage(
@@ -138,11 +155,9 @@ class _EvacuateTabState extends State<EvacuateTab>
     try {
       await _emergencyLocationService.stop();
       if (!mounted) return;
-      setState(() => _emergencySession = null);
       _showEmergencyMessage('Emergency location sharing stopped.');
     } catch (_) {
       if (!mounted) return;
-      setState(() => _emergencySession = null);
       _showEmergencyMessage(
         'Sharing stopped on this device, but the session status could not be updated. Please check your connection.',
       );
@@ -279,6 +294,7 @@ class _EvacuateTabState extends State<EvacuateTab>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _emergencyLocationService.removeListener(_handleEmergencySessionChanged);
     TorchFlashlight.stopSOS();
     FlutterRingtonePlayer().stop();
     _pageController.dispose();
@@ -1201,7 +1217,7 @@ class _EvacuateTabState extends State<EvacuateTab>
   }
 
   Widget _emergencyLocationCard(bool isDarkMode) {
-    final session = _emergencySession;
+    final session = _emergencyLocationService.session;
     final active = session != null &&
         DateTime.now().isBefore(session.expiresAt);
     final expiryLabel = session == null

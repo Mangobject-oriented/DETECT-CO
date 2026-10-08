@@ -3379,6 +3379,8 @@ class _MapTabState extends State<MapTab> {
                       options: MapOptions(
                         initialCenter: calambaCenter,
                         initialZoom: 13.5,
+                        minZoom: 11,
+                        maxZoom: 17,
                         cameraConstraint:
                             CameraConstraint.contain(
                           bounds: _cameraBounds,
