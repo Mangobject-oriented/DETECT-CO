@@ -1,4 +1,5 @@
 import { initializeApp } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
 import { getDatabase } from 'firebase/database';
 
 const firebaseConfig = {
@@ -25,6 +26,6 @@ export const firebaseConfigError = missingConfig.length > 0
     'Copy the web app values into admin_web/.env.local.'
   : null;
 
-export const database = firebaseConfigError
-  ? null
-  : getDatabase(initializeApp(firebaseConfig));
+const app = firebaseConfigError ? null : initializeApp(firebaseConfig);
+export const auth = app ? getAuth(app) : null;
+export const database = app ? getDatabase(app) : null;

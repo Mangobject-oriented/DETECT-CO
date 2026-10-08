@@ -3,8 +3,10 @@ import 'leaflet/dist/leaflet.css';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
+import mapPlaces from '../../assets/data/map_places.json';
 import { onValue, push, ref, remove, set, update } from 'firebase/database';
-import { database, firebaseConfigError } from './firebase.js';
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { auth, database, firebaseConfigError } from './firebase.js';
 import './styles.css';
 
 L.Icon.Default.mergeOptions({
@@ -13,14 +15,29 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 });
 
-const map = L.map('map').setView([14.211, 121.165], 12);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+// Start near the middle of the existing Calamba coverage area.
+// Emergency markers can still recenter the map anywhere afterward.
+const map = L.map('map', { trackResize: true }).setView([14.188421, 121.108354], 12);
+const osmTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19,
   attribution:
     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
 }).addTo(map);
 
 const markers = new Map();
+const centerMarkers = new Map();
+const routeToggle = document.querySelector('#route-toggle');
+const centersToggle = document.querySelector('#centers-toggle');
+const routeStatus = document.querySelector('#route-status');
+const rescueLocationButton = document.querySelector('#rescue-location-button');
+const rescueMarker = L.marker([14.211, 121.165], { icon: makeMapMarkerIcon('rescue', 'Rescue location') });
+let rescueLocation = null;
+let routeLayer = null;
+let routeDistance = null;
+let lastRouteTarget = null;
+let lastRoutedSessionId = null;
+let routeRequestAt = 0;
+let routeGeneration = 0;
 const connectionState = document.querySelector('#connection-state');
 const activeCount = document.querySelector('#active-count');
 const summaryCard = document.querySelector('#summary-card');
@@ -49,6 +66,91 @@ const clearHistoryButton = document.querySelector('#clear-history-button');
 const clearHistoryConfirmation = document.querySelector('#clear-history-confirmation');
 const confirmClearHistoryButton = document.querySelector('#confirm-clear-history');
 let pendingAnnouncement = null;
+osmTiles.on('tileerror', (event) => {
+  // Leaflet keeps rendering other tiles; this only surfaces the failed URL
+  // for browser diagnostics and does not remove or replace the base layer.
+  console.warn('OpenStreetMap tile failed to load:', event.tile?.src || 'unknown tile');
+});
+const loginScreen = document.querySelector('#login-screen');
+const loginForm = document.querySelector('#login-form');
+const loginEmail = document.querySelector('#login-email');
+const loginPassword = document.querySelector('#login-password');
+const loginError = document.querySelector('#login-error');
+const loginSubmit = document.querySelector('#login-submit');
+const togglePassword = document.querySelector('#toggle-password');
+const logoutButton = document.querySelector('#logout-button');
+const adminIdentity = document.querySelector('#admin-identity');
+let databaseUnsubscribers = [];
+let authenticatedUiReady = false;
+let expirationInterval = null;
+
+togglePassword.addEventListener('click', () => {
+  const showing = loginPassword.type === 'password';
+  loginPassword.type = showing ? 'text' : 'password';
+  togglePassword.textContent = showing ? 'Hide' : 'Show';
+  togglePassword.setAttribute('aria-label', showing ? 'Hide password' : 'Show password');
+  togglePassword.setAttribute('aria-pressed', String(showing));
+});
+
+loginForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!auth) return;
+  loginSubmit.disabled = true;
+  loginSubmit.textContent = 'Signing in…';
+  loginError.hidden = true;
+  try {
+    await signInWithEmailAndPassword(auth, loginEmail.value.trim(), loginPassword.value);
+    loginPassword.value = '';
+  } catch (_) {
+    loginError.textContent = 'Could not sign in. Check your email and password, then try again.';
+    loginError.hidden = false;
+  } finally {
+    loginSubmit.disabled = false;
+    loginSubmit.textContent = 'Log In';
+  }
+});
+
+logoutButton.addEventListener('click', async () => {
+  logoutButton.disabled = true;
+  try {
+    await signOut(auth);
+  } catch (_) {
+    message.hidden = false;
+    message.textContent = 'Could not sign out. Please try again.';
+  } finally {
+    logoutButton.disabled = false;
+  }
+});
+
+function showAuthenticatedUser(user) {
+  document.querySelector('#app').hidden = !user;
+  loginScreen.hidden = Boolean(user);
+  adminIdentity.textContent = user ? (user.email || 'Admin') : '';
+  if (!user) {
+    stopAuthenticatedListeners();
+  } else {
+    if (!authenticatedUiReady) {
+      authenticatedUiReady = true;
+      startAuthenticatedListeners();
+      expirationInterval = window.setInterval(() => {
+        if (sessions.some((session) => Number(session.expiresAt) <= Date.now())) renderSessions();
+        else updateRemainingLabels();
+      }, 1000);
+    }
+    // The map is created while #app is hidden on the login screen.
+    // Wait for the dashboard layout to become measurable before asking
+    // Leaflet to lay out the base tiles and existing map layers again.
+    invalidateMapAfterReveal();
+  }
+}
+
+function invalidateMapAfterReveal() {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      map.invalidateSize({ pan: false });
+    });
+  });
+}
 
 function updatePriorityAppearance() {
   announcementPriority.dataset.priority = announcementPriority.value;
@@ -71,7 +173,7 @@ function showPage(page) {
   });
 
   if (showEmergency) {
-    requestAnimationFrame(() => map.invalidateSize());
+    invalidateMapAfterReveal();
   }
 }
 
@@ -94,7 +196,7 @@ const presets = {
   },
   evacuation: {
     title: 'Evacuation Notice',
-    message: 'Please proceed to your designated evacuation area and follow instructions from local officials.',
+    message: 'Please proceed to your designated evacuation area and follow local safety advisories.',
     type: 'alert',
     priority: 'emergency',
   },
@@ -225,7 +327,7 @@ confirmClearHistoryButton.addEventListener('click', async () => {
     showAnnouncementMessage('Announcement history cleared.');
   } catch (error) {
     clearHistoryConfirmation.close();
-    showAnnouncementMessage(`Could not clear announcement history: ${error.message}`, true);
+    showAnnouncementMessage(`Could not clear history: ${error.message}`, true);
   } finally {
     confirmClearHistoryButton.disabled = false;
   }
@@ -234,6 +336,94 @@ confirmClearHistoryButton.addEventListener('click', async () => {
 let sessions = [];
 let selectedId = null;
 let lastCenteredSignature = null;
+
+function makeMapMarkerIcon(kind, label) {
+  return L.divIcon({ className: `map-marker ${kind}-marker`, html: `<span aria-label="${label}" title="${label}"></span>`, iconSize: [34, 42], iconAnchor: [17, 38], popupAnchor: [0, -34] });
+}
+
+function renderCenters() {
+  for (const place of mapPlaces.filter((item) => item.type === 'evacuation')) {
+    const key = place.name;
+    if (!centerMarkers.has(key)) {
+      const marker = L.marker([place.latitude, place.longitude], { icon: makeMapMarkerIcon('center', 'Evacuation center') })
+        .bindPopup(`<strong>${escapeHtml(place.name)}</strong><br>${escapeHtml(place.description || '')}`);
+      centerMarkers.set(key, marker);
+    }
+    const marker = centerMarkers.get(key);
+    if (centersToggle.checked && !map.hasLayer(marker)) marker.addTo(map);
+    if (!centersToggle.checked && map.hasLayer(marker)) map.removeLayer(marker);
+  }
+  sessionStorage.setItem('detectco-centers-visible', String(centersToggle.checked));
+}
+
+function clearRescueRoute(text = 'Rescue route is off.') {
+  routeGeneration++;
+  if (routeLayer) map.removeLayer(routeLayer);
+  routeLayer = null;
+  routeDistance = null;
+  lastRoutedSessionId = null;
+  routeStatus.textContent = text;
+}
+
+function getRescueLocation() {
+  if (rescueLocation) return Promise.resolve(rescueLocation);
+  if (!navigator.geolocation) return Promise.reject(new Error('Browser location is unavailable.'));
+  routeStatus.textContent = 'Getting rescue location…';
+  return new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition((position) => {
+    rescueLocation = [position.coords.latitude, position.coords.longitude];
+    rescueMarker.setLatLng(rescueLocation).addTo(map);
+    rescueLocationButton.textContent = 'Update Rescue Location';
+    resolve(rescueLocation);
+  }, () => reject(new Error('Rescue location unavailable. Allow browser location access and try again.')), { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }));
+}
+
+async function updateRescueRoute(force = false) {
+  const session = sessions.find((item) => item.id === selectedId);
+  if (!routeToggle.checked || !session) return;
+  const destination = [Number(session.latitude), Number(session.longitude)];
+  if (!destination.every(Number.isFinite)) { routeStatus.textContent = 'Selected user has no valid location.'; return; }
+  if (!force && lastRoutedSessionId === session.id && lastRouteTarget && L.latLng(lastRouteTarget).distanceTo(destination) < 60) return;
+  const wait = Math.max(0, 4000 - (Date.now() - routeRequestAt));
+  if (wait) await new Promise((resolve) => window.setTimeout(resolve, wait));
+  if (!routeToggle.checked || selectedId !== session.id) return;
+  routeRequestAt = Date.now();
+  const generation = ++routeGeneration;
+  try {
+    const start = await getRescueLocation();
+    const url = `https://router.project-osrm.org/route/v1/driving/${start[1]},${start[0]};${destination[1]},${destination[0]}?overview=full&geometries=geojson`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(12000) });
+    if (!response.ok) throw new Error('Routing service is unavailable.');
+    const data = await response.json();
+    const route = data.routes?.[0];
+    if (!route) throw new Error('No route is available for these locations.');
+    if (generation !== routeGeneration || !routeToggle.checked) return;
+    if (routeLayer) map.removeLayer(routeLayer);
+    routeLayer = L.geoJSON(route.geometry, { style: { color: '#42a5f5', weight: 6, opacity: 0.9, dashArray: '10 7' } }).addTo(map);
+    lastRouteTarget = destination;
+    lastRoutedSessionId = session.id;
+    const km = route.distance / 1000;
+    const minutes = Math.round(route.duration / 60);
+    routeDistance = `Distance: ${km < 10 ? km.toFixed(1) : Math.round(km)} km · ETA: ${minutes} min`;
+    routeStatus.textContent = routeDistance;
+    map.fitBounds(routeLayer.getBounds(), { padding: [35, 35], maxZoom: 16 });
+  } catch (error) {
+    if (generation === routeGeneration) routeStatus.textContent = error.message || 'Could not calculate the rescue route.';
+  }
+}
+
+centersToggle.checked = sessionStorage.getItem('detectco-centers-visible') !== 'false';
+centersToggle.addEventListener('change', renderCenters);
+routeToggle.addEventListener('change', () => {
+  if (routeToggle.checked) {
+    if (!selectedId) { routeToggle.checked = false; routeStatus.textContent = 'Select an emergency user first.'; return; }
+    updateRescueRoute();
+  } else clearRescueRoute();
+});
+rescueLocationButton.addEventListener('click', () => {
+  rescueLocation = null;
+  getRescueLocation().then(() => updateRescueRoute(true)).catch((error) => { routeStatus.textContent = error.message; });
+});
+renderCenters();
 
 function formatTime(value) {
   const timestamp = Number(value);
@@ -288,6 +478,8 @@ function selectSession(id, openMarker = false) {
   if (!session) return;
 
   selectedId = id;
+  routeToggle.disabled = false;
+  routeStatus.textContent = routeToggle.checked ? 'Updating rescue route…' : 'Selected user is the route destination.';
   details.hidden = false;
   detailsTitle.textContent = `Emergency ${session.sessionId || session.id}`;
 
@@ -317,6 +509,9 @@ function selectSession(id, openMarker = false) {
 
   if (openMarker && markers.has(id)) markers.get(id).openPopup();
   renderList();
+  if (routeToggle.checked) {
+    updateRescueRoute();
+  }
 }
 
 function renderList() {
@@ -437,7 +632,7 @@ function renderSessions() {
     const position = [latitude, longitude];
     let marker = markers.get(session.id);
     if (!marker) {
-      marker = L.marker(position).addTo(map);
+      marker = L.marker(position, { icon: makeMapMarkerIcon('emergency', 'Emergency user location') }).addTo(map);
       marker.on('click', () => selectSession(session.id));
       markers.set(session.id, marker);
     } else {
@@ -472,14 +667,26 @@ function renderSessions() {
   if (selectedId && !activeIds.has(selectedId)) {
     selectedId = null;
     details.hidden = true;
+    routeToggle.disabled = true;
+    routeToggle.checked = false;
+    clearRescueRoute('Selected emergency session ended.');
   } else if (selectedId) {
+    const selected = sessions.find((item) => item.id === selectedId);
+    const nextTarget = selected ? [Number(selected.latitude), Number(selected.longitude)] : null;
+    const changed = nextTarget && (!lastRouteTarget || L.latLng(lastRouteTarget).distanceTo(nextTarget) >= 60);
     selectSession(selectedId);
+    if (routeToggle.checked && changed) updateRescueRoute();
+  } else {
+    routeToggle.disabled = true;
   }
 }
 
 document.querySelector('#close-details').addEventListener('click', () => {
   selectedId = null;
   details.hidden = true;
+  routeToggle.disabled = true;
+  routeToggle.checked = false;
+  clearRescueRoute('Select an emergency to route.');
   renderList();
 });
 
@@ -491,13 +698,17 @@ function setConnectionState(state) {
     : (state === 'offline' ? 'Offline' : 'Connecting...');
 }
 
-try {
-  if (firebaseConfigError) throw new Error(firebaseConfigError);
-  onValue(ref(database, '.info/connected'), (snapshot) => {
+function startAuthenticatedListeners() {
+  if (!database) {
+    message.hidden = false;
+    message.textContent = 'Firebase is not configured for this admin website.';
+    return;
+  }
+  databaseUnsubscribers.push(onValue(ref(database, '.info/connected'), (snapshot) => {
     setConnectionState(snapshot.val() === true ? 'live' : 'offline');
-  }, () => setConnectionState('offline'));
+  }, () => setConnectionState('offline')));
 
-  onValue(
+  databaseUnsubscribers.push(onValue(
     ref(database, 'emergency_sessions'),
     (snapshot) => {
       const value = snapshot.val();
@@ -514,25 +725,40 @@ try {
       message.hidden = false;
       message.textContent = `Could not read emergency sessions: ${error.message}. Check Realtime Database rules and web app configuration.`;
     },
-  );
+  ));
 
-  onValue(ref(database, 'announcements'), (snapshot) => {
+  databaseUnsubscribers.push(onValue(ref(database, 'announcements'), (snapshot) => {
     renderAnnouncements(snapshot.val());
   }, (error) => {
     announcementCaption.textContent = 'Unavailable';
     showAnnouncementMessage(`Could not load recent notifications: ${error.message}`, true);
-  });
-} catch (error) {
-  setConnectionState('offline');
-  message.hidden = false;
-  message.textContent = error.message;
+  }));
 }
 
-// Re-evaluate expiration and countdowns without rebuilding active cards each second.
-window.setInterval(() => {
-  if (sessions.some((session) => Number(session.expiresAt) <= Date.now())) {
-    renderSessions();
-  } else {
-    updateRemainingLabels();
-  }
-}, 1000);
+function stopAuthenticatedListeners() {
+  databaseUnsubscribers.forEach((unsubscribe) => unsubscribe());
+  databaseUnsubscribers = [];
+  authenticatedUiReady = false;
+  if (expirationInterval != null) window.clearInterval(expirationInterval);
+  expirationInterval = null;
+  for (const marker of markers.values()) map.removeLayer(marker);
+  markers.clear();
+  sessions = [];
+  selectedId = null;
+  details.hidden = true;
+  renderSessions();
+  clearRescueRoute('Select an emergency to route.');
+  if (map.hasLayer(rescueMarker)) map.removeLayer(rescueMarker);
+  rescueLocation = null;
+  setConnectionState('connecting');
+}
+
+if (!auth || firebaseConfigError) {
+  loginError.textContent = 'Admin sign-in is unavailable because Firebase is not configured.';
+  loginError.hidden = false;
+} else {
+  onAuthStateChanged(auth, showAuthenticatedUser, () => {
+    loginError.textContent = 'Could not check your sign-in session. Refresh and try again.';
+    loginError.hidden = false;
+  });
+}

@@ -30,6 +30,24 @@ body {
   background: var(--app-bg);
 }
 
+[hidden] { display: none !important; }
+.login-screen { display: grid; min-height: 100vh; place-items: center; padding: 22px; background: radial-gradient(ellipse at top, #303030, #212121 62%); }
+.login-card { display: grid; width: min(100%, 410px); gap: 15px; padding: clamp(24px, 6vw, 38px); border: 1px solid var(--app-border); border-radius: 20px; background: #303030; box-shadow: 0 18px 55px #0005; }
+.login-logo { width: 74px; height: 74px; margin: 0 auto 3px; object-fit: contain; }
+.login-card .eyebrow, .login-card h1 { text-align: center; }
+.login-card .eyebrow { margin-bottom: -10px; }
+.login-card h1 { margin-bottom: 7px; }
+.login-card label { display: grid; gap: 7px; color: var(--app-muted); font-size: .82rem; }
+.login-card input { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--app-border); border-radius: 10px; color: var(--app-text); background: #252525; }
+.password-field { position: relative; display: block; }
+.password-field input { padding-right: 64px; }
+.password-toggle { position: absolute; top: 50%; right: 8px; padding: 6px 9px; transform: translateY(-50%); border: 0; border-radius: 7px; color: #c4d3f7; background: #424242; cursor: pointer; }
+.login-error { margin: 0; color: #ff8686; font-size: .82rem; }
+.login-submit { min-height: 44px; margin-top: 3px; }
+.account-controls { display: flex; align-items: center; gap: 12px; }
+.admin-identity { max-width: 220px; overflow: hidden; color: var(--app-muted); font-size: .78rem; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 620px) { .account-controls { flex-wrap: wrap; justify-content: flex-end; } .admin-identity { max-width: 130px; } }
+
 button,
 input,
 textarea,
@@ -294,6 +312,9 @@ main {
 }
 
 #map {
+  position: relative;
+  width: 100%;
+  min-width: 0;
   z-index: 0;
   min-height: 500px;
   height: min(69vh, 780px);
@@ -302,6 +323,22 @@ main {
   border-radius: 12px;
   background: #25282d;
 }
+
+.map-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 9px 14px; margin: 0 0 11px; }
+.map-toggle { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; color: var(--app-text); font-size: .82rem; cursor: pointer; }
+.map-toggle input { accent-color: var(--app-red); width: 16px; height: 16px; }
+.map-toggle input:disabled { cursor: not-allowed; }
+.route-status { flex: 1 1 180px; color: var(--app-muted); font-size: .78rem; }
+.map-legend { display: flex; flex-wrap: wrap; gap: 9px 16px; padding: 11px 3px 0; color: var(--app-muted); font-size: .72rem; }
+.map-legend span { display: inline-flex; align-items: center; gap: 7px; }
+.map-marker { background: transparent; border: 0; }
+.map-marker span { position: relative; display: block; width: 25px; height: 25px; margin: 3px; border: 3px solid #fff; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); box-shadow: 0 2px 8px #0009; }
+.map-marker span::after { position: absolute; top: 6px; left: 6px; width: 7px; height: 7px; border-radius: 50%; background: #fff; content: ''; }
+.emergency-marker span, .emergency-pin { background: #f44336; }
+.center-marker span, .center-pin { background: #42a5f5; }
+.rescue-marker span, .rescue-pin { background: #ff9a3c; }
+.legend-pin { display: inline-block; width: 13px; height: 13px; border: 2px solid #fff; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); box-shadow: 0 1px 4px #0008; }
+.legend-route { display: inline-block; width: 24px; border-top: 3px dashed #42a5f5; }
 
 .leaflet-tile-pane {
   filter: brightness(0.78) saturate(0.82);

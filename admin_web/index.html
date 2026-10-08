@@ -8,7 +8,20 @@
     <title>DETECT-CO Barangay Emergency Monitor</title>
   </head>
   <body>
-    <div id="app">
+    <main id="login-screen" class="login-screen">
+      <form id="login-form" class="login-card">
+        <img class="login-logo" src="/detect-co-logo.png" alt="DETECT-CO" />
+        <p class="eyebrow">DETECT-CO · BARANGAY ADMIN</p>
+        <h1>Admin Login</h1>
+        <label>Email<input id="login-email" name="email" type="email" autocomplete="username" required /></label>
+        <label>Password
+          <span class="password-field"><input id="login-password" name="password" type="password" autocomplete="current-password" required /><button id="toggle-password" class="password-toggle" type="button" aria-label="Show password" aria-pressed="false">Show</button></span>
+        </label>
+        <p id="login-error" class="login-error" role="alert" hidden></p>
+        <button id="login-submit" class="send-announcement login-submit" type="submit">Log In</button>
+      </form>
+    </main>
+    <div id="app" hidden>
       <header class="topbar">
         <div class="brand-block">
           <img class="brand-logo" src="/detect-co-logo.png" alt="DETECT-CO logo" />
@@ -25,9 +38,7 @@
             <span aria-hidden="true">🔔</span> Notifications
           </button>
         </nav>
-        <div id="connection-state" class="connection-state connecting" role="status">
-          Connecting...
-        </div>
+        <div class="account-controls"><span id="admin-identity" class="admin-identity"></span><button id="logout-button" class="quiet-button" type="button">Log Out</button><div id="connection-state" class="connection-state connecting" role="status">Connecting...</div></div>
       </header>
 
       <main>
@@ -54,7 +65,19 @@
                 <p>Markers update automatically as GPS reports arrive.</p>
               </div>
             </div>
+            <div class="map-tools" aria-label="Map controls">
+              <label class="map-toggle"><input id="route-toggle" type="checkbox" disabled /> <span>Rescue Route</span></label>
+              <label class="map-toggle"><input id="centers-toggle" type="checkbox" checked /> <span>Evacuation Centers</span></label>
+              <button id="rescue-location-button" class="quiet-button" type="button">Set Rescue Location</button>
+              <span id="route-status" class="route-status" role="status">Select an emergency to route.</span>
+            </div>
             <div id="map" aria-label="Map of active emergency sessions"></div>
+            <div class="map-legend" aria-label="Map legend">
+              <span><i class="legend-pin emergency-pin" aria-hidden="true"></i> Emergency user</span>
+              <span><i class="legend-pin center-pin" aria-hidden="true"></i> Evacuation center</span>
+              <span><i class="legend-pin rescue-pin" aria-hidden="true"></i> Rescue location</span>
+              <span><i class="legend-route" aria-hidden="true"></i> Rescue route</span>
+            </div>
           </div>
 
           <aside class="list-panel panel">

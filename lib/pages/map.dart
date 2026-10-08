@@ -16,6 +16,7 @@ import 'package:flutter/foundation.dart';
 // Offline tile cache + connectivity (new)
 import 'package:path_provider/path_provider.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:detectco/services/weather_condition.dart';
 
 // Firebase Realtime Database
 import 'package:firebase_database/firebase_database.dart';
@@ -445,8 +446,9 @@ class _CachedTileImage extends ImageProvider<_CachedTileImage> {
 // =====================================================
 // WEATHER VISUAL MODEL (NEW)
 //
-// Open-Meteo "weather_code" (WMO) values are mapped to a
-// small set of effects. Unknown codes show no effect.
+// Open-Meteo current weather codes are combined with observed
+// precipitation by the shared condition resolver before effects
+// are selected. Probability values never trigger precipitation.
 // =====================================================
 
 enum _WxKind {
@@ -485,56 +487,28 @@ class _WxVisual {
   int get hashCode => Object.hash(kind, level, isDay);
 }
 
-_WxVisual _visualForCode(int code, bool isDay) {
-  switch (code) {
-    case 0:
-      // Clear sky: sunlight only makes sense in daytime.
-      return isDay ? _WxVisual(_WxKind.clear, 2, isDay) : _WxVisual.none;
-    case 1:
-      return isDay ? _WxVisual(_WxKind.clear, 1, isDay) : _WxVisual.none;
-    case 2:
-      return _WxVisual(_WxKind.partly, 1, isDay);
-    case 3:
-      return _WxVisual(_WxKind.cloudy, 2, isDay);
-    case 45:
-    case 48:
-      return _WxVisual(_WxKind.fog, 1, isDay);
-    case 51:
-      return _WxVisual(_WxKind.drizzle, 1, isDay);
-    case 53:
-    case 56:
-    case 57:
-      return _WxVisual(_WxKind.drizzle, 2, isDay);
-    case 55:
-      return _WxVisual(_WxKind.drizzle, 3, isDay);
-    case 61:
-    case 80:
-      return _WxVisual(_WxKind.rain, 1, isDay);
-    case 63:
-    case 66:
-    case 81:
-      return _WxVisual(_WxKind.rain, 2, isDay);
-    case 65:
-    case 67:
-    case 82:
-      return _WxVisual(_WxKind.rain, 3, isDay);
-    case 71:
-    case 77:
-      return _WxVisual(_WxKind.snow, 1, isDay);
-    case 73:
-    case 85:
-      return _WxVisual(_WxKind.snow, 2, isDay);
-    case 75:
-    case 86:
-      return _WxVisual(_WxKind.snow, 3, isDay);
-    case 95:
-      return _WxVisual(_WxKind.thunder, 2, isDay);
-    case 96:
-    case 99:
-      return _WxVisual(_WxKind.thunder, 3, isDay);
-    default:
-      return _WxVisual.none;
-  }
+_WxVisual _visualForCode(int code, bool isDay, double precipitationMm) {
+  final WeatherCondition condition = resolveWeatherCondition(
+    weatherCode: code,
+    currentPrecipitationMm: precipitationMm,
+  );
+  final int level = switch (code) {
+    0 || 65 || 67 || 75 || 82 || 86 || 96 || 99 => 3,
+    1 || 51 || 61 || 71 || 77 || 80 || 95 => 1,
+    _ => 2,
+  };
+  return switch (condition) {
+    WeatherCondition.clear => code <= 1 && isDay
+        ? _WxVisual(_WxKind.clear, code == 0 ? 2 : 1, isDay)
+        : _WxVisual.none,
+    WeatherCondition.partlyCloudy => _WxVisual(_WxKind.partly, 1, isDay),
+    WeatherCondition.cloudy => _WxVisual(_WxKind.cloudy, 2, isDay),
+    WeatherCondition.fog => _WxVisual(_WxKind.fog, 1, isDay),
+    WeatherCondition.drizzle => _WxVisual(_WxKind.drizzle, level, isDay),
+    WeatherCondition.rain => _WxVisual(_WxKind.rain, level, isDay),
+    WeatherCondition.thunderstorm => _WxVisual(_WxKind.thunder, level, isDay),
+    WeatherCondition.snow => _WxVisual(_WxKind.snow, level, isDay),
+  };
 }
 
 bool _isOfflineResult(dynamic result) {
@@ -1396,6 +1370,7 @@ class _MapTabState extends State<MapTab> {
         _weatherVisual = _visualForCode(
           (data['code'] as num).toInt(),
           data['isDay'] == true,
+          (data['precipitation'] as num?)?.toDouble() ?? 0,
         );
       });
     } catch (e) {
@@ -1403,7 +1378,7 @@ class _MapTabState extends State<MapTab> {
     }
   }
 
-  Future<void> _saveWeather(int code, bool isDay) async {
+  Future<void> _saveWeather(int code, bool isDay, double precipitationMm) async {
     final String? root = _tileProvider.cachePath;
     if (root == null) return;
 
@@ -1412,6 +1387,7 @@ class _MapTabState extends State<MapTab> {
         jsonEncode({
           'code': code,
           'isDay': isDay,
+          'precipitation': precipitationMm,
           'ts': DateTime.now().millisecondsSinceEpoch,
         }),
       );
@@ -1430,7 +1406,7 @@ class _MapTabState extends State<MapTab> {
         'https://api.open-meteo.com/v1/forecast'
         '?latitude=${calambaCenter.latitude.toStringAsFixed(4)}'
         '&longitude=${calambaCenter.longitude.toStringAsFixed(4)}'
-        '&current=weather_code,is_day'
+        '&current=weather_code,is_day,precipitation,rain'
         '&timezone=auto',
       );
 
@@ -1446,14 +1422,22 @@ class _MapTabState extends State<MapTab> {
 
       final int code = (current['weather_code'] as num).toInt();
       final bool isDay = ((current['is_day'] as num?)?.toInt() ?? 1) == 1;
+      final double precipitationMm = math.max(
+        (current['precipitation'] as num?)?.toDouble() ?? 0,
+        (current['rain'] as num?)?.toDouble() ?? 0,
+      ).toDouble();
 
-      _saveWeather(code, isDay);
+      _saveWeather(code, isDay, precipitationMm);
 
       if (!mounted) return;
 
       debugPrint('Weather code=$code isDay=$isDay');
 
-      final _WxVisual next = _visualForCode(_debugForceCode ?? code, true);
+      final _WxVisual next = _visualForCode(
+        _debugForceCode ?? code,
+        isDay,
+        precipitationMm,
+      );
 
       if (next != _weatherVisual) {
         setState(() {

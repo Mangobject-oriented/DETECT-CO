@@ -7,7 +7,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:detectco/pages/menu.dart'; // change to your actual menu file name
+import 'package:detectco/services/weather_condition.dart';
 
 
 // =====================================================
@@ -685,7 +687,10 @@ class _HomeTabState extends State<HomeTab>
 
   int? _weatherCode;
   double? _cloudCover;
+  double? _weatherCurrentPrecipitation;
+  bool _weatherConditionLoading = false;
   Timer? _weatherConditionTimer;
+  StreamSubscription<List<ConnectivityResult>>? _weatherConnectivitySub;
 
   // =====================================================
   // INIT STATE
@@ -780,6 +785,15 @@ class _HomeTabState extends State<HomeTab>
 
     _fetchWeatherCondition();
 
+    _weatherConnectivitySub = Connectivity().onConnectivityChanged.listen(
+      (results) {
+        if (results.any((result) => result != ConnectivityResult.none)) {
+          _fetchWeatherCondition();
+        }
+      },
+      onError: (_) {},
+    );
+
     _weatherConditionTimer = Timer.periodic(
       const Duration(minutes: 10),
       (_) => _fetchWeatherCondition(),
@@ -794,6 +808,7 @@ class _HomeTabState extends State<HomeTab>
     _mlPredictionTimer?.cancel();
     _esp32StatusTimer?.cancel();
     _weatherConditionTimer?.cancel();
+    _weatherConnectivitySub?.cancel();
     _waterAnimationController.dispose();
     super.dispose();
   }
@@ -1463,14 +1478,20 @@ class _HomeTabState extends State<HomeTab>
   // FETCH WEATHER CONDITION (SUNNY / CLOUDY / RAIN CODE)
   // =====================================================
   //
-  // This is a small, separate Open-Meteo call used only to
-  // decide which background animation to show. It does not
-  // touch or duplicate the flood/rainfall logic above; it
-  // only reads weather_code and cloud_cover, which none of
-  // the existing calls request.
+  // This small Open-Meteo call supplies current weather code,
+  // cloud cover, and observed precipitation for the background
+  // effect. Forecast probability never selects an animation.
 
   Future<void> _fetchWeatherCondition() async {
+    if (_weatherConditionLoading) return;
+    _weatherConditionLoading = true;
     try {
+      final List<ConnectivityResult> connectivity =
+          await Connectivity().checkConnectivity();
+      if (connectivity.isEmpty ||
+          connectivity.every((result) => result == ConnectivityResult.none)) {
+        return;
+      }
       // Wait for the one-time location lookup (already done
       // after the first time). Never requests location again.
       await _ensureSessionLocation();
@@ -1479,7 +1500,7 @@ class _HomeTabState extends State<HomeTab>
         'https://api.open-meteo.com/v1/forecast'
         '?latitude=$_weatherLatitude'
         '&longitude=$_weatherLongitude'
-        '&current=weather_code,cloud_cover'
+        '&current=weather_code,cloud_cover,precipitation,rain'
         '&timezone=auto',
       );
 
@@ -1512,6 +1533,13 @@ class _HomeTabState extends State<HomeTab>
 
       final double? cloudCoverValue =
           _parseDouble(current['cloud_cover']);
+      final double? precipitationValue = _parseDouble(current['precipitation']);
+      final double? rainValue = _parseDouble(current['rain']);
+      final double? currentPrecipitation = precipitationValue == null
+          ? rainValue
+          : rainValue == null
+              ? precipitationValue
+              : math.max(precipitationValue, rainValue).toDouble();
 
       if (!mounted) return;
 
@@ -1524,7 +1552,10 @@ class _HomeTabState extends State<HomeTab>
         final bool cloudSame = cloudCoverValue == null ||
             cloudCoverValue == _cloudCover;
 
-        if (codeSame && cloudSame) {
+        final bool precipitationSame = currentPrecipitation == null ||
+            currentPrecipitation == _weatherCurrentPrecipitation;
+
+        if (codeSame && cloudSame && precipitationSame) {
           return;
         }
       }
@@ -1537,10 +1568,16 @@ class _HomeTabState extends State<HomeTab>
         if (cloudCoverValue != null) {
           _cloudCover = cloudCoverValue;
         }
+
+        if (currentPrecipitation != null) {
+          _weatherCurrentPrecipitation = currentPrecipitation;
+        }
       });
     } catch (e) {
       // Silently ignored: the background simply falls back
       // to whatever rainfall data is already available.
+    } finally {
+      _weatherConditionLoading = false;
     }
   }
 
@@ -1548,18 +1585,25 @@ class _HomeTabState extends State<HomeTab>
   // COMPUTE BACKGROUND WEATHER MODE
   // =====================================================
   //
-  // Combines the weather_code/cloud_cover fetched above with
-  // the rainfall figures already tracked elsewhere in this
-  // file (ML prediction or Open-Meteo fallback) to decide
-  // which background animation to show.
+  // Uses the shared current-condition resolver. ML forecasts
+  // and hourly precipitation probability do not select effects.
 
   _WeatherBackgroundMode _computeWeatherMode() {
-
+    final int? code = _weatherCode;
+    final WeatherCondition condition = resolveWeatherCondition(
+      weatherCode: code,
+      currentPrecipitationMm: _weatherCurrentPrecipitation,
+    );
     switch (homeBgChoice.value) {
       case HomeBgChoice.storm:
-        return _WeatherBackgroundMode.storm;
+        return condition == WeatherCondition.thunderstorm
+            ? _WeatherBackgroundMode.storm
+            : _modeForWeatherCondition(condition);
       case HomeBgChoice.rain:
-        return _WeatherBackgroundMode.rain;
+        return condition == WeatherCondition.rain ||
+                condition == WeatherCondition.drizzle
+            ? _WeatherBackgroundMode.rain
+            : _modeForWeatherCondition(condition);
       case HomeBgChoice.cloudy:
         return _WeatherBackgroundMode.cloudy;
       case HomeBgChoice.sunny:
@@ -1568,47 +1612,31 @@ class _HomeTabState extends State<HomeTab>
         break; // fall through to the API-based logic below
     }
 
-    final int? code = _weatherCode;
+    return _modeForWeatherCondition(condition);
+  }
 
-    final bool isThunderCode =
-        code != null && code >= 95 && code <= 99;
-
-    final bool isRainCode = code != null &&
-        ((code >= 51 && code <= 67) ||
-            (code >= 80 && code <= 82));
-
-    final bool isCloudyCode =
-        code != null && code >= 1 && code <= 3;
-
-    final double? rain1h =
-        (!_mlForecastIdle && _mlError == null)
-            ? _mlRainfall1h
-            : _openMeteoRainfall1h;
-
-    final double currentRain =
-        _openMeteoCurrentRainfall ?? 0;
-
-    final double hourlyRain = rain1h ?? 0;
-
-    final bool heavyByAmount =
-        hourlyRain >= 4.0 || currentRain >= 2.0;
-
-    final bool lightByAmount =
-        hourlyRain > 0 || currentRain > 0;
-
-    if (isThunderCode || heavyByAmount) {
-      return _WeatherBackgroundMode.storm;
+  _WeatherBackgroundMode _modeForWeatherCondition(
+    WeatherCondition condition,
+  ) {
+    switch (condition) {
+      case WeatherCondition.thunderstorm:
+        return _WeatherBackgroundMode.storm;
+      case WeatherCondition.rain:
+      case WeatherCondition.drizzle:
+        return _WeatherBackgroundMode.rain;
+      case WeatherCondition.cloudy:
+      case WeatherCondition.partlyCloudy:
+        return _WeatherBackgroundMode.cloudy;
+      case WeatherCondition.fog:
+        return _WeatherBackgroundMode.fog;
+      case WeatherCondition.snow:
+        return _WeatherBackgroundMode.snow;
+      case WeatherCondition.clear:
+        if (condition == WeatherCondition.clear && (_cloudCover ?? 0) > 50) {
+          return _WeatherBackgroundMode.cloudy;
+        }
+        return _WeatherBackgroundMode.sunny;
     }
-
-    if (isRainCode || lightByAmount) {
-      return _WeatherBackgroundMode.rain;
-    }
-
-    if (isCloudyCode || (_cloudCover ?? 0) > 50) {
-      return _WeatherBackgroundMode.cloudy;
-    }
-
-    return _WeatherBackgroundMode.sunny;
   }
 
   // =====================================================
@@ -3003,6 +3031,8 @@ class _DashboardSnapshot {
 enum _WeatherBackgroundMode {
   sunny,
   cloudy,
+  fog,
+  snow,
   rain,
   storm,
 }
@@ -3227,6 +3257,52 @@ class _RainBackgroundState
           ],
         );
 
+      case _WeatherBackgroundMode.fog:
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xFF343B42), Color(0xFF242A30), Color(0xFF212121)],
+                ),
+              ),
+            ),
+            AnimatedBuilder(
+              animation: _controller,
+              builder: (context, child) => CustomPaint(
+                size: Size.infinite,
+                painter: _FogPainter(progress: _controller.value),
+              ),
+            ),
+          ],
+        );
+
+      case _WeatherBackgroundMode.snow:
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xFF27333D), Color(0xFF20272D), Color(0xFF212121)],
+                ),
+              ),
+            ),
+            AnimatedBuilder(
+              animation: _controller,
+              builder: (context, child) => CustomPaint(
+                size: Size.infinite,
+                painter: _SnowPainter(progress: _controller.value),
+              ),
+            ),
+          ],
+        );
+
       // ---------------------------------------------
       // RAIN (LITE)
       // ---------------------------------------------
@@ -3344,6 +3420,18 @@ class _RainBackgroundState
                   ),
                 );
 
+              case _WeatherBackgroundMode.fog:
+                return CustomPaint(
+                  size: Size.infinite,
+                  painter: _FogPainter(progress: _controller.value),
+                );
+
+              case _WeatherBackgroundMode.snow:
+                return CustomPaint(
+                  size: Size.infinite,
+                  painter: _SnowPainter(progress: _controller.value),
+                );
+
               case _WeatherBackgroundMode.rain:
               case _WeatherBackgroundMode.storm:
                 return CustomPaint(
@@ -3365,6 +3453,69 @@ class _RainBackgroundState
       ],
     );
   }
+}
+
+class _FogPainter extends CustomPainter {
+  const _FogPainter({required this.progress});
+
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF343B42), Color(0xFF242A30), Color(0xFF212121)],
+        ).createShader(Offset.zero & size),
+    );
+    final Paint mist = Paint()
+      ..color = const Color(0xFFCFD8DC).withValues(alpha: 0.075);
+    for (int i = 0; i < 4; i++) {
+      final double phase = (progress + i * 0.27) % 1;
+      final double x = (phase * 1.35 - 0.15) * size.width;
+      final double y = size.height * (0.38 + i * 0.12);
+      canvas.drawOval(Rect.fromCenter(center: Offset(x, y), width: size.width * 0.72, height: 34), mist);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _FogPainter oldDelegate) =>
+      oldDelegate.progress != progress;
+}
+
+class _SnowPainter extends CustomPainter {
+  const _SnowPainter({required this.progress});
+
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF27333D), Color(0xFF20272D), Color(0xFF212121)],
+        ).createShader(Offset.zero & size),
+    );
+    final Paint flake = Paint()
+      ..color = const Color(0xFFDCE7EF).withValues(alpha: 0.62);
+    for (int i = 0; i < 22; i++) {
+      final double seed = i * 37.71;
+      final double x = ((math.sin(seed) + 1) / 2) * size.width +
+          math.sin((progress * math.pi * 2) + seed) * 9;
+      final double y = (((progress * (0.35 + (i % 4) * 0.12)) + i / 22) % 1) * size.height;
+      canvas.drawCircle(Offset(x, y), 1.3 + (i % 3) * 0.55, flake);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SnowPainter oldDelegate) =>
+      oldDelegate.progress != progress;
 }
 
 class _RainPainter extends CustomPainter {

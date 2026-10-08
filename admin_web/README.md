@@ -30,14 +30,24 @@ from the repository root with `node functions/announcement-listener.js`; the
 computer running it must remain online to send announcement pushes. See
 `functions/README.md` for setup and testing.
 
-## Access and privacy
+## Admin authentication and access
 
-This first version has no sign-in or user identity system. It requires the
-existing Realtime Database rules to permit reading the sessions from the
-browser. Because emergency locations are sensitive, do not deploy this page
-publicly with unauthenticated database read access. Configure and verify
-appropriate access controls before making it available beyond a trusted local
-environment. No database rules are changed by this web app.
+The website signs in with Firebase Authentication Email/Password. Enable that
+provider in the Firebase Console and create accounts there. Any valid signed-in
+Firebase user can open the dashboard. No role, user record, or custom claim is
+required. The dashboard's Realtime Database listeners start only after Firebase
+reports an authenticated user, and are stopped on logout.
+
+Authentication does not replace Realtime Database security rules. This
+repository has no local Realtime Database rules file, so inspect the deployed
+rules before changing them. If rules currently require a privileged account
+property for the website's `emergency_sessions` or `announcements` paths, change
+only those relevant read/write predicates to require an authenticated user
+(`auth != null`) and keep unrelated data rules intact. The Flutter emergency
+session writer currently does not use Firebase Authentication; preserve its
+existing narrowly scoped write access when adjusting session rules, or that
+mobile flow may stop working. Do not make the database public to get the
+website working.
 
 ## Run locally
 

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:detectco/pages/local_ai_test.dart';
 import 'package:detectco/pages/home.dart';
 
 // =====================================================
@@ -794,31 +793,6 @@ class _MenuTabState extends State<MenuTab> {
                           'Learn more about DETECT-CO',
                       onTap: () {
                         // Open About App page
-                      },
-                    ),
-
-                    const SizedBox(height: 14),
-
-                    // =================================================
-                    // LOCAL AI
-                    // =================================================
-
-                    _buildMenuCard(
-                      cardColor: cardColor,
-                      icon:
-                          Icons.smart_toy_outlined,
-                      title: 'Local AI',
-                      subtitle:
-                          'Test the DETECT-CO local AI assistant',
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder:
-                                (context) =>
-                                    const LocalAiTestPage(),
-                          ),
-                        );
                       },
                     ),
 

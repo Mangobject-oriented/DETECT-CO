@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:detectco/services/emergency_location_service.dart';
@@ -7,6 +9,7 @@ import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 import 'package:detectco/main.dart'; // for isDarkModeNotifier
 import 'package:detectco/pages/during_after_flood.dart';
 import 'package:detectco/pages/flood_prep_checklist.dart';
+import 'package:detectco/pages/local_ai_test.dart';
 
 class EvacuateTab extends StatefulWidget {
   const EvacuateTab({super.key, this.onGoToMap});
@@ -22,7 +25,8 @@ class EvacuateTab extends StatefulWidget {
 
 class _EvacuateTabState extends State<EvacuateTab>
     with WidgetsBindingObserver {
-  // 0 = Evacuation Centers, 1 = Emergency Numbers, 2 = Flood Prep Guides
+  // 0 = Evacuation Centers, 1 = Emergency Numbers, 2 = Flood Prep Guides,
+  // 3 = Tools
   int _selectedSection = 0;
 
   late final PageController _pageController =
@@ -62,27 +66,50 @@ class _EvacuateTabState extends State<EvacuateTab>
       if (!mounted) return;
     }
 
+    Timer? countdownTimer;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Share your emergency location?'),
-        content: const Text(
-          'Your current GPS location and updates will be temporarily shared '
-          'with authorized emergency responders for up to 30 minutes. '
-          'You can stop sharing at any time.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Share location'),
-          ),
-        ],
-      ),
+      builder: (dialogContext) {
+        int secondsRemaining = 10;
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            countdownTimer ??= Timer.periodic(const Duration(seconds: 1), (timer) {
+              if (secondsRemaining <= 1) {
+                timer.cancel();
+                setDialogState(() => secondsRemaining = 0);
+              } else {
+                setDialogState(() => secondsRemaining--);
+              }
+            });
+            return AlertDialog(
+              backgroundColor: const Color(0xFF303030),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: const Text('Allow Emergency Location?'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('DETECT-CO needs your location to send your current position to the authorized DETECT-CO emergency response system so rescuers can locate you. Location updates are shared for up to 30 minutes, and you can stop sharing at any time.'),
+                  const SizedBox(height: 14),
+                  const Row(children: [Icon(Icons.privacy_tip_outlined, size: 19, color: Colors.redAccent), SizedBox(width: 8), Expanded(child: Text('Your location is shared only for emergency response.', style: TextStyle(fontSize: 13)))]),
+                  const SizedBox(height: 12),
+                  Text(secondsRemaining == 0 ? 'You can now allow location sharing.' : 'Please wait $secondsRemaining seconds before confirming.', style: const TextStyle(fontWeight: FontWeight.w600)),
+                ],
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+                ElevatedButton(
+                  onPressed: secondsRemaining == 0 ? () => Navigator.pop(dialogContext, true) : null,
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700, foregroundColor: Colors.white),
+                  child: Text(secondsRemaining == 0 ? 'Allow Location' : 'Wait $secondsRemaining s'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
+    countdownTimer?.cancel();
     if (confirmed != true || !mounted) return;
 
     setState(() => _startingEmergencySession = true);
@@ -301,7 +328,7 @@ class _EvacuateTabState extends State<EvacuateTab>
   // =====================================================
 
   Widget _sectionTabs(bool isDarkMode) {
-    final labels = ['Evacuation', 'Emergency', 'Guides'];
+    final labels = ['Evacuation', 'Emergency', 'Guides', 'Tools'];
 
     return Container(
       margin: const EdgeInsets.only(top: 16, bottom: 8),
@@ -312,55 +339,90 @@ class _EvacuateTabState extends State<EvacuateTab>
             : const Color(0xFFF0F2F5),
         borderRadius: BorderRadius.circular(14),
       ),
-      child: Row(
-        children: List.generate(labels.length, (index) {
-          final bool isSelected = _selectedSection == index;
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 420;
+          final tabWidth = compact ? 76.0 : constraints.maxWidth / labels.length;
 
-          return Expanded(
-            child: GestureDetector(
-              onTap: () {
-                setState(() {
-                  _selectedSection = index;
-                });
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: List.generate(labels.length, (index) {
+                final bool isSelected = _selectedSection == index;
+                final selectedColor = switch (index) {
+                  0 => Colors.green,
+                  1 => const Color(0xFFFF3035),
+                  2 => const Color.fromARGB(255, 72, 119, 247),
+                  _ => Colors.orange,
+                };
 
-                _pageController.animateToPage(
-                  index,
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
-                );
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  // Evacuation (0) = green, Emergency (1) = red,
-                  // Guides (2) = unchanged blue.
-                  color: !isSelected
-                      ? Colors.transparent
-                      : index == 0
-                          ? Colors.green
-                          : index == 1
-                              ? const Color(0xFFFF3035)
-                              : const Color.fromARGB(255, 72, 119, 247),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  labels[index],
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: isSelected
-                        ? Colors.white
-                        : (isDarkMode
-                            ? Colors.grey[400]
-                            : Colors.grey[600]),
+                return SizedBox(
+                  width: tabWidth,
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _selectedSection = index;
+                      });
+
+                      _pageController.animateToPage(
+                        index,
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                      );
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 10,
+                        horizontal: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? selectedColor
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (index == 3) ...[
+                            Icon(
+                              Icons.build_rounded,
+                              size: 15,
+                              color: isSelected
+                                  ? Colors.white
+                                  : (isDarkMode
+                                      ? Colors.grey[400]
+                                      : Colors.grey[600]),
+                            ),
+                            const SizedBox(width: 3),
+                          ],
+                          Flexible(
+                            child: Text(
+                              labels[index],
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: compact ? 11 : 13,
+                                fontWeight: FontWeight.bold,
+                                color: isSelected
+                                    ? Colors.white
+                                    : (isDarkMode
+                                        ? Colors.grey[400]
+                                        : Colors.grey[600]),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-              ),
+                );
+              }),
             ),
           );
-        }),
+        },
       ),
     );
   }
@@ -745,7 +807,7 @@ class _EvacuateTabState extends State<EvacuateTab>
                 decoration: BoxDecoration(
                   color: _isSosActive
                       ? const Color(0xFFFF3035)
-                      : const Color(0xFF2867F5),
+                      : const Color(0xFFFF7A00),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: const Icon(
@@ -807,7 +869,7 @@ class _EvacuateTabState extends State<EvacuateTab>
               style: ElevatedButton.styleFrom(
                 backgroundColor: _isSosActive
                     ? const Color(0xFFFF3035)
-                    : const Color(0xFF2867F5),
+                    : const Color(0xFFFF7A00),
                 foregroundColor: Colors.white,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
@@ -1012,21 +1074,6 @@ class _EvacuateTabState extends State<EvacuateTab>
         'FLOOD PREPARATION GUIDES',
         isDarkMode,
       ),
-
-      _emergencyLocationCard(isDarkMode),
-
-      // =====================================================
-      // SOS FLASHLIGHT
-      // =====================================================
-
-      _sosFlashlightCard(isDarkMode),
-
-      // =====================================================
-      // EMERGENCY ALARM
-      // =====================================================
-
-      _emergencyAlarmCard(isDarkMode),
-
       _guideCard(
         'Flood Preparation Checklist',
         isDarkMode,
@@ -1055,6 +1102,102 @@ class _EvacuateTabState extends State<EvacuateTab>
         },
       ),
     ];
+  }
+
+  List<Widget> _toolsSection(
+    BuildContext context,
+    bool isDarkMode,
+  ) {
+    return [
+      _sectionTitle('TOOLS', isDarkMode),
+      _emergencyAlarmCard(isDarkMode),
+      _sosFlashlightCard(isDarkMode),
+      _emergencyLocationCard(isDarkMode),
+      _localAiCard(context, isDarkMode),
+    ];
+  }
+
+  Widget _localAiCard(BuildContext context, bool isDarkMode) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const LocalAiTestPage(),
+          ),
+        );
+      },
+      child: Container(
+        width: double.infinity,
+        height: 78,
+        margin: const EdgeInsets.only(bottom: 14),
+        decoration: BoxDecoration(
+          color: isDarkMode ? const Color(0xFF303030) : Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.20),
+              blurRadius: 8,
+              offset: const Offset(4, 5),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 50,
+              height: double.infinity,
+              decoration: const BoxDecoration(
+                color: Colors.orange,
+                borderRadius: BorderRadius.horizontal(
+                  left: Radius.circular(18),
+                ),
+              ),
+              child: const Icon(
+                Icons.smart_toy_outlined,
+                color: Colors.white,
+                size: 28,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Local AI',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: isDarkMode
+                          ? Colors.white
+                          : const Color(0xFF1D2B4A),
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Ask the offline DETECT-CO assistant for help',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDarkMode
+                          ? Colors.grey[400]
+                          : const Color(0xFF8194BB),
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 14),
+              child: Icon(Icons.chevron_right_rounded, color: Colors.orange),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _emergencyLocationCard(bool isDarkMode) {
@@ -1096,7 +1239,7 @@ class _EvacuateTabState extends State<EvacuateTab>
                 decoration: BoxDecoration(
                   color: active
                       ? const Color(0xFFFF3035)
-                      : const Color(0xFF2867F5),
+                      : const Color(0xFFFF7A00),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: const Icon(
@@ -1168,7 +1311,7 @@ class _EvacuateTabState extends State<EvacuateTab>
               style: ElevatedButton.styleFrom(
                 backgroundColor: active
                     ? const Color(0xFFFF3035)
-                    : const Color(0xFF2867F5),
+                    : const Color(0xFFFF7A00),
                 foregroundColor: Colors.white,
                 disabledBackgroundColor: Colors.blueGrey,
                 elevation: 0,
@@ -1255,9 +1398,7 @@ class _EvacuateTabState extends State<EvacuateTab>
               // =================================================
 
               Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 40,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: _sectionTabs(isDarkMode),
               ),
 
@@ -1319,6 +1460,18 @@ class _EvacuateTabState extends State<EvacuateTab>
                         ],
                       ),
                     ),
+                    SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 40,
+                        vertical: 8,
+                      ),
+                      child: Column(
+                        children: [
+                          ..._toolsSection(context, isDarkMode),
+                          const SizedBox(height: 20),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1329,4 +1482,3 @@ class _EvacuateTabState extends State<EvacuateTab>
     );
   }
 }
-
