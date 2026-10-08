@@ -1,4 +1,3 @@
-
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -64,9 +63,8 @@ class AppNotification {
       title: json['title']?.toString() ?? 'DETECT-CO',
       body: json['body']?.toString() ?? '',
       type: json['type']?.toString() ?? 'announcement',
-      timestamp: DateTime.tryParse(
-            json['timestamp']?.toString() ?? '',
-          ) ??
+      timestamp:
+          DateTime.tryParse(json['timestamp']?.toString() ?? '') ??
           DateTime.now(),
       isRead: json['isRead'] == true,
     );
@@ -79,6 +77,9 @@ class AppNotification {
 
 class NotificationStorage {
   static const String _key = 'detect_co_notifications';
+  static const String _lastMlWarningAtKey = 'detectco_ml_warning_at';
+  static const String _lastMlWarningLevelKey = 'detectco_ml_warning_level';
+  static bool _mlWarningInFlight = false;
 
   // ===================================================
   // GLOBAL UNREAD NOTIFICATION COUNT
@@ -105,9 +106,7 @@ class NotificationStorage {
 
       return decoded
           .map(
-            (item) => AppNotification.fromJson(
-              Map<String, dynamic>.from(item),
-            ),
+            (item) => AppNotification.fromJson(Map<String, dynamic>.from(item)),
           )
           .where(
             (notification) =>
@@ -160,31 +159,22 @@ class NotificationStorage {
   // SAVE NOTIFICATION
   // ===================================================
 
-  static Future<void> saveNotification(
-    AppNotification notification,
-  ) async {
+  static Future<void> saveNotification(AppNotification notification) async {
     final prefs = await SharedPreferences.getInstance();
 
     final notifications = await _readNotifications();
 
     // Prevent duplicate notifications.
-    notifications.removeWhere(
-      (item) => item.id == notification.id,
-    );
+    notifications.removeWhere((item) => item.id == notification.id);
 
     notifications.insert(0, notification);
 
     // Keep the latest 100 notifications.
     if (notifications.length > 100) {
-      notifications.removeRange(
-        100,
-        notifications.length,
-      );
+      notifications.removeRange(100, notifications.length);
     }
 
-    final encoded = jsonEncode(
-      notifications.map((e) => e.toJson()).toList(),
-    );
+    final encoded = jsonEncode(notifications.map((e) => e.toJson()).toList());
 
     await prefs.setString(_key, encoded);
 
@@ -193,6 +183,75 @@ class NotificationStorage {
     unreadCountNotifier.value = notifications
         .where((notification) => !notification.isRead)
         .length;
+  }
+
+  /// Saves an ML-context flood warning in the existing history and local
+  /// notification channel. Warnings are cooldown-limited, with immediate
+  /// delivery allowed when measured risk escalates.
+  static Future<void> maybeSendMlFloodWarning({
+    required String riskLevel,
+    required double waterRiseCm,
+    required double? currentRainfallMm,
+    required double? predicted3hMm,
+  }) async {
+    final level = riskLevel.toUpperCase();
+    if (_mlWarningInFlight || (level != 'MODERATE' && level != 'HIGH')) return;
+    _mlWarningInFlight = true;
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      final previousLevel = preferences.getString(_lastMlWarningLevelKey);
+      final previousAt = preferences.getInt(_lastMlWarningAtKey) ?? 0;
+      final now = DateTime.now();
+      const cooldown = Duration(hours: 6);
+      final rank = level == 'HIGH' ? 2 : 1;
+      final previousRank = previousLevel == 'HIGH'
+          ? 2
+          : previousLevel == 'MODERATE'
+          ? 1
+          : 0;
+      final escalated = rank > previousRank;
+      final coolingDown =
+          previousAt > 0 &&
+          now.millisecondsSinceEpoch - previousAt < cooldown.inMilliseconds;
+      if (coolingDown && !escalated) return;
+
+      final currentRainText = currentRainfallMm == null
+          ? 'Current rainfall unavailable'
+          : 'Current rainfall: ${currentRainfallMm.toStringAsFixed(1)} mm';
+      final forecastText = predicted3hMm == null
+          ? '3-hour ML forecast unavailable'
+          : '3-hour ML rainfall forecast: ${predicted3hMm.toStringAsFixed(1)} mm';
+      final title = level == 'HIGH'
+          ? 'ML FLOOD RISK: HIGH'
+          : 'ML FLOOD WARNING';
+      final body =
+          'Measured water rise: ${waterRiseCm.toStringAsFixed(1)} cm. $currentRainText. $forecastText.';
+      final id =
+          'ml-flood-${level.toLowerCase()}-${now.millisecondsSinceEpoch}';
+
+      await showLocalNotification(
+        id: now.millisecondsSinceEpoch.remainder(0x7fffffff),
+        title: title,
+        body: body,
+        isTestNotification: false,
+      );
+      await saveNotification(
+        AppNotification(
+          id: id,
+          title: title,
+          body: body,
+          type: 'alert',
+          timestamp: now,
+          isRead: false,
+        ),
+      );
+      await preferences.setString(_lastMlWarningLevelKey, level);
+      await preferences.setInt(_lastMlWarningAtKey, now.millisecondsSinceEpoch);
+    } catch (error) {
+      debugPrint('ML warning notification failed: $error');
+    } finally {
+      _mlWarningInFlight = false;
+    }
   }
 
   // ===================================================
@@ -204,15 +263,11 @@ class NotificationStorage {
 
     final notifications = await _readNotifications();
 
-    notifications.removeWhere(
-      (item) => item.id == id,
-    );
+    notifications.removeWhere((item) => item.id == id);
 
     await prefs.setString(
       _key,
-      jsonEncode(
-        notifications.map((e) => e.toJson()).toList(),
-      ),
+      jsonEncode(notifications.map((e) => e.toJson()).toList()),
     );
 
     // Recalculate from the actual remaining notifications.
@@ -256,9 +311,7 @@ class NotificationStorage {
 
     await prefs.setString(
       _key,
-      jsonEncode(
-        notifications.map((e) => e.toJson()).toList(),
-      ),
+      jsonEncode(notifications.map((e) => e.toJson()).toList()),
     );
 
     // Recalculate immediately.
@@ -288,9 +341,7 @@ class NotificationStorage {
 
     await prefs.setString(
       _key,
-      jsonEncode(
-        notifications.map((e) => e.toJson()).toList(),
-      ),
+      jsonEncode(notifications.map((e) => e.toJson()).toList()),
     );
 
     // Everything is read.
@@ -306,8 +357,7 @@ class NotificationTab extends StatefulWidget {
   const NotificationTab({super.key});
 
   @override
-  State<NotificationTab> createState() =>
-      _NotificationTabState();
+  State<NotificationTab> createState() => _NotificationTabState();
 }
 
 class _NotificationTabState extends State<NotificationTab>
@@ -342,10 +392,7 @@ class _NotificationTabState extends State<NotificationTab>
   void initState() {
     super.initState();
 
-    _tabController = TabController(
-      length: 2,
-      vsync: this,
-    );
+    _tabController = TabController(length: 2, vsync: this);
 
     // Listen for notification storage changes.
     //
@@ -377,8 +424,7 @@ class _NotificationTabState extends State<NotificationTab>
   // ===================================================
 
   Future<void> _loadNotifications() async {
-    final result =
-        await NotificationStorage.getNotifications();
+    final result = await NotificationStorage.getNotifications();
 
     if (!mounted) return;
 
@@ -392,19 +438,13 @@ class _NotificationTabState extends State<NotificationTab>
   // DELETE ONE
   // ===================================================
 
-  Future<void> _deleteNotification(
-    AppNotification notification,
-  ) async {
-    await NotificationStorage.deleteNotification(
-      notification.id,
-    );
+  Future<void> _deleteNotification(AppNotification notification) async {
+    await NotificationStorage.deleteNotification(notification.id);
 
     if (!mounted) return;
 
     setState(() {
-      notifications.removeWhere(
-        (item) => item.id == notification.id,
-      );
+      notifications.removeWhere((item) => item.id == notification.id);
     });
   }
 
@@ -418,46 +458,33 @@ class _NotificationTabState extends State<NotificationTab>
     final bool? confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
-        final isDarkMode =
-            isDarkModeNotifier.value;
+        final isDarkMode = isDarkModeNotifier.value;
 
         return AlertDialog(
-          backgroundColor: isDarkMode
-              ? const Color(0xFF303030)
-              : Colors.white,
+          backgroundColor: isDarkMode ? const Color(0xFF303030) : Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(18),
           ),
           title: Text(
             'Remove all notifications?',
-            style: TextStyle(
-              color: isDarkMode
-                  ? Colors.white
-                  : Colors.black,
-            ),
+            style: TextStyle(color: isDarkMode ? Colors.white : Colors.black),
           ),
           content: Text(
             'This will permanently remove all notifications.',
             style: TextStyle(
-              color: isDarkMode
-                  ? Colors.white70
-                  : Colors.black87,
+              color: isDarkMode ? Colors.white70 : Colors.black87,
             ),
           ),
           actions: [
             TextButton(
-              onPressed: () =>
-                  Navigator.pop(context, false),
+              onPressed: () => Navigator.pop(context, false),
               child: const Text('Cancel'),
             ),
             TextButton(
-              onPressed: () =>
-                  Navigator.pop(context, true),
+              onPressed: () => Navigator.pop(context, true),
               child: const Text(
                 'Remove All',
-                style: TextStyle(
-                  color: Colors.red,
-                ),
+                style: TextStyle(color: Colors.red),
               ),
             ),
           ],
@@ -480,14 +507,10 @@ class _NotificationTabState extends State<NotificationTab>
   // MARK AS READ
   // ===================================================
 
-  Future<void> _markAsRead(
-    AppNotification notification,
-  ) async {
+  Future<void> _markAsRead(AppNotification notification) async {
     if (notification.isRead) return;
 
-    await NotificationStorage.markAsRead(
-      notification.id,
-    );
+    await NotificationStorage.markAsRead(notification.id);
 
     if (!mounted) return;
 
@@ -528,9 +551,7 @@ class _NotificationTabState extends State<NotificationTab>
   // FILTER
   // ===================================================
 
-  List<AppNotification> _getNotifications(
-    String type,
-  ) {
+  List<AppNotification> _getNotifications(String type) {
     return notifications.where((notification) {
       if (type == 'announcement') {
         return notification.type == 'announcement';
@@ -544,21 +565,15 @@ class _NotificationTabState extends State<NotificationTab>
   // NOTIFICATION LIST
   // ===================================================
 
-  Widget _buildNotificationList(
-    List<AppNotification> items,
-    bool isDarkMode,
-  ) {
+  Widget _buildNotificationList(List<AppNotification> items, bool isDarkMode) {
     if (isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     if (items.isEmpty) {
       return Center(
         child: Column(
-          mainAxisAlignment:
-              MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
               width: 76,
@@ -566,16 +581,13 @@ class _NotificationTabState extends State<NotificationTab>
               decoration: BoxDecoration(
                 color: isDarkMode
                     ? Colors.white.withOpacity(0.06)
-                    : const Color(0xFF4A7FF7)
-                        .withOpacity(0.08),
+                    : const Color(0xFF4A7FF7).withOpacity(0.08),
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 Icons.notifications_none_rounded,
                 size: 40,
-                color: isDarkMode
-                    ? Colors.grey[600]
-                    : Colors.grey[400],
+                color: isDarkMode ? Colors.grey[600] : Colors.grey[400],
               ),
             ),
             const SizedBox(height: 14),
@@ -584,9 +596,7 @@ class _NotificationTabState extends State<NotificationTab>
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
-                color: isDarkMode
-                    ? Colors.grey[400]
-                    : Colors.grey[600],
+                color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
               ),
             ),
           ],
@@ -595,10 +605,7 @@ class _NotificationTabState extends State<NotificationTab>
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.only(
-        top: 12,
-        bottom: 20,
-      ),
+      padding: const EdgeInsets.only(top: 12, bottom: 20),
       itemCount: items.length,
       itemBuilder: (context, index) {
         final notification = items[index];
@@ -607,87 +614,60 @@ class _NotificationTabState extends State<NotificationTab>
           key: Key(notification.id),
           direction: DismissDirection.endToStart,
           background: Container(
-            margin: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 5,
-            ),
+            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
             decoration: BoxDecoration(
               color: Colors.red,
-              borderRadius:
-                  BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(18),
             ),
             alignment: Alignment.centerRight,
-            padding:
-                const EdgeInsets.only(right: 20),
-            child: const Icon(
-              Icons.delete,
-              color: Colors.white,
-            ),
+            padding: const EdgeInsets.only(right: 20),
+            child: const Icon(Icons.delete, color: Colors.white),
           ),
           onDismissed: (_) {
             _deleteNotification(notification);
           },
           child: GestureDetector(
-            onTap: () =>
-                _markAsRead(notification),
+            onTap: () => _markAsRead(notification),
             child: Container(
-              margin: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 5,
-              ),
+              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
               padding: const EdgeInsets.all(15),
               decoration: BoxDecoration(
                 color: notification.isRead
                     ? isDarkMode
-                        ? Colors.white.withOpacity(0.055)
-                        : Colors.grey.shade100
+                          ? Colors.white.withOpacity(0.055)
+                          : Colors.grey.shade100
                     : isDarkMode
-                        ? const Color(0xFF263B63)
-                            .withOpacity(0.90)
-                        : const Color(0xFFE8F0FF),
-                borderRadius:
-                    BorderRadius.circular(18),
+                    ? const Color(0xFF263B63).withOpacity(0.90)
+                    : const Color(0xFFE8F0FF),
+                borderRadius: BorderRadius.circular(18),
                 border: Border.all(
                   color: notification.isRead
                       ? isDarkMode
-                          ? Colors.white
-                              .withOpacity(0.06)
-                          : Colors.transparent
+                            ? Colors.white.withOpacity(0.06)
+                            : Colors.transparent
                       : const Color(0xFF4A7FF7),
-                  width:
-                      notification.isRead ? 1 : 1.5,
+                  width: notification.isRead ? 1 : 1.5,
                 ),
               ),
               child: Row(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
                     width: 44,
                     height: 44,
                     decoration: BoxDecoration(
-                      color:
-                          notification.type ==
-                                  'alert'
-                              ? Colors.red
-                                  .withOpacity(0.15)
-                              : const Color(
-                                  0xFF4A7FF7,
-                                ).withOpacity(0.15),
+                      color: notification.type == 'alert'
+                          ? Colors.red.withOpacity(0.15)
+                          : const Color(0xFF4A7FF7).withOpacity(0.15),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
-                      notification.type ==
-                              'alert'
+                      notification.type == 'alert'
                           ? Icons.warning_rounded
                           : Icons.campaign_rounded,
-                      color:
-                          notification.type ==
-                                  'alert'
-                              ? Colors.red
-                              : const Color(
-                                  0xFF4A7FF7,
-                                ),
+                      color: notification.type == 'alert'
+                          ? Colors.red
+                          : const Color(0xFF4A7FF7),
                     ),
                   ),
 
@@ -695,8 +675,7 @@ class _NotificationTabState extends State<NotificationTab>
 
                   Expanded(
                     child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
@@ -705,15 +684,12 @@ class _NotificationTabState extends State<NotificationTab>
                                 notification.title,
                                 style: TextStyle(
                                   fontSize: 16,
-                                  fontWeight:
-                                      notification
-                                              .isRead
-                                          ? FontWeight.w500
-                                          : FontWeight.bold,
-                                  color:
-                                      isDarkMode
-                                          ? Colors.white
-                                          : Colors.black87,
+                                  fontWeight: notification.isRead
+                                      ? FontWeight.w500
+                                      : FontWeight.bold,
+                                  color: isDarkMode
+                                      ? Colors.white
+                                      : Colors.black87,
                                 ),
                               ),
                             ),
@@ -721,14 +697,9 @@ class _NotificationTabState extends State<NotificationTab>
                               Container(
                                 width: 9,
                                 height: 9,
-                                decoration:
-                                    const BoxDecoration(
-                                  color:
-                                      Color(
-                                    0xFF4A7FF7,
-                                  ),
-                                  shape:
-                                      BoxShape.circle,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFF4A7FF7),
+                                  shape: BoxShape.circle,
                                 ),
                               ),
                           ],
@@ -740,25 +711,19 @@ class _NotificationTabState extends State<NotificationTab>
                           notification.body,
                           style: TextStyle(
                             fontSize: 14,
-                            color:
-                                isDarkMode
-                                    ? Colors.white70
-                                    : Colors.black54,
+                            color: isDarkMode ? Colors.white70 : Colors.black54,
                           ),
                         ),
 
                         const SizedBox(height: 8),
 
                         Text(
-                          _formatDate(
-                            notification.timestamp,
-                          ),
+                          _formatDate(notification.timestamp),
                           style: TextStyle(
                             fontSize: 12,
-                            color:
-                                isDarkMode
-                                    ? Colors.grey[500]
-                                    : Colors.grey[600],
+                            color: isDarkMode
+                                ? Colors.grey[500]
+                                : Colors.grey[600],
                           ),
                         ),
                       ],
@@ -768,15 +733,9 @@ class _NotificationTabState extends State<NotificationTab>
                   IconButton(
                     icon: Icon(
                       Icons.delete_outline,
-                      color:
-                          isDarkMode
-                              ? Colors.grey[400]
-                              : Colors.grey[600],
+                      color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
                     ),
-                    onPressed: () =>
-                        _deleteNotification(
-                      notification,
-                    ),
+                    onPressed: () => _deleteNotification(notification),
                   ),
                 ],
               ),
@@ -795,22 +754,13 @@ class _NotificationTabState extends State<NotificationTab>
   Widget build(BuildContext context) {
     return ValueListenableBuilder<bool>(
       valueListenable: isDarkModeNotifier,
-      builder: (
-        context,
-        isDarkMode,
-        child,
-      ) {
-        final announcements =
-            _getNotifications('announcement');
+      builder: (context, isDarkMode, child) {
+        final announcements = _getNotifications('announcement');
 
-        final alerts =
-            _getNotifications('alert');
+        final alerts = _getNotifications('alert');
 
         return Scaffold(
-          backgroundColor:
-              isDarkMode
-                  ? const Color(0xFF212121)
-                  : Colors.white,
+          backgroundColor: isDarkMode ? const Color(0xFF212121) : Colors.white,
 
           body: Column(
             children: [
@@ -823,18 +773,12 @@ class _NotificationTabState extends State<NotificationTab>
                 decoration: BoxDecoration(
                   color: isDarkMode
                       ? const Color(0xFF212121)
-                      : const Color.fromARGB(
-                          255,
-                          72,
-                          119,
-                          247,
-                        ),
+                      : const Color.fromARGB(255, 72, 119, 247),
                 ),
                 child: SafeArea(
                   bottom: false,
                   child: Padding(
-                    padding:
-                        const EdgeInsets.symmetric(
+                    padding: const EdgeInsets.symmetric(
                       horizontal: 16,
                       vertical: 12,
                     ),
@@ -842,10 +786,8 @@ class _NotificationTabState extends State<NotificationTab>
                       children: [
                         GestureDetector(
                           onDoubleTap: () {
-                            isDarkModeNotifier
-                                    .value =
-                                !isDarkModeNotifier
-                                    .value;
+                            isDarkModeNotifier.value =
+                                !isDarkModeNotifier.value;
                           },
                           child: SizedBox(
                             width: 50,
@@ -862,8 +804,7 @@ class _NotificationTabState extends State<NotificationTab>
                           'Notification',
                           style: TextStyle(
                             fontSize: 20,
-                            fontWeight:
-                                FontWeight.bold,
+                            fontWeight: FontWeight.bold,
                             color: Colors.white,
                           ),
                         ),
@@ -876,17 +817,13 @@ class _NotificationTabState extends State<NotificationTab>
                             color: Colors.white,
                           ),
                           onSelected: (value) {
-                            if (value ==
-                                'mark_all') {
-                              NotificationStorage
-                                  .markAllAsRead()
-                                  .then((_) {
+                            if (value == 'mark_all') {
+                              NotificationStorage.markAllAsRead().then((_) {
                                 _loadNotifications();
                               });
                             }
 
-                            if (value ==
-                                'delete_all') {
+                            if (value == 'delete_all') {
                               _deleteAllNotifications();
                             }
                           },
@@ -894,15 +831,11 @@ class _NotificationTabState extends State<NotificationTab>
                             return [
                               const PopupMenuItem(
                                 value: 'mark_all',
-                                child: Text(
-                                  'Mark all as read',
-                                ),
+                                child: Text('Mark all as read'),
                               ),
                               const PopupMenuItem(
                                 value: 'delete_all',
-                                child: Text(
-                                  'Remove all notifications',
-                                ),
+                                child: Text('Remove all notifications'),
                               ),
                             ];
                           },
@@ -916,44 +849,28 @@ class _NotificationTabState extends State<NotificationTab>
               // =================================================
               // TABS
               // =================================================
-
               Container(
                 decoration: BoxDecoration(
-                  color: isDarkMode
-                      ? const Color(0xFF303030)
-                      : Colors.white,
+                  color: isDarkMode ? const Color(0xFF303030) : Colors.white,
                   border: Border(
                     bottom: BorderSide(
                       color: isDarkMode
-                          ? Colors.white
-                              .withOpacity(0.05)
-                          : Colors.grey
-                              .withOpacity(0.12),
+                          ? Colors.white.withOpacity(0.05)
+                          : Colors.grey.withOpacity(0.12),
                     ),
                   ),
                 ),
                 child: TabBar(
                   controller: _tabController,
-                  labelColor:
-                      const Color(0xFF4A7FF7),
-                  unselectedLabelColor:
-                      isDarkMode
-                          ? Colors.grey[400]
-                          : Colors.grey[600],
-                  indicatorColor:
-                      const Color(0xFF4A7FF7),
+                  labelColor: const Color(0xFF4A7FF7),
+                  unselectedLabelColor: isDarkMode
+                      ? Colors.grey[400]
+                      : Colors.grey[600],
+                  indicatorColor: const Color(0xFF4A7FF7),
                   indicatorWeight: 2.5,
                   tabs: const [
-                    Tab(
-                      icon:
-                          Icon(Icons.campaign),
-                      text: 'Announcements',
-                    ),
-                    Tab(
-                      icon:
-                          Icon(Icons.warning),
-                      text: 'Alerts',
-                    ),
+                    Tab(icon: Icon(Icons.campaign), text: 'Announcements'),
+                    Tab(icon: Icon(Icons.warning), text: 'Alerts'),
                   ],
                 ),
               ),
@@ -961,19 +878,12 @@ class _NotificationTabState extends State<NotificationTab>
               // =================================================
               // NOTIFICATIONS
               // =================================================
-
               Expanded(
                 child: TabBarView(
                   controller: _tabController,
                   children: [
-                    _buildNotificationList(
-                      announcements,
-                      isDarkMode,
-                    ),
-                    _buildNotificationList(
-                      alerts,
-                      isDarkMode,
-                    ),
+                    _buildNotificationList(announcements, isDarkMode),
+                    _buildNotificationList(alerts, isDarkMode),
                   ],
                 ),
               ),

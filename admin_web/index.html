@@ -37,6 +37,9 @@
           <button class="page-nav-button" type="button" data-page="notifications">
             <span aria-hidden="true">🔔</span> Notifications
           </button>
+          <button class="page-nav-button" type="button" data-page="ml-monitoring">
+            <span aria-hidden="true">📈</span> ML Monitoring
+          </button>
         </nav>
         <div class="account-controls"><span id="admin-identity" class="admin-identity"></span><button id="logout-button" class="quiet-button" type="button">Log Out</button><div id="connection-state" class="connection-state connecting" role="status">Connecting...</div></div>
       </header>
@@ -104,6 +107,63 @@
           </div>
           <dl id="details-grid" class="details-grid"></dl>
         </section>
+        </section>
+
+        <section id="ml-monitoring-page" class="page-section" aria-label="ML Monitoring" hidden>
+          <div class="ml-page-heading">
+            <div>
+              <p class="eyebrow">LSTM + XGBOOST + RANDOM FOREST ENSEMBLE</p>
+              <h2>ML Monitoring</h2>
+              <p class="ml-muted">Live forecast and measured rainfall verification for the configured model location.</p>
+            </div>
+            <div class="ml-refresh-controls">
+              <span id="ml-connection-state" class="ml-state unavailable" role="status">Waiting for ML API</span>
+              <button id="ml-refresh-button" class="quiet-button" type="button">Refresh forecast</button>
+            </div>
+          </div>
+
+          <div id="ml-message" class="message" role="status" hidden></div>
+
+          <section class="ml-summary-grid" aria-label="Current ML flood summary">
+            <article class="ml-summary-card"><span>Sensor-backed flood risk</span><strong id="ml-risk-value" class="risk-low">Unavailable</strong><small id="ml-risk-detail">Waiting for sensor reading</small></article>
+            <article class="ml-summary-card"><span>Current water rise</span><strong id="ml-water-rise">—</strong><small>Baseline distance: 150 cm</small></article>
+            <article class="ml-summary-card"><span>Current rainfall</span><strong id="ml-current-rain">—</strong><small>Latest Open-Meteo hourly value</small></article>
+            <article class="ml-summary-card"><span>Last prediction</span><strong id="ml-last-prediction">—</strong><small id="ml-location-label">Model location</small></article>
+          </section>
+
+          <section class="ml-panel-grid">
+            <article class="panel ml-panel">
+              <div class="panel-heading"><div><h2>ML Rainfall Forecast</h2><p>Actual values returned by the existing ensemble endpoint.</p></div></div>
+              <div id="ml-forecast-values" class="ml-forecast-grid"><p class="ml-muted">Waiting for predictions…</p></div>
+            </article>
+            <article class="panel ml-panel">
+              <div class="panel-heading"><div><h2>Rainfall Prediction Graph</h2><p>Predicted rainfall accumulation by horizon.</p></div></div>
+              <div id="ml-forecast-chart" class="ml-chart" role="img" aria-label="ML rainfall forecast chart"><p class="ml-muted">Chart unavailable until real predictions arrive.</p></div>
+            </article>
+          </section>
+
+          <section class="ml-panel-grid ml-panel-grid-lower">
+            <article class="panel ml-panel">
+              <div class="panel-heading"><div><h2>Model Status</h2><p>Loaded model outputs reported by FastAPI.</p></div></div>
+              <div id="ml-model-status" class="ml-model-status"><p class="ml-muted">Model status unavailable.</p></div>
+              <p class="ml-note">Overall risk follows validated sensor water-rise thresholds. Rainfall predictions are shown as context because no rainfall-to-risk thresholds are configured.</p>
+            </article>
+            <article class="panel ml-panel">
+              <div class="panel-heading"><div><h2>ML Risk Monitoring Point</h2><p id="ml-map-caption">No barangay-specific model coordinates are configured.</p></div></div>
+              <div id="ml-risk-map" class="ml-risk-map" aria-label="Map of the configured ML model location"></div>
+            </article>
+          </section>
+
+          <section class="panel ml-panel ml-evaluation-panel">
+            <div class="panel-heading"><div><h2>Prediction vs Actual</h2><p>Actuals are collected from completed Open-Meteo hourly records after each forecast. Metrics remain blank until a complete horizon is observed.</p></div></div>
+            <div class="table-scroll">
+              <table class="ml-table">
+                <thead><tr><th>Horizon</th><th>Latest prediction</th><th>Actual rainfall</th><th>Absolute error</th><th>MAE</th><th>RMSE</th><th>Mean error %</th><th>Samples</th></tr></thead>
+                <tbody id="ml-evaluation-rows"><tr><td colspan="8" class="ml-muted">No completed comparisons yet.</td></tr></tbody>
+              </table>
+            </div>
+            <p class="ml-note">History is stored locally by the FastAPI host in <code>DETECT-CO-ML/data/ml_monitoring.sqlite3</code>; it does not create or modify Firebase paths.</p>
+          </section>
         </section>
 
         <section id="notifications-page" class="page-section" aria-label="Notifications" hidden>

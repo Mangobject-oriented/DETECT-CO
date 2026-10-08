@@ -53,3 +53,4 @@ venv/
 DETECT-CO-ML/venv/
 __pycache__/
 DETECT-CO-ML/__pycache__/
+DETECT-CO-ML/data/ml_monitoring.sqlite3*

@@ -48,6 +48,50 @@ body {
 .admin-identity { max-width: 220px; overflow: hidden; color: var(--app-muted); font-size: .78rem; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 620px) { .account-controls { flex-wrap: wrap; justify-content: flex-end; } .admin-identity { max-width: 130px; } }
 
+.ml-page-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.ml-page-heading h2 { margin: 0 0 5px; font-size: 1.25rem; }
+.ml-muted, .ml-note { color: var(--app-muted); font-size: .78rem; line-height: 1.5; }
+.ml-page-heading p:last-child { margin-bottom: 0; }
+.ml-refresh-controls { display: flex; align-items: center; gap: 10px; }
+.ml-state { padding: 7px 10px; border: 1px solid var(--app-border); border-radius: 999px; font-size: .75rem; white-space: nowrap; }
+.ml-state.live { color: #a7e9af; border-color: rgb(92 219 110 / 30%); }
+.ml-state.unavailable { color: #ffc08a; border-color: rgb(255 154 60 / 30%); }
+.ml-summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+.ml-summary-card { display: grid; gap: 7px; min-width: 0; padding: 16px; border: 1px solid var(--app-border); border-radius: 15px; background: var(--app-card); }
+.ml-summary-card > span, .ml-summary-card small { color: var(--app-muted); font-size: .75rem; }
+.ml-summary-card strong { overflow: hidden; font-size: 1.4rem; text-overflow: ellipsis; white-space: nowrap; }
+.risk-low { color: var(--app-green); }
+.risk-moderate { color: var(--app-orange); }
+.risk-high { color: var(--app-red); }
+.risk-unavailable { color: var(--app-muted); }
+.ml-panel-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; margin-bottom: 14px; }
+.ml-panel { min-width: 0; padding: 17px; }
+.ml-panel .panel-heading { margin-bottom: 13px; }
+.ml-forecast-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.ml-forecast-value { display: grid; gap: 8px; min-width: 0; padding: 12px 8px; border: 1px solid var(--app-border); border-radius: 11px; background: #292929; text-align: center; }
+.ml-forecast-value span { color: var(--app-muted); font-size: .76rem; }
+.ml-forecast-value strong { font-size: clamp(.85rem, 1.4vw, 1.1rem); overflow-wrap: anywhere; }
+.ml-chart { width: 100%; min-height: 190px; }
+.ml-chart svg { display: block; width: 100%; height: 190px; overflow: visible; }
+.ml-chart-grid { stroke: rgb(255 255 255 / 10%); stroke-width: 1; }
+.ml-chart-line { fill: none; stroke: #7bb0ff; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.ml-chart-dot { fill: #a9ccff; stroke: #263b63; stroke-width: 2; }
+.ml-chart-label { fill: #a5abb3; font: 12px Inter, system-ui, sans-serif; }
+.ml-model-status { display: grid; gap: 8px; margin: 6px 0 13px; }
+.ml-model-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 11px; border: 1px solid var(--app-border); border-radius: 10px; background: #292929; }
+.ml-model-row strong { color: var(--app-text); font-size: .85rem; }
+.ml-model-row span { color: var(--app-green); font-size: .75rem; font-weight: 700; }
+.ml-note { margin: 12px 0 0; }
+.ml-risk-map { min-height: 270px; overflow: hidden; border: 1px solid var(--app-border); border-radius: 12px; background: #262a30; }
+.ml-evaluation-panel { margin-bottom: 8px; }
+.table-scroll { overflow-x: auto; }
+.ml-table { width: 100%; border-collapse: collapse; font-size: .78rem; white-space: nowrap; }
+.ml-table th, .ml-table td { padding: 11px 10px; border-bottom: 1px solid var(--app-border); text-align: left; }
+.ml-table th { color: var(--app-muted); font-size: .68rem; letter-spacing: .04em; text-transform: uppercase; }
+.ml-table tbody tr:last-child td { border-bottom: 0; }
+@media (max-width: 900px) { .ml-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 680px) { .ml-page-heading { align-items: flex-start; flex-direction: column; } .ml-refresh-controls { width: 100%; justify-content: space-between; } .ml-panel-grid { grid-template-columns: 1fr; } .ml-forecast-grid { gap: 4px; } .ml-forecast-value { padding: 10px 4px; } }
+
 button,
 input,
 textarea,

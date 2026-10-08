@@ -18,6 +18,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:detectco/services/weather_condition.dart';
 import 'package:detectco/services/flood_risk.dart';
+import 'package:detectco/services/ml_flood_risk.dart';
 
 // Firebase Realtime Database
 import 'package:firebase_database/firebase_database.dart';
@@ -181,11 +182,7 @@ class _SearchResult {
   final EvacSite? site;
   final Hospital? hospital;
 
-  const _SearchResult({
-    required this.name,
-    this.site,
-    this.hospital,
-  });
+  const _SearchResult({required this.name, this.site, this.hospital});
 }
 
 class _EvacCandidate {
@@ -452,17 +449,7 @@ class _CachedTileImage extends ImageProvider<_CachedTileImage> {
 // are selected. Probability values never trigger precipitation.
 // =====================================================
 
-enum _WxKind {
-  none,
-  clear,
-  partly,
-  cloudy,
-  fog,
-  drizzle,
-  rain,
-  thunder,
-  snow,
-}
+enum _WxKind { none, clear, partly, cloudy, fog, drizzle, rain, thunder, snow }
 
 @immutable
 class _WxVisual {
@@ -499,9 +486,10 @@ _WxVisual _visualForCode(int code, bool isDay, double precipitationMm) {
     _ => 2,
   };
   return switch (condition) {
-    WeatherCondition.clear => code <= 1 && isDay
-        ? _WxVisual(_WxKind.clear, code == 0 ? 2 : 1, isDay)
-        : _WxVisual.none,
+    WeatherCondition.clear =>
+      code <= 1 && isDay
+          ? _WxVisual(_WxKind.clear, code == 0 ? 2 : 1, isDay)
+          : _WxVisual.none,
     WeatherCondition.partlyCloudy => _WxVisual(_WxKind.partly, 1, isDay),
     WeatherCondition.cloudy => _WxVisual(_WxKind.cloudy, 2, isDay),
     WeatherCondition.fog => _WxVisual(_WxKind.fog, 1, isDay),
@@ -515,8 +503,7 @@ _WxVisual _visualForCode(int code, bool isDay, double precipitationMm) {
 bool _isOfflineResult(dynamic result) {
   // connectivity_plus 6.x returns a List, 5.x a single value.
   if (result is List) {
-    return result.isEmpty ||
-        result.every((e) => e == ConnectivityResult.none);
+    return result.isEmpty || result.every((e) => e == ConnectivityResult.none);
   }
   return result == ConnectivityResult.none;
 }
@@ -622,11 +609,7 @@ class _WeatherOverlayState extends State<_WeatherOverlay>
 
     return IgnorePointer(
       child: SizedBox.expand(
-        child: RepaintBoundary(
-          child: CustomPaint(
-            painter: _painter,
-          ),
-        ),
+        child: RepaintBoundary(child: CustomPaint(painter: _painter)),
       ),
     );
   }
@@ -866,18 +849,12 @@ class _WeatherPainter extends CustomPainter {
         const [0.0, 1.0],
       );
 
-    _cloudPaint!.color = Color.fromRGBO(
-      255,
-      255,
-      255,
-      rel.clamp(0.0, 1.0),
-    );
+    _cloudPaint!.color = Color.fromRGBO(255, 255, 255, rel.clamp(0.0, 1.0));
 
     final double span = size.width + 2 * r;
 
     for (int i = 0; i < count; i++) {
-      final double x =
-          ((i * 0.41 + t * (0.006 + 0.002 * i)) % 1.0) * span - r;
+      final double x = ((i * 0.41 + t * (0.006 + 0.002 * i)) % 1.0) * span - r;
       final double y = size.height * (0.16 + 0.30 * i);
 
       canvas.save();
@@ -906,8 +883,7 @@ class _WeatherPainter extends CustomPainter {
       );
 
     for (int i = 0; i < 3; i++) {
-      final double dx =
-          math.sin(t * 0.07 + i * 2.1) * size.width * 0.10;
+      final double dx = math.sin(t * 0.07 + i * 2.1) * size.width * 0.10;
       final double y = size.height * (0.02 + 0.32 * i);
 
       canvas.save();
@@ -996,8 +972,7 @@ class _WeatherPainter extends CustomPainter {
     for (int i = 0; i < _count; i++) {
       final double fy = (_sy[i] + t * _sp[i]) % 1.0;
       final double y = fy * (h + 10) - 5;
-      final double x =
-          _sx[i] * w + math.sin(t * 0.7 + _sl[i] * 6.283) * 10;
+      final double x = _sx[i] * w + math.sin(t * 0.7 + _sl[i] * 6.283) * 10;
 
       if (i < half) {
         _bufSmall[i * 2] = x;
@@ -1037,11 +1012,9 @@ class _MapTabState extends State<MapTab> {
   EvacSite? selectedSite;
   Hospital? selectedHospital;
 
-  final LatLng swCorner =
-      LatLng(14.13466576727542, 121.00698800147504);
+  final LatLng swCorner = LatLng(14.13466576727542, 121.00698800147504);
 
-  final LatLng neCorner =
-      LatLng(14.242176187772285, 121.20972008423361);
+  final LatLng neCorner = LatLng(14.242176187772285, 121.20972008423361);
 
   late final LatLng calambaCenter = LatLng(
     (swCorner.latitude + neCorner.latitude) / 2,
@@ -1058,7 +1031,7 @@ class _MapTabState extends State<MapTab> {
   // markers near the northern edge can be panned clear of
   // them.
   // =====================================================
-    // TEMP DEBUG: set to a WMO code (e.g. 63 = rain, 95 = thunder, 45 = fog)
+  // TEMP DEBUG: set to a WMO code (e.g. 63 = rain, 95 = thunder, 45 = fog)
   // to force an effect. Set back to null when done.
   static const int? _debugForceCode = 63;
 
@@ -1084,12 +1057,22 @@ class _MapTabState extends State<MapTab> {
 
   // Water rise in centimeters, calculated from the 150 cm sensor baseline.
   double waterLevel = 0;
+  bool _waterSensorAvailable = false;
+
+  MlForecastSnapshot _mlForecast = MlFloodRiskStore.instance.forecast;
 
   FloodRiskStatus get _currentFloodRisk =>
       FloodRiskReading.statusForWaterRise(waterLevel);
 
-  final DatabaseReference dbRef =
-      FirebaseDatabase.instance.ref().child('flood');
+  MlFloodRiskAssessment get _mlRiskAssessment =>
+      MlFloodRiskAssessment.calculate(
+        waterRiseCm: waterLevel,
+        forecast: _mlForecast,
+      );
+
+  final DatabaseReference dbRef = FirebaseDatabase.instance.ref().child(
+    'flood',
+  );
 
   late final StreamSubscription<DatabaseEvent> _firebaseSub;
 
@@ -1116,8 +1099,7 @@ class _MapTabState extends State<MapTab> {
 
   bool _legendExpanded = false;
 
-  final TextEditingController _searchController =
-      TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
   bool _placesLoadFailed = false;
@@ -1166,17 +1148,14 @@ class _MapTabState extends State<MapTab> {
   // costly on low/mid-range Android devices.
   // =====================================================
 
-  BoxDecoration _glassDecoration(
-    bool isDarkMode, {
-    double radius = 14,
-  }) {
+  BoxDecoration _glassDecoration(bool isDarkMode, {double radius = 14}) {
     return BoxDecoration(
-      color: (isDarkMode ? const Color(0xFF2C2C2C) : Colors.white)
-          .withOpacity(0.85),
+      color: (isDarkMode ? const Color(0xFF2C2C2C) : Colors.white).withOpacity(
+        0.85,
+      ),
       borderRadius: BorderRadius.circular(radius),
       border: Border.all(
-        color: (isDarkMode ? Colors.white : Colors.black)
-            .withOpacity(0.10),
+        color: (isDarkMode ? Colors.white : Colors.black).withOpacity(0.10),
         width: 1,
       ),
       boxShadow: const [
@@ -1205,16 +1184,16 @@ class _MapTabState extends State<MapTab> {
 
     if (_lastMessage == message &&
         _lastMessageAt != null &&
-        now.difference(_lastMessageAt!) <
-            const Duration(seconds: 8)) {
+        now.difference(_lastMessageAt!) < const Duration(seconds: 8)) {
       return;
     }
 
     _lastMessage = message;
     _lastMessageAt = now;
 
-    final ScaffoldMessengerState? messenger =
-        ScaffoldMessenger.maybeOf(context);
+    final ScaffoldMessengerState? messenger = ScaffoldMessenger.maybeOf(
+      context,
+    );
 
     if (messenger == null) return;
 
@@ -1226,10 +1205,7 @@ class _MapTabState extends State<MapTab> {
           duration: const Duration(seconds: 5),
           behavior: SnackBarBehavior.floating,
           action: (actionLabel != null && onAction != null)
-              ? SnackBarAction(
-                  label: actionLabel,
-                  onPressed: onAction,
-                )
+              ? SnackBarAction(label: actionLabel, onPressed: onAction)
               : null,
         ),
       );
@@ -1239,16 +1215,11 @@ class _MapTabState extends State<MapTab> {
   // TILE ERRORS (shown at most once a minute, no retries)
   // =====================================================
 
-  void _onTileError(
-    TileImage tile,
-    Object error,
-    StackTrace? stackTrace,
-  ) {
+  void _onTileError(TileImage tile, Object error, StackTrace? stackTrace) {
     final DateTime now = DateTime.now();
 
     if (_lastTileErrorAt != null &&
-        now.difference(_lastTileErrorAt!) <
-            const Duration(seconds: 60)) {
+        now.difference(_lastTileErrorAt!) < const Duration(seconds: 60)) {
       return;
     }
 
@@ -1313,8 +1284,9 @@ class _MapTabState extends State<MapTab> {
     if (!mounted) return;
 
     try {
-      _connectivitySub =
-          Connectivity().onConnectivityChanged.listen((dynamic result) {
+      _connectivitySub = Connectivity().onConnectivityChanged.listen((
+        dynamic result,
+      ) {
         final bool wasOffline = _offline;
         final bool nowOffline = _isOfflineResult(result);
 
@@ -1383,7 +1355,11 @@ class _MapTabState extends State<MapTab> {
     }
   }
 
-  Future<void> _saveWeather(int code, bool isDay, double precipitationMm) async {
+  Future<void> _saveWeather(
+    int code,
+    bool isDay,
+    double precipitationMm,
+  ) async {
     final String? root = _tileProvider.cachePath;
     if (root == null) return;
 
@@ -1415,8 +1391,9 @@ class _MapTabState extends State<MapTab> {
         '&timezone=auto',
       );
 
-      final http.Response response =
-          await http.get(uri).timeout(const Duration(seconds: 10));
+      final http.Response response = await http
+          .get(uri)
+          .timeout(const Duration(seconds: 10));
 
       if (response.statusCode != 200) {
         throw HttpException('Weather status ${response.statusCode}');
@@ -1427,10 +1404,12 @@ class _MapTabState extends State<MapTab> {
 
       final int code = (current['weather_code'] as num).toInt();
       final bool isDay = ((current['is_day'] as num?)?.toInt() ?? 1) == 1;
-      final double precipitationMm = math.max(
-        (current['precipitation'] as num?)?.toDouble() ?? 0,
-        (current['rain'] as num?)?.toDouble() ?? 0,
-      ).toDouble();
+      final double precipitationMm = math
+          .max(
+            (current['precipitation'] as num?)?.toDouble() ?? 0,
+            (current['rain'] as num?)?.toDouble() ?? 0,
+          )
+          .toDouble();
 
       _saveWeather(code, isDay, precipitationMm);
 
@@ -1528,9 +1507,10 @@ class _MapTabState extends State<MapTab> {
         if (!mounted || _offline) return;
 
         final List<bool> results = await Future.wait(
-          tiles.skip(i).take(2).map(
-                (t) => _tileProvider.ensureTile(t[0], t[1], t[2]),
-              ),
+          tiles
+              .skip(i)
+              .take(2)
+              .map((t) => _tileProvider.ensureTile(t[0], t[1], t[2])),
         );
 
         failures += results.where((ok) => !ok).length;
@@ -1574,35 +1554,36 @@ class _MapTabState extends State<MapTab> {
           .child('evac_status')
           .onValue
           .listen(
-        (event) {
-          final dynamic value = event.snapshot.value;
-          final Map<String, EvacStatus> parsed = {};
+            (event) {
+              final dynamic value = event.snapshot.value;
+              final Map<String, EvacStatus> parsed = {};
 
-          if (value is Map) {
-            value.forEach((key, v) {
-              final dynamic raw = v is Map ? v['status'] : v;
-              final EvacStatus? status =
-                  tryParseEvacStatus(raw?.toString());
+              if (value is Map) {
+                value.forEach((key, v) {
+                  final dynamic raw = v is Map ? v['status'] : v;
+                  final EvacStatus? status = tryParseEvacStatus(
+                    raw?.toString(),
+                  );
 
-              if (status != null) {
-                parsed[key.toString()] = status;
+                  if (status != null) {
+                    parsed[key.toString()] = status;
+                  }
+                });
               }
-            });
-          }
 
-          if (!mounted) return;
+              if (!mounted) return;
 
-          setState(() {
-            _remoteStatus
-              ..clear()
-              ..addAll(parsed);
-          });
-        },
-        onError: (Object e) {
-          // Static / default statuses keep working.
-          debugPrint('Evac status listener error: $e');
-        },
-      );
+              setState(() {
+                _remoteStatus
+                  ..clear()
+                  ..addAll(parsed);
+              });
+            },
+            onError: (Object e) {
+              // Static / default statuses keep working.
+              debugPrint('Evac status listener error: $e');
+            },
+          );
     } catch (e) {
       debugPrint('Evac status setup error: $e');
     }
@@ -1643,6 +1624,56 @@ class _MapTabState extends State<MapTab> {
     return 'No active flood alert';
   }
 
+  void _showMlRiskDetails(bool isDarkMode) {
+    final assessment = _mlRiskAssessment;
+    final forecast = _mlForecast;
+    const horizons = [1, 3, 6, 12, 24];
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: isDarkMode ? const Color(0xFF303030) : Colors.white,
+        title: Text(
+          'ML Flood Risk · ${_waterSensorAvailable ? assessment.label : 'UNAVAILABLE'}',
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              _waterSensorAvailable
+                  ? 'Current water rise: ${assessment.waterRiseCm.toStringAsFixed(1)} cm'
+                  : 'Current water rise: unavailable (sensor data missing)',
+            ),
+            Text(
+              forecast.currentRainfallMm == null
+                  ? 'Current rainfall: unavailable'
+                  : 'Current rainfall: ${forecast.currentRainfallMm!.toStringAsFixed(1)} mm',
+            ),
+            const SizedBox(height: 10),
+            for (final horizon in horizons)
+              Text(
+                '$horizon-hour prediction: ${forecast.predictionsMm[horizon]?.toStringAsFixed(1) ?? '--'} mm',
+              ),
+            if (forecast.generatedAt != null)
+              Text(
+                'Updated: ${TimeOfDay.fromDateTime(forecast.generatedAt!).format(context)}',
+              ),
+            if (!forecast.available)
+              const Text(
+                'ML forecast is unavailable. Risk uses the current sensor reading.',
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   String _formatDistance(double meters) {
     return meters >= 1000
         ? '${(meters / 1000).toStringAsFixed(1)} km away'
@@ -1651,8 +1682,9 @@ class _MapTabState extends State<MapTab> {
 
   Future<void> _loadMapPlaces() async {
     try {
-      final String jsonString =
-          await rootBundle.loadString('assets/data/map_places.json');
+      final String jsonString = await rootBundle.loadString(
+        'assets/data/map_places.json',
+      );
 
       final List<dynamic> data = jsonDecode(jsonString);
 
@@ -1660,15 +1692,14 @@ class _MapTabState extends State<MapTab> {
       final List<Hospital> loadedHospitals = [];
 
       for (final item in data) {
-        final Map<String, dynamic> place =
-            Map<String, dynamic>.from(item as Map);
+        final Map<String, dynamic> place = Map<String, dynamic>.from(
+          item as Map,
+        );
 
         final String type = place['type']?.toString() ?? '';
 
-        final double latitude =
-            (place['latitude'] as num).toDouble();
-        final double longitude =
-            (place['longitude'] as num).toDouble();
+        final double latitude = (place['latitude'] as num).toDouble();
+        final double longitude = (place['longitude'] as num).toDouble();
 
         if (type == 'hospital') {
           loadedHospitals.add(
@@ -1683,12 +1714,10 @@ class _MapTabState extends State<MapTab> {
             EvacSite(
               name: place['name']?.toString() ?? '',
               description: place['description']?.toString() ?? '',
-              image: place['image']?.toString() ??
-                  'assets/images/evac1.png',
+              image: place['image']?.toString() ?? 'assets/images/evac1.png',
               location: LatLng(latitude, longitude),
-              status: tryParseEvacStatus(
-                    place['status']?.toString(),
-                  ) ??
+              status:
+                  tryParseEvacStatus(place['status']?.toString()) ??
                   EvacStatus.open,
             ),
           );
@@ -1727,6 +1756,7 @@ class _MapTabState extends State<MapTab> {
   @override
   void initState() {
     super.initState();
+    MlFloodRiskStore.instance.addListener(_onMlForecastChanged);
 
     _loadMapPlaces();
     _listenForEvacStatus();
@@ -1745,6 +1775,7 @@ class _MapTabState extends State<MapTab> {
         if (!mounted) return;
 
         setState(() {
+          _waterSensorAvailable = distanceCm != null;
           waterLevel = distanceCm == null
               ? 0
               : FloodRiskReading.waterRiseCm(distanceCm);
@@ -1752,7 +1783,12 @@ class _MapTabState extends State<MapTab> {
       },
       onError: (Object e) {
         debugPrint('Flood data listener error: $e');
-        if (mounted) setState(() => waterLevel = 0);
+        if (mounted) {
+          setState(() {
+            _waterSensorAvailable = false;
+            waterLevel = 0;
+          });
+        }
       },
     );
 
@@ -1764,6 +1800,11 @@ class _MapTabState extends State<MapTab> {
         _focusOnRequestedSite();
       });
     }
+  }
+
+  void _onMlForecastChanged() {
+    if (!mounted) return;
+    setState(() => _mlForecast = MlFloodRiskStore.instance.forecast);
   }
 
   // =====================================================
@@ -1793,6 +1834,7 @@ class _MapTabState extends State<MapTab> {
 
   @override
   void dispose() {
+    MlFloodRiskStore.instance.removeListener(_onMlForecastChanged);
     _firebaseSub.cancel();
     _statusSub?.cancel();
     _positionStream?.cancel();
@@ -1819,7 +1861,8 @@ class _MapTabState extends State<MapTab> {
     EvacSite? match;
 
     for (final site in evacSites) {
-      final bool sameName = widget.focusName != null &&
+      final bool sameName =
+          widget.focusName != null &&
           site.name.toLowerCase() == widget.focusName!.toLowerCase();
 
       final bool sameSpot =
@@ -1832,7 +1875,8 @@ class _MapTabState extends State<MapTab> {
       }
     }
 
-    final EvacSite site = match ??
+    final EvacSite site =
+        match ??
         EvacSite(
           name: widget.focusName ?? 'Evacuation Center',
           description: widget.focusDescription ?? '',
@@ -1861,10 +1905,7 @@ class _MapTabState extends State<MapTab> {
   // a simple message; there is no automatic retry.
   // =====================================================
 
-  Future<void> getRoute(
-    LatLng start,
-    LatLng end,
-  ) async {
+  Future<void> getRoute(LatLng start, LatLng end) async {
     final url =
         'https://router.project-osrm.org/route/v1/driving/'
         '${start.longitude},${start.latitude};'
@@ -1891,11 +1932,7 @@ class _MapTabState extends State<MapTab> {
         if (!mounted) return;
 
         setState(() {
-          routePoints = coords
-              .map<LatLng>(
-                (c) => LatLng(c[1], c[0]),
-              )
-              .toList();
+          routePoints = coords.map<LatLng>((c) => LatLng(c[1], c[0])).toList();
         });
       } else {
         debugPrint('Route API status: ${response.statusCode}');
@@ -1969,8 +2006,7 @@ class _MapTabState extends State<MapTab> {
     for (final site in evacSites) {
       final EvacStatus status = _statusFor(site);
 
-      if (status == EvacStatus.full ||
-          status == EvacStatus.unavailable) {
+      if (status == EvacStatus.full || status == EvacStatus.unavailable) {
         continue;
       }
 
@@ -2060,10 +2096,7 @@ class _MapTabState extends State<MapTab> {
 
     mapController.move(nearest.location, 16);
 
-    getRoute(
-      currentPosition!,
-      nearest.location,
-    );
+    getRoute(currentPosition!, nearest.location);
 
     _showHospitalPanel(nearest, minDist);
   }
@@ -2074,10 +2107,7 @@ class _MapTabState extends State<MapTab> {
 
   Widget _statusChip(EvacStatus status) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: 6,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: status.color.withOpacity(0.15),
         borderRadius: BorderRadius.circular(20),
@@ -2115,14 +2145,17 @@ class _MapTabState extends State<MapTab> {
         return ValueListenableBuilder<bool>(
           valueListenable: isDarkModeNotifier,
           builder: (context, isDarkMode, child) {
-            final Color panelBackground =
-                isDarkMode ? const Color(0xFF2C2C2C) : Colors.white;
+            final Color panelBackground = isDarkMode
+                ? const Color(0xFF2C2C2C)
+                : Colors.white;
 
-            final Color titleColor =
-                isDarkMode ? Colors.white : const Color(0xFF1D2B4A);
+            final Color titleColor = isDarkMode
+                ? Colors.white
+                : const Color(0xFF1D2B4A);
 
-            final Color subtitleColor =
-                isDarkMode ? Colors.grey[400]! : const Color(0xFF5A6B8C);
+            final Color subtitleColor = isDarkMode
+                ? Colors.grey[400]!
+                : const Color(0xFF5A6B8C);
 
             const Color accent = Color(0xFF2867F5);
 
@@ -2159,10 +2192,7 @@ class _MapTabState extends State<MapTab> {
                         'Centers marked Full or Unavailable are left out. '
                         'Centers inside an active flood-risk area are '
                         'ranked lower.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: subtitleColor,
-                        ),
+                        style: TextStyle(fontSize: 12, color: subtitleColor),
                       ),
                       const SizedBox(height: 12),
                       for (int i = 0; i < candidates.length; i++)
@@ -2179,10 +2209,7 @@ class _MapTabState extends State<MapTab> {
                         'This is based on the information available in the '
                         'app and does not guarantee that a location is safe. '
                         'Always follow official advisories.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: subtitleColor,
-                        ),
+                        style: TextStyle(fontSize: 12, color: subtitleColor),
                       ),
                     ],
                   ),
@@ -2205,7 +2232,8 @@ class _MapTabState extends State<MapTab> {
   ) {
     return Semantics(
       button: true,
-      label: '${recommended ? "Recommended. " : ""}${c.site.name}, '
+      label:
+          '${recommended ? "Recommended. " : ""}${c.site.name}, '
           '${_formatDistance(c.distanceMeters)}, '
           'status ${c.status.description}, ${_floodNote(c.site)}',
       child: InkWell(
@@ -2232,10 +2260,7 @@ class _MapTabState extends State<MapTab> {
           ),
           child: Row(
             children: [
-              Icon(
-                recommended ? Icons.star : Icons.place,
-                color: accent,
-              ),
+              Icon(recommended ? Icons.star : Icons.place, color: accent),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -2262,10 +2287,7 @@ class _MapTabState extends State<MapTab> {
                     Text(
                       '${_formatDistance(c.distanceMeters)}  •  '
                       'Status: ${c.status.description}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: subtitleColor,
-                      ),
+                      style: TextStyle(fontSize: 12, color: subtitleColor),
                     ),
                     Text(
                       _floodNote(c.site),
@@ -2303,23 +2325,13 @@ class _MapTabState extends State<MapTab> {
 
     if (_currentFloodRisk == FloodRiskStatus.critical) {
       riskText = "CRITICAL";
-      riskColor = const Color.fromRGBO(
-        244,
-        67,
-        54,
-        1,
-      );
+      riskColor = const Color.fromRGBO(244, 67, 54, 1);
     } else if (_currentFloodRisk == FloodRiskStatus.warning) {
       riskText = "FLOODING";
       riskColor = Colors.orange;
     } else {
       riskText = "SAFE";
-      riskColor = const Color.fromRGBO(
-        76,
-        175,
-        80,
-        1,
-      );
+      riskColor = const Color.fromRGBO(76, 175, 80, 1);
     }
 
     final EvacStatus siteStatus = _statusFor(site);
@@ -2336,20 +2348,22 @@ class _MapTabState extends State<MapTab> {
             // THEME-AWARE COLORS FOR THIS PANEL
             // =====================================================
 
-            final Color panelBackground =
-                isDarkMode ? const Color(0xFF2C2C2C) : Colors.white;
+            final Color panelBackground = isDarkMode
+                ? const Color(0xFF2C2C2C)
+                : Colors.white;
 
-            final Color titleColor =
-                isDarkMode ? Colors.white : const Color(0xFF1D2B4A);
+            final Color titleColor = isDarkMode
+                ? Colors.white
+                : const Color(0xFF1D2B4A);
 
-            final Color subtitleColor =
-                isDarkMode ? Colors.grey[400]! : const Color(0xFF5A6B8C);
+            final Color subtitleColor = isDarkMode
+                ? Colors.grey[400]!
+                : const Color(0xFF5A6B8C);
 
             final Color primaryButtonColor = const Color(0xFF2867F5);
 
             return Container(
-              height:
-                  MediaQuery.of(context).size.height * 0.55,
+              height: MediaQuery.of(context).size.height * 0.55,
               width: double.infinity,
               decoration: BoxDecoration(
                 color: panelBackground,
@@ -2359,8 +2373,7 @@ class _MapTabState extends State<MapTab> {
                 ),
               ),
               child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   ClipRRect(
                     borderRadius: const BorderRadius.only(
@@ -2378,16 +2391,14 @@ class _MapTabState extends State<MapTab> {
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           // Scrollable info area so the extra status
                           // badge can never overflow small screens.
                           Expanded(
                             child: SingleChildScrollView(
                               child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   // =====================================
                                   // SITE NAME
@@ -2407,7 +2418,6 @@ class _MapTabState extends State<MapTab> {
                                   // =====================================
                                   // SITE DESCRIPTION
                                   // =====================================
-
                                   Text(
                                     site.description,
                                     style: TextStyle(
@@ -2423,26 +2433,22 @@ class _MapTabState extends State<MapTab> {
                                     runSpacing: 8,
                                     children: [
                                       Container(
-                                        padding:
-                                            const EdgeInsets.symmetric(
+                                        padding: const EdgeInsets.symmetric(
                                           horizontal: 12,
                                           vertical: 6,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: riskColor
-                                              .withOpacity(0.15),
-                                          borderRadius:
-                                              BorderRadius.circular(20),
-                                          border: Border.all(
-                                            color: riskColor,
+                                          color: riskColor.withOpacity(0.15),
+                                          borderRadius: BorderRadius.circular(
+                                            20,
                                           ),
+                                          border: Border.all(color: riskColor),
                                         ),
                                         child: Text(
                                           "Flood Risk: $riskText",
                                           style: TextStyle(
                                             color: riskColor,
-                                            fontWeight:
-                                                FontWeight.bold,
+                                            fontWeight: FontWeight.bold,
                                           ),
                                         ),
                                       ),
@@ -2450,7 +2456,6 @@ class _MapTabState extends State<MapTab> {
                                       // =================================
                                       // EVACUATION CENTER STATUS
                                       // =================================
-
                                       _statusChip(siteStatus),
                                     ],
                                   ),
@@ -2464,16 +2469,12 @@ class _MapTabState extends State<MapTab> {
                           // =====================================
                           // GO TO LOCATION BUTTON
                           // =====================================
-
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton.icon(
                               onPressed: () {
                                 if (currentPosition != null) {
-                                  getRoute(
-                                    currentPosition!,
-                                    site.location,
-                                  );
+                                  getRoute(currentPosition!, site.location);
                                 } else {
                                   _showMessage(
                                     'Turn on location to see a route '
@@ -2481,19 +2482,12 @@ class _MapTabState extends State<MapTab> {
                                   );
                                 }
 
-                                mapController.move(
-                                  site.location,
-                                  16,
-                                );
+                                mapController.move(site.location, 16);
 
                                 Navigator.pop(context);
                               },
-                              icon: const Icon(
-                                Icons.directions,
-                              ),
-                              label: const Text(
-                                "Go to Location",
-                              ),
+                              icon: const Icon(Icons.directions),
+                              label: const Text("Go to Location"),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: primaryButtonColor,
                                 foregroundColor: Colors.white,
@@ -2502,8 +2496,7 @@ class _MapTabState extends State<MapTab> {
                                   vertical: 14,
                                 ),
                                 shape: RoundedRectangleBorder(
-                                  borderRadius:
-                                      BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(12),
                                 ),
                               ),
                             ),
@@ -2514,31 +2507,20 @@ class _MapTabState extends State<MapTab> {
                           // =====================================
                           // DIRECTIONS FROM ME BUTTON
                           // =====================================
-
                           SizedBox(
                             width: double.infinity,
                             child: OutlinedButton.icon(
                               onPressed: () {
                                 if (currentPosition != null) {
-                                  getRoute(
-                                    currentPosition!,
-                                    site.location,
-                                  );
+                                  getRoute(currentPosition!, site.location);
 
-                                  mapController.move(
-                                    currentPosition!,
-                                    16,
-                                  );
+                                  mapController.move(currentPosition!, 16);
                                 } else {
                                   // Ask for location only now that the
                                   // user explicitly wants directions.
                                   _locateMe().then((located) {
-                                    if (located &&
-                                        currentPosition != null) {
-                                      getRoute(
-                                        currentPosition!,
-                                        site.location,
-                                      );
+                                    if (located && currentPosition != null) {
+                                      getRoute(currentPosition!, site.location);
                                     }
                                   });
                                 }
@@ -2565,8 +2547,7 @@ class _MapTabState extends State<MapTab> {
                                   vertical: 14,
                                 ),
                                 shape: RoundedRectangleBorder(
-                                  borderRadius:
-                                      BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(12),
                                 ),
                               ),
                             ),
@@ -2595,8 +2576,8 @@ class _MapTabState extends State<MapTab> {
     final String distanceLabel = distanceMeters <= 0
         ? 'Distance unavailable (location off)'
         : distanceMeters >= 1000
-            ? '${(distanceMeters / 1000).toStringAsFixed(1)} km away'
-            : '${distanceMeters.toStringAsFixed(0)} m away';
+        ? '${(distanceMeters / 1000).toStringAsFixed(1)} km away'
+        : '${distanceMeters.toStringAsFixed(0)} m away';
 
     showModalBottomSheet(
       context: context,
@@ -2606,14 +2587,17 @@ class _MapTabState extends State<MapTab> {
         return ValueListenableBuilder<bool>(
           valueListenable: isDarkModeNotifier,
           builder: (context, isDarkMode, child) {
-            final Color panelBackground =
-                isDarkMode ? const Color(0xFF2C2C2C) : Colors.white;
+            final Color panelBackground = isDarkMode
+                ? const Color(0xFF2C2C2C)
+                : Colors.white;
 
-            final Color titleColor =
-                isDarkMode ? Colors.white : const Color(0xFF1D2B4A);
+            final Color titleColor = isDarkMode
+                ? Colors.white
+                : const Color(0xFF1D2B4A);
 
-            final Color subtitleColor =
-                isDarkMode ? Colors.grey[400]! : const Color(0xFF5A6B8C);
+            final Color subtitleColor = isDarkMode
+                ? Colors.grey[400]!
+                : const Color(0xFF5A6B8C);
 
             const Color hospitalColor = Color(0xFFFF3035);
 
@@ -2668,7 +2652,6 @@ class _MapTabState extends State<MapTab> {
                             // =============================================
                             // HOSPITAL DESCRIPTION
                             // =============================================
-
                             Text(
                               hospital.description,
                               style: TextStyle(
@@ -2683,7 +2666,10 @@ class _MapTabState extends State<MapTab> {
                   ),
                   const SizedBox(height: 12),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.blue.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(20),
@@ -2702,7 +2688,6 @@ class _MapTabState extends State<MapTab> {
                   // =====================================
                   // GO TO HOSPITAL BUTTON
                   // =====================================
-
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
@@ -2724,9 +2709,7 @@ class _MapTabState extends State<MapTab> {
                         backgroundColor: hospitalColor,
                         foregroundColor: Colors.white,
                         elevation: 0,
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 14,
-                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -2746,20 +2729,13 @@ class _MapTabState extends State<MapTab> {
   // LEGEND ITEM
   // =====================================================
 
-  Widget _legendItem(
-    Color color,
-    String text,
-    bool isDarkMode,
-  ) {
+  Widget _legendItem(Color color, String text, bool isDarkMode) {
     return Row(
       children: [
         Container(
           width: 12,
           height: 12,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-          ),
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
 
         const SizedBox(width: 6),
@@ -2768,9 +2744,7 @@ class _MapTabState extends State<MapTab> {
           text,
           style: TextStyle(
             fontSize: 12,
-            color: isDarkMode
-                ? Colors.white
-                : Colors.black,
+            color: isDarkMode ? Colors.white : Colors.black,
           ),
         ),
       ],
@@ -2778,18 +2752,10 @@ class _MapTabState extends State<MapTab> {
   }
 
   // LEGEND ITEM WITH A CUSTOM SYMBOL (used by the expandable part)
-  Widget _legendSymbolItem(
-    Widget symbol,
-    String text,
-    bool isDarkMode,
-  ) {
+  Widget _legendSymbolItem(Widget symbol, String text, bool isDarkMode) {
     return Row(
       children: [
-        SizedBox(
-          width: 18,
-          height: 18,
-          child: Center(child: symbol),
-        ),
+        SizedBox(width: 18, height: 18, child: Center(child: symbol)),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
@@ -2806,20 +2772,13 @@ class _MapTabState extends State<MapTab> {
 
   Widget _buildLegendExtras(bool isDarkMode) {
     return ConstrainedBox(
-      constraints: const BoxConstraints(
-        maxWidth: 140,
-        maxHeight: 200,
-      ),
+      constraints: const BoxConstraints(maxWidth: 140, maxHeight: 200),
       child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _legendSymbolItem(
-              Image.asset(
-                'assets/icon/evacsite.png',
-                width: 18,
-                height: 18,
-              ),
+              Image.asset('assets/icon/evacsite.png', width: 18, height: 18),
               'Evacuation Center',
               isDarkMode,
             ),
@@ -2860,11 +2819,7 @@ class _MapTabState extends State<MapTab> {
             ),
             const SizedBox(height: 4),
             _legendSymbolItem(
-              Container(
-                width: 18,
-                height: 4,
-                color: const Color(0xFF4A7FF7),
-              ),
+              Container(width: 18, height: 4, color: const Color(0xFF4A7FF7)),
               'Route',
               isDarkMode,
             ),
@@ -2978,10 +2933,8 @@ class _MapTabState extends State<MapTab> {
     required ValueChanged<bool> onSelected,
     required bool isDarkMode,
   }) {
-    final Color cardColor =
-        isDarkMode ? const Color(0xFF2C2C2C) : Colors.white;
-    final Color textColor =
-        isDarkMode ? Colors.white : const Color(0xFF1D2B4A);
+    final Color cardColor = isDarkMode ? const Color(0xFF2C2C2C) : Colors.white;
+    final Color textColor = isDarkMode ? Colors.white : const Color(0xFF1D2B4A);
 
     return Padding(
       padding: const EdgeInsets.only(right: 6),
@@ -3060,9 +3013,7 @@ class _MapTabState extends State<MapTab> {
 
     for (final hospital in hospitals) {
       if (hospital.name.toLowerCase().contains(q)) {
-        results.add(
-          _SearchResult(name: hospital.name, hospital: hospital),
-        );
+        results.add(_SearchResult(name: hospital.name, hospital: hospital));
       }
     }
 
@@ -3109,19 +3060,17 @@ class _MapTabState extends State<MapTab> {
   Widget _buildSearchResults(bool isDarkMode) {
     if (_searchQuery.isEmpty) return const SizedBox.shrink();
 
-    final Color cardColor =
-        isDarkMode ? const Color(0xFF2C2C2C) : Colors.white;
+    final Color cardColor = isDarkMode ? const Color(0xFF2C2C2C) : Colors.white;
     final Color textColor = isDarkMode ? Colors.white : Colors.black;
-    final Color subColor =
-        isDarkMode ? Colors.grey[400]! : Colors.grey[700]!;
+    final Color subColor = isDarkMode ? Colors.grey[400]! : Colors.grey[700]!;
 
     final List<_SearchResult> results = _computeSearchResults();
 
     Widget content;
 
     if (results.isEmpty) {
-      final bool noData = _placesLoadFailed ||
-          (evacSites.isEmpty && hospitals.isEmpty);
+      final bool noData =
+          _placesLoadFailed || (evacSites.isEmpty && hospitals.isEmpty);
 
       content = Padding(
         padding: const EdgeInsets.all(16),
@@ -3145,7 +3094,7 @@ class _MapTabState extends State<MapTab> {
           final String subtitle = isHospital
               ? 'Hospital'
               : 'Evacuation Center  •  Status: '
-                  '${_statusFor(r.site!).label}';
+                    '${_statusFor(r.site!).label}';
 
           return ListTile(
             leading: Icon(
@@ -3158,10 +3107,7 @@ class _MapTabState extends State<MapTab> {
               r.name,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: textColor,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(color: textColor, fontWeight: FontWeight.bold),
             ),
             subtitle: Text(
               subtitle,
@@ -3204,13 +3150,10 @@ class _MapTabState extends State<MapTab> {
     _locating = true;
 
     try {
-      final serviceEnabled =
-          await Geolocator.isLocationServiceEnabled();
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
 
       if (!serviceEnabled) {
-        debugPrint(
-          'Location services are disabled.',
-        );
+        debugPrint('Location services are disabled.');
         _showMessage(
           'Location services are turned off. Turn on GPS to use '
           'location features.',
@@ -3222,18 +3165,14 @@ class _MapTabState extends State<MapTab> {
         return false;
       }
 
-      LocationPermission permission =
-          await Geolocator.checkPermission();
+      LocationPermission permission = await Geolocator.checkPermission();
 
       if (permission == LocationPermission.denied) {
-        permission =
-            await Geolocator.requestPermission();
+        permission = await Geolocator.requestPermission();
       }
 
       if (permission == LocationPermission.deniedForever) {
-        debugPrint(
-          'Location permission permanently denied.',
-        );
+        debugPrint('Location permission permanently denied.');
         _showMessage(
           'Location permission is blocked. Enable it in app '
           'settings to use location features.',
@@ -3246,9 +3185,7 @@ class _MapTabState extends State<MapTab> {
       }
 
       if (permission == LocationPermission.denied) {
-        debugPrint(
-          'Location permission denied.',
-        );
+        debugPrint('Location permission denied.');
         _showMessage(
           'Location permission is required for location-based '
           'features. The map still works without it.',
@@ -3256,24 +3193,19 @@ class _MapTabState extends State<MapTab> {
         return false;
       }
 
-      final pos = await Geolocator.getCurrentPosition()
-          .timeout(const Duration(seconds: 20));
+      final pos = await Geolocator.getCurrentPosition().timeout(
+        const Duration(seconds: 20),
+      );
 
       if (!mounted) return false;
 
       setState(() {
-        currentPosition = LatLng(
-          pos.latitude,
-          pos.longitude,
-        );
+        currentPosition = LatLng(pos.latitude, pos.longitude);
 
         followMe = true;
       });
 
-      mapController.move(
-        currentPosition!,
-        16,
-      );
+      mapController.move(currentPosition!, 16);
 
       return true;
     } on TimeoutException catch (e) {
@@ -3303,15 +3235,9 @@ class _MapTabState extends State<MapTab> {
   Widget build(BuildContext context) {
     return ValueListenableBuilder<bool>(
       valueListenable: isDarkModeNotifier,
-      builder: (
-        context,
-        isDarkMode,
-        child,
-      ) {
+      builder: (context, isDarkMode, child) {
         return Scaffold(
-          backgroundColor: isDarkMode
-              ? const Color(0xFF212121)
-              : Colors.white,
+          backgroundColor: isDarkMode ? const Color(0xFF212121) : Colors.white,
 
           body: Column(
             children: [
@@ -3322,17 +3248,11 @@ class _MapTabState extends State<MapTab> {
               Container(
                 color: isDarkMode
                     ? const Color(0xFF212121)
-                    : const Color.fromARGB(
-                        255,
-                        72,
-                        119,
-                        247,
-                      ),
+                    : const Color.fromARGB(255, 72, 119, 247),
                 child: SafeArea(
                   bottom: false,
                   child: Padding(
-                    padding:
-                        const EdgeInsets.symmetric(
+                    padding: const EdgeInsets.symmetric(
                       horizontal: 16,
                       vertical: 6,
                     ),
@@ -3353,7 +3273,6 @@ class _MapTabState extends State<MapTab> {
                         const SizedBox(width: 8),
 
                         // APP NAME
-
                         const Text(
                           'Map',
                           style: TextStyle(
@@ -3371,7 +3290,6 @@ class _MapTabState extends State<MapTab> {
               // =================================================
               // MAP
               // =================================================
-
               Expanded(
                 child: Stack(
                   children: [
@@ -3383,8 +3301,7 @@ class _MapTabState extends State<MapTab> {
                         initialZoom: 13.5,
                         minZoom: 11,
                         maxZoom: 17,
-                        cameraConstraint:
-                            CameraConstraint.contain(
+                        cameraConstraint: CameraConstraint.contain(
                           bounds: _cameraBounds,
                         ),
                       ),
@@ -3402,8 +3319,7 @@ class _MapTabState extends State<MapTab> {
                         TileLayer(
                           urlTemplate:
                               'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                          userAgentPackageName:
-                              'com.detectco.app',
+                          userAgentPackageName: 'com.detectco.app',
                           tileProvider: _tileProvider,
                           maxNativeZoom: _tileMaxNativeZoom,
                           errorTileCallback: _onTileError,
@@ -3417,13 +3333,11 @@ class _MapTabState extends State<MapTab> {
                         // RepaintBoundary: it never blocks gestures and
                         // never repaints the map.
                         // =================================================
-
                         _WeatherOverlay(visual: _weatherVisual),
 
                         // =================================================
                         // FLOOD ZONES (toggled by the "Flood Areas" filter)
                         // =================================================
-
                         if (_showFloodAreas)
                           CircleLayer(
                             circles: [
@@ -3434,26 +3348,25 @@ class _MapTabState extends State<MapTab> {
                                 ),
                                 radius: 600,
                                 useRadiusInMeter: true,
-                                color: _currentFloodRisk == FloodRiskStatus.normal
+                                color:
+                                    _currentFloodRisk == FloodRiskStatus.normal
                                     ? Colors.green.withOpacity(0.35)
-                                    : _currentFloodRisk == FloodRiskStatus.warning
-                                        ? Colors.orange.withOpacity(0.35)
-                                        : const Color.fromRGBO(
-                                            244,
-                                            67,
-                                            54,
-                                            1,
-                                          ).withOpacity(0.35),
-                                borderColor: _currentFloodRisk == FloodRiskStatus.normal
+                                    : _currentFloodRisk ==
+                                          FloodRiskStatus.warning
+                                    ? Colors.orange.withOpacity(0.35)
+                                    : const Color.fromRGBO(
+                                        244,
+                                        67,
+                                        54,
+                                        1,
+                                      ).withOpacity(0.35),
+                                borderColor:
+                                    _currentFloodRisk == FloodRiskStatus.normal
                                     ? Colors.green
-                                    : _currentFloodRisk == FloodRiskStatus.warning
-                                        ? Colors.orange
-                                        : const Color.fromRGBO(
-                                            244,
-                                            67,
-                                            54,
-                                            1,
-                                          ),
+                                    : _currentFloodRisk ==
+                                          FloodRiskStatus.warning
+                                    ? Colors.orange
+                                    : const Color.fromRGBO(244, 67, 54, 1),
                                 borderStrokeWidth: 2,
                               ),
 
@@ -3464,26 +3377,25 @@ class _MapTabState extends State<MapTab> {
                                 ),
                                 radius: 600,
                                 useRadiusInMeter: true,
-                                color: _currentFloodRisk == FloodRiskStatus.normal
+                                color:
+                                    _currentFloodRisk == FloodRiskStatus.normal
                                     ? Colors.green.withOpacity(0.35)
-                                    : _currentFloodRisk == FloodRiskStatus.warning
-                                        ? Colors.orange.withOpacity(0.35)
-                                        : const Color.fromRGBO(
-                                            244,
-                                            67,
-                                            54,
-                                            1,
-                                          ).withOpacity(0.35),
-                                borderColor: _currentFloodRisk == FloodRiskStatus.normal
+                                    : _currentFloodRisk ==
+                                          FloodRiskStatus.warning
+                                    ? Colors.orange.withOpacity(0.35)
+                                    : const Color.fromRGBO(
+                                        244,
+                                        67,
+                                        54,
+                                        1,
+                                      ).withOpacity(0.35),
+                                borderColor:
+                                    _currentFloodRisk == FloodRiskStatus.normal
                                     ? Colors.green
-                                    : _currentFloodRisk == FloodRiskStatus.warning
-                                        ? Colors.orange
-                                        : const Color.fromRGBO(
-                                            244,
-                                            67,
-                                            54,
-                                            1,
-                                          ),
+                                    : _currentFloodRisk ==
+                                          FloodRiskStatus.warning
+                                    ? Colors.orange
+                                    : const Color.fromRGBO(244, 67, 54, 1),
                                 borderStrokeWidth: 2,
                               ),
 
@@ -3494,26 +3406,25 @@ class _MapTabState extends State<MapTab> {
                                 ),
                                 radius: 600,
                                 useRadiusInMeter: true,
-                                color: _currentFloodRisk == FloodRiskStatus.normal
+                                color:
+                                    _currentFloodRisk == FloodRiskStatus.normal
                                     ? Colors.green.withOpacity(0.35)
-                                    : _currentFloodRisk == FloodRiskStatus.warning
-                                        ? Colors.orange.withOpacity(0.35)
-                                        : const Color.fromRGBO(
-                                            244,
-                                            67,
-                                            54,
-                                            1,
-                                          ).withOpacity(0.35),
-                                borderColor: _currentFloodRisk == FloodRiskStatus.normal
+                                    : _currentFloodRisk ==
+                                          FloodRiskStatus.warning
+                                    ? Colors.orange.withOpacity(0.35)
+                                    : const Color.fromRGBO(
+                                        244,
+                                        67,
+                                        54,
+                                        1,
+                                      ).withOpacity(0.35),
+                                borderColor:
+                                    _currentFloodRisk == FloodRiskStatus.normal
                                     ? Colors.green
-                                    : _currentFloodRisk == FloodRiskStatus.warning
-                                        ? Colors.orange
-                                        : const Color.fromRGBO(
-                                            244,
-                                            67,
-                                            54,
-                                            1,
-                                          ),
+                                    : _currentFloodRisk ==
+                                          FloodRiskStatus.warning
+                                    ? Colors.orange
+                                    : const Color.fromRGBO(244, 67, 54, 1),
                                 borderStrokeWidth: 2,
                               ),
                             ],
@@ -3522,7 +3433,6 @@ class _MapTabState extends State<MapTab> {
                         // =================================================
                         // ROUTE
                         // =================================================
-
                         PolylineLayer(
                           polylines: [
                             Polyline(
@@ -3536,7 +3446,6 @@ class _MapTabState extends State<MapTab> {
                         // =================================================
                         // MARKERS
                         // =================================================
-
                         MarkerLayer(
                           markers: [
                             if (currentPosition != null)
@@ -3575,11 +3484,11 @@ class _MapTabState extends State<MapTab> {
                                         'Evacuation center ${site.name}, '
                                         'status ${_statusFor(site).label}',
                                     child: GestureDetector(
-                                      onTap: () =>
-                                          _showEvacPanel(site),
+                                      onTap: () => _showEvacPanel(site),
                                       child: Container(
                                         // Ring marks the selected center.
-                                        decoration: (selectedSite != null &&
+                                        decoration:
+                                            (selectedSite != null &&
                                                 selectedSite!.location ==
                                                     site.location)
                                             ? BoxDecoration(
@@ -3612,15 +3521,15 @@ class _MapTabState extends State<MapTab> {
                                                   height: 18,
                                                   decoration:
                                                       const BoxDecoration(
-                                                    color: Colors.white,
-                                                    shape: BoxShape.circle,
-                                                  ),
+                                                        color: Colors.white,
+                                                        shape: BoxShape.circle,
+                                                      ),
                                                   child: Icon(
                                                     _statusFor(site).icon,
                                                     size: 16,
-                                                    color:
-                                                        _statusFor(site)
-                                                            .color,
+                                                    color: _statusFor(
+                                                      site,
+                                                    ).color,
                                                   ),
                                                 ),
                                               ),
@@ -3644,7 +3553,8 @@ class _MapTabState extends State<MapTab> {
                                     child: GestureDetector(
                                       onTap: () {
                                         final Distance distance = Distance();
-                                        final double dist = currentPosition != null
+                                        final double dist =
+                                            currentPosition != null
                                             ? distance.as(
                                                 LengthUnit.Meter,
                                                 currentPosition!,
@@ -3657,9 +3567,15 @@ class _MapTabState extends State<MapTab> {
                                         decoration: BoxDecoration(
                                           color: const Color(0xFFFF3035),
                                           shape: BoxShape.circle,
-                                          border: Border.all(color: Colors.white, width: 2),
+                                          border: Border.all(
+                                            color: Colors.white,
+                                            width: 2,
+                                          ),
                                           boxShadow: const [
-                                            BoxShadow(color: Colors.black26, blurRadius: 4),
+                                            BoxShadow(
+                                              color: Colors.black26,
+                                              blurRadius: 4,
+                                            ),
                                           ],
                                         ),
                                         child: const Icon(
@@ -3674,6 +3590,76 @@ class _MapTabState extends State<MapTab> {
                           ],
                         ),
                       ],
+                    ),
+
+                    Positioned(
+                      left: 10,
+                      right: 58,
+                      bottom: 74,
+                      child: GestureDetector(
+                        onTap: () => _showMlRiskDetails(isDarkMode),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 11,
+                            vertical: 9,
+                          ),
+                          decoration: _glassDecoration(isDarkMode, radius: 12),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.analytics_rounded,
+                                size: 19,
+                                color: !_waterSensorAvailable
+                                    ? Colors.grey
+                                    : switch (_mlRiskAssessment.level) {
+                                        MlFloodRiskLevel.low =>
+                                          Colors.greenAccent,
+                                        MlFloodRiskLevel.moderate =>
+                                          Colors.orangeAccent,
+                                        MlFloodRiskLevel.high =>
+                                          Colors.redAccent,
+                                      },
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'ML FLOOD RISK · ${_waterSensorAvailable ? _mlRiskAssessment.label : 'UNAVAILABLE'}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '${_waterSensorAvailable ? 'Rise ${waterLevel.toStringAsFixed(1)} cm' : 'Sensor unavailable'} · '
+                                      '1h ${_mlForecast.rainfall1hMm?.toStringAsFixed(1) ?? '--'} mm · '
+                                      '3h ${_mlForecast.rainfall3hMm?.toStringAsFixed(1) ?? '--'} mm',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: Colors.grey[300],
+                                        fontSize: 10,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Icon(
+                                Icons.info_outline,
+                                color: Colors.white70,
+                                size: 17,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
 
                     // =====================================================
@@ -3790,27 +3776,21 @@ class _MapTabState extends State<MapTab> {
                     //  flood items stay always visible, the other
                     //  symbols open/close with "Map symbols")
                     // =================================================
-
                     Positioned(
                       top: 94,
                       left: 10,
                       child: Container(
-                        padding:
-                            const EdgeInsets.symmetric(
+                        padding: const EdgeInsets.symmetric(
                           horizontal: 10,
                           vertical: 6,
                         ),
-                        decoration: _glassDecoration(
-                          isDarkMode,
-                          radius: 12,
-                        ),
+                        decoration: _glassDecoration(isDarkMode, radius: 12),
                         child: Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             _legendItem(
                               Colors.green,
-                              "Safe",
+                              "Normal · 0–4 cm rise",
                               isDarkMode,
                             ),
 
@@ -3818,7 +3798,7 @@ class _MapTabState extends State<MapTab> {
 
                             _legendItem(
                               Colors.orange,
-                              "Medium Risk",
+                              "Flooding · 5–40 cm rise",
                               isDarkMode,
                             ),
 
@@ -3826,7 +3806,7 @@ class _MapTabState extends State<MapTab> {
 
                             _legendItem(
                               Colors.red,
-                              "Flooding",
+                              "Critical · >40 cm rise",
                               isDarkMode,
                             ),
 
@@ -3839,8 +3819,7 @@ class _MapTabState extends State<MapTab> {
                               child: InkWell(
                                 onTap: () {
                                   setState(() {
-                                    _legendExpanded =
-                                        !_legendExpanded;
+                                    _legendExpanded = !_legendExpanded;
                                   });
                                 },
                                 child: ConstrainedBox(
@@ -3875,8 +3854,7 @@ class _MapTabState extends State<MapTab> {
                               ),
                             ),
 
-                            if (_legendExpanded)
-                              _buildLegendExtras(isDarkMode),
+                            if (_legendExpanded) _buildLegendExtras(isDarkMode),
                           ],
                         ),
                       ),
@@ -3885,7 +3863,6 @@ class _MapTabState extends State<MapTab> {
                     // =================================================
                     // SEARCH + FILTERS (results drawn last, on top)
                     // =================================================
-
                     _buildSearchBar(isDarkMode),
                     _buildFilterChips(isDarkMode),
                     _buildSearchResults(isDarkMode),

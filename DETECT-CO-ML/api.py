@@ -8,6 +8,11 @@ import tensorflow as tf
 import xgboost as xgb
 from pathlib import Path
 import requests
+import os
+from datetime import datetime
+from zoneinfo import ZoneInfo
+from fastapi.middleware.cors import CORSMiddleware
+from monitoring_store import get_monitoring, record_forecast
 
 
 # ============================================================
@@ -150,6 +155,21 @@ app = FastAPI(
     version="1.0.0",
 )
 
+_admin_origins = [
+    origin.strip()
+    for origin in os.environ.get(
+        "DETECTCO_ADMIN_ORIGINS",
+        "http://127.0.0.1:5173,http://localhost:5173",
+    ).split(",")
+    if origin.strip()
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_admin_origins,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type"],
+)
+
 
 # ============================================================
 # REQUEST MODEL
@@ -178,6 +198,28 @@ def get_location_key(latitude: float, longitude: float):
         )
 
     return key
+
+
+def current_hour_rainfall(weather_records, now):
+    """Return the latest rainfall sample at or before the current local hour."""
+    current_hour = now.astimezone(ZoneInfo("Asia/Manila")).replace(
+        minute=0, second=0, microsecond=0
+    )
+    candidates = []
+    for record in weather_records:
+        try:
+            timestamp = datetime.fromisoformat(
+                str(record.get("timestamp")).replace("Z", "+00:00")
+            )
+            if timestamp.tzinfo is None:
+                timestamp = timestamp.replace(tzinfo=ZoneInfo("Asia/Manila"))
+            timestamp = timestamp.astimezone(ZoneInfo("Asia/Manila"))
+            rainfall = float(record.get("rainfall_mm"))
+        except (TypeError, ValueError):
+            continue
+        if timestamp <= current_hour and np.isfinite(rainfall) and rainfall >= 0:
+            candidates.append((timestamp, rainfall))
+    return max(candidates, key=lambda sample: sample[0])[1] if candidates else None
 
 
 # ============================================================
@@ -739,8 +781,40 @@ def predict(
     # Run complete ensemble
     # --------------------------------------------------------
 
-    return predict_ensemble(
+    result = predict_ensemble(
         latitude=request.latitude,
         longitude=request.longitude,
         weather_records=weather,
     )
+
+    generated_at = datetime.now(ZoneInfo("Asia/Manila"))
+    result["generated_at"] = generated_at.isoformat(timespec="seconds")
+    result["current_rainfall_mm"] = current_hour_rainfall(weather, generated_at)
+    result["model_status"] = {
+        "lstm": "online",
+        "xgboost": "online",
+        "random_forest": "online",
+    }
+    result["prediction_version"] = "lstm-xgboost-rf-ensemble-v1"
+
+    try:
+        location_key = get_location_key(request.latitude, request.longitude)
+        record_forecast(location_key, result, weather, generated_at)
+        result["history_recorded"] = True
+    except Exception as error:
+        # Forecast delivery should remain available even if local history
+        # storage is temporarily unavailable.
+        print(f"ML monitoring history write failed: {error}")
+        result["history_recorded"] = False
+
+    return result
+
+
+@app.get("/monitoring")
+def monitoring(
+    latitude: float = 14.15,
+    longitude: float = 121.05,
+):
+    """Return latest real forecast, collected comparisons, and metrics."""
+    location_key = get_location_key(latitude, longitude)
+    return get_monitoring(location_key)

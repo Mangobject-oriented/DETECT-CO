@@ -1,8 +1,4 @@
-enum FloodRiskStatus {
-  normal,
-  warning,
-  critical,
-}
+enum FloodRiskStatus { normal, warning, critical }
 
 /// Converts the ultrasonic sensor's distance into rise from the 150 cm
 /// normal baseline.

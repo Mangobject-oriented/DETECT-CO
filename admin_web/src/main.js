@@ -50,6 +50,7 @@ const detailsTitle = document.querySelector('#details-title');
 const detailsGrid = document.querySelector('#details-grid');
 const emergencyPage = document.querySelector('#emergency-page');
 const notificationsPage = document.querySelector('#notifications-page');
+const mlMonitoringPage = document.querySelector('#ml-monitoring-page');
 const pageTitle = document.querySelector('#page-title');
 const pageNavigationButtons = document.querySelectorAll('[data-page]');
 const announcementForm = document.querySelector('#announcement-form');
@@ -83,6 +84,16 @@ const adminIdentity = document.querySelector('#admin-identity');
 let databaseUnsubscribers = [];
 let authenticatedUiReady = false;
 let expirationInterval = null;
+let mlRefreshInterval = null;
+let mlRiskMap = null;
+let mlRiskMarker = null;
+let mlFloodDistanceCm = null;
+let latestMlPrediction = null;
+let mlRefreshInFlight = false;
+
+const mlLocation = { latitude: 14.15, longitude: 121.05, label: 'Calamba model location' };
+const mlApiBase = (import.meta.env.VITE_ML_API_URL || 'http://192.168.18.14:8000').replace(/\/+$/, '');
+const mlHorizons = [1, 3, 6, 12, 24];
 
 togglePassword.addEventListener('click', () => {
   const showing = loginPassword.type === 'password';
@@ -136,6 +147,9 @@ function showAuthenticatedUser(user) {
         if (sessions.some((session) => Number(session.expiresAt) <= Date.now())) renderSessions();
         else updateRemainingLabels();
       }, 1000);
+      mlRefreshInterval = window.setInterval(() => {
+        if (!mlMonitoringPage.hidden) refreshMlMonitoring();
+      }, 5 * 60 * 1000);
     }
     // The map is created while #app is hidden on the login screen.
     // Wait for the dashboard layout to become measurable before asking
@@ -161,9 +175,11 @@ updatePriorityAppearance();
 
 function showPage(page) {
   const showEmergency = page === 'emergency';
+  const showMl = page === 'ml-monitoring';
   emergencyPage.hidden = !showEmergency;
-  notificationsPage.hidden = showEmergency;
-  pageTitle.textContent = showEmergency ? 'Emergency Map' : 'Notifications';
+  notificationsPage.hidden = showEmergency || showMl;
+  mlMonitoringPage.hidden = !showMl;
+  pageTitle.textContent = showEmergency ? 'Emergency Map' : (showMl ? 'ML Monitoring' : 'Notifications');
 
   pageNavigationButtons.forEach((button) => {
     const selected = button.dataset.page === page;
@@ -174,6 +190,11 @@ function showPage(page) {
 
   if (showEmergency) {
     invalidateMapAfterReveal();
+  }
+  if (showMl) {
+    ensureMlRiskMap();
+    requestAnimationFrame(() => mlRiskMap?.invalidateSize({ pan: false }));
+    refreshMlMonitoring({ refreshPrediction: true });
   }
 }
 
@@ -698,6 +719,304 @@ function setConnectionState(state) {
     : (state === 'offline' ? 'Offline' : 'Connecting...');
 }
 
+function readMlNumber(value) {
+  if (value == null || value === '') return null;
+  const number = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : null;
+}
+
+function mlPredictions(result) {
+  const data = result?.predictions || {};
+  return Object.fromEntries(mlHorizons.map((hour) => [
+    hour,
+    readMlNumber(data[`rainfall_${hour}h_mm`]),
+  ]));
+}
+
+function formatMl(value, suffix = 'mm') {
+  return value == null ? 'Unavailable' : `${value.toFixed(1)} ${suffix}`;
+}
+
+function ensureMlRiskMap() {
+  if (mlRiskMap) return;
+  const element = document.querySelector('#ml-risk-map');
+  if (!element) return;
+  mlRiskMap = L.map(element, { zoomControl: false, scrollWheelZoom: false }).setView(
+    [mlLocation.latitude, mlLocation.longitude],
+    12,
+  );
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18,
+    attribution: '&copy; OpenStreetMap contributors',
+  }).addTo(mlRiskMap);
+  mlRiskMarker = L.circleMarker([mlLocation.latitude, mlLocation.longitude], {
+    radius: 10,
+    color: '#5cdb6e',
+    fillColor: '#5cdb6e',
+    fillOpacity: 0.85,
+    weight: 2,
+  }).addTo(mlRiskMap);
+  mlRiskMarker.bindPopup(mlLocation.label);
+}
+
+function renderMlRisk() {
+  const rise = mlFloodDistanceCm == null
+    ? null
+    : Math.max(0, 150 - mlFloodDistanceCm);
+  let level = 'Unavailable';
+  let levelClass = 'risk-unavailable';
+  let color = '#a5abb3';
+  if (rise != null) {
+    if (rise <= 4) {
+      level = 'LOW · NORMAL'; levelClass = 'risk-low'; color = '#5cdb6e';
+    } else if (rise <= 40) {
+      level = 'MODERATE · WARNING'; levelClass = 'risk-moderate'; color = '#ff9a3c';
+    } else {
+      level = 'HIGH · CRITICAL'; levelClass = 'risk-high'; color = '#ff4b4b';
+    }
+  }
+  const value = document.querySelector('#ml-risk-value');
+  value.textContent = level;
+  value.className = levelClass;
+  document.querySelector('#ml-risk-detail').textContent = rise == null
+    ? 'Sensor reading unavailable'
+    : 'Based on measured sensor water rise';
+  document.querySelector('#ml-water-rise').textContent = formatMl(rise, 'cm');
+  document.querySelector('#ml-current-rain').textContent = formatMl(
+    readMlNumber(latestMlPrediction?.current_rainfall_mm),
+  );
+  if (mlRiskMarker) {
+    mlRiskMarker.setStyle({ color, fillColor: color });
+    const popup = document.createElement('div');
+    const title = document.createElement('strong');
+    title.textContent = mlLocation.label;
+    const status = document.createElement('p');
+    status.textContent = `Sensor-backed flood status: ${level}`;
+    const riseText = document.createElement('p');
+    riseText.textContent = `Current water rise: ${formatMl(rise, 'cm')}`;
+    const rainText = document.createElement('p');
+    rainText.textContent = `Current rainfall: ${formatMl(readMlNumber(latestMlPrediction?.current_rainfall_mm))}`;
+    popup.append(title, status, riseText, rainText);
+    mlRiskMarker.bindPopup(popup);
+  }
+}
+
+function renderMlChart(predictions) {
+  const host = document.querySelector('#ml-forecast-chart');
+  const valid = mlHorizons
+    .map((hour) => ({ hour, value: predictions[hour] }))
+    .filter((point) => point.value != null);
+  host.replaceChildren();
+  if (!valid.length) {
+    const empty = document.createElement('p');
+    empty.className = 'ml-muted';
+    empty.textContent = 'Chart unavailable until real predictions arrive.';
+    host.append(empty);
+    return;
+  }
+
+  const width = 520; const height = 190;
+  const left = 38; const right = 14; const top = 18; const bottom = 35;
+  const maxValue = Math.max(1, ...valid.map((point) => point.value));
+  const plotHeight = height - top - bottom;
+  const plotWidth = width - left - right;
+  const points = valid.map((point, index) => ({
+    ...point,
+    x: left + (valid.length === 1 ? plotWidth / 2 : index * plotWidth / (valid.length - 1)),
+    y: top + plotHeight - point.value / maxValue * plotHeight,
+  }));
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', 'Predicted rainfall accumulation by forecast period');
+  for (let index = 0; index < 4; index++) {
+    const y = top + index * plotHeight / 3;
+    const grid = document.createElementNS(svg.namespaceURI, 'line');
+    grid.setAttribute('x1', String(left)); grid.setAttribute('x2', String(width - right));
+    grid.setAttribute('y1', String(y)); grid.setAttribute('y2', String(y));
+    grid.setAttribute('class', 'ml-chart-grid'); svg.append(grid);
+    const tick = document.createElementNS(svg.namespaceURI, 'text');
+    tick.setAttribute('x', String(left - 6)); tick.setAttribute('y', String(y + 4));
+    tick.setAttribute('text-anchor', 'end'); tick.setAttribute('class', 'ml-chart-label');
+    tick.textContent = `${(maxValue * (3 - index) / 3).toFixed(1)}`;
+    svg.append(tick);
+  }
+  const line = document.createElementNS(svg.namespaceURI, 'polyline');
+  line.setAttribute('points', points.map((point) => `${point.x},${point.y}`).join(' '));
+  line.setAttribute('class', 'ml-chart-line'); svg.append(line);
+  for (const point of points) {
+    const dot = document.createElementNS(svg.namespaceURI, 'circle');
+    dot.setAttribute('cx', String(point.x)); dot.setAttribute('cy', String(point.y)); dot.setAttribute('r', '5');
+    dot.setAttribute('class', 'ml-chart-dot');
+    dot.append(document.createElementNS(svg.namespaceURI, 'title'));
+    dot.firstChild.textContent = `${point.hour}h: ${point.value.toFixed(1)} mm`;
+    svg.append(dot);
+    const label = document.createElementNS(svg.namespaceURI, 'text');
+    label.setAttribute('x', String(point.x)); label.setAttribute('y', String(height - 10));
+    label.setAttribute('text-anchor', 'middle'); label.setAttribute('class', 'ml-chart-label');
+    label.textContent = `${point.hour}h`; svg.append(label);
+  }
+  host.append(svg);
+}
+
+function renderMlForecast(result) {
+  const predictions = mlPredictions(result);
+  const values = document.querySelector('#ml-forecast-values');
+  values.replaceChildren();
+  for (const hour of mlHorizons) {
+    const card = document.createElement('div');
+    card.className = 'ml-forecast-value';
+    const label = document.createElement('span'); label.textContent = `${hour}h`;
+    const number = document.createElement('strong'); number.textContent = formatMl(predictions[hour]);
+    card.append(label, number); values.append(card);
+  }
+  renderMlChart(predictions);
+  latestMlPrediction = result;
+  const timestamp = result?.generated_at ? new Date(result.generated_at) : null;
+  document.querySelector('#ml-last-prediction').textContent = timestamp && !Number.isNaN(timestamp.getTime())
+    ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(timestamp)
+    : 'Unavailable';
+  document.querySelector('#ml-location-label').textContent = `${mlLocation.label} · 14.15, 121.05`;
+  const states = result?.model_status || {};
+  const weights = result?.ensemble_weights || {};
+  const statusHost = document.querySelector('#ml-model-status');
+  statusHost.replaceChildren();
+  for (const model of ['lstm', 'xgboost', 'random_forest']) {
+    const row = document.createElement('div'); row.className = 'ml-model-row';
+    const name = document.createElement('strong'); name.textContent = model === 'random_forest' ? 'Random Forest' : model.toUpperCase();
+    const state = document.createElement('span');
+    const online = states[model] === 'online';
+    const weight = readMlNumber(weights[model]);
+    state.textContent = `${online ? 'ONLINE' : 'UNAVAILABLE'} · ensemble weight ${weight == null ? '—' : `${(weight * 100).toFixed(0)}%`}`;
+    if (!online) state.classList.add('risk-unavailable');
+    row.append(name, state); statusHost.append(row);
+  }
+  document.querySelector('#ml-connection-state').textContent = result?.history_recorded === false
+    ? 'Forecast live · history unavailable'
+    : 'Forecast live';
+  document.querySelector('#ml-connection-state').className = 'ml-state live';
+  document.querySelector('#ml-message').hidden = true;
+  renderMlRisk();
+}
+
+function renderMlEvaluation(data) {
+  const tbody = document.querySelector('#ml-evaluation-rows');
+  tbody.replaceChildren();
+  const latest = data?.latest;
+  const predictions = mlPredictions(latest);
+  const metrics = data?.metrics || {};
+  for (const hour of mlHorizons) {
+    const history = data?.history?.[String(hour)] || [];
+    const completed = history.find((sample) => readMlNumber(sample.actual_mm) != null);
+    const actual = completed ? readMlNumber(completed.actual_mm) : null;
+    const predicted = completed ? readMlNumber(completed.predicted_mm) : predictions[hour];
+    const error = actual != null && predicted != null ? Math.abs(predicted - actual) : null;
+    const metric = metrics[String(hour)] || {};
+    const values = [
+      `${hour}h`, formatMl(predicted), formatMl(actual), formatMl(error),
+      formatMl(readMlNumber(metric.mae_mm)), formatMl(readMlNumber(metric.rmse_mm)),
+      metric.mean_error_percent == null ? '—' : `${Number(metric.mean_error_percent).toFixed(1)}%`,
+      String(metric.count || 0),
+    ];
+    const row = document.createElement('tr');
+    for (const value of values) { const cell = document.createElement('td'); cell.textContent = value; row.append(cell); }
+    tbody.append(row);
+  }
+}
+
+async function refreshMlMonitoring({ refreshPrediction = false } = {}) {
+  if (!auth?.currentUser || mlRefreshInFlight) return;
+  mlRefreshInFlight = true;
+  const button = document.querySelector('#ml-refresh-button');
+  button.disabled = true;
+  document.querySelector('#ml-connection-state').textContent = 'Refreshing…';
+  try {
+    const requestPrediction = async () => {
+      const response = await fetch(`${mlApiBase}/predict`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ latitude: mlLocation.latitude, longitude: mlLocation.longitude }),
+        signal: AbortSignal.timeout(30000),
+      });
+      if (!response.ok) throw new Error(`ML API returned ${response.status}.`);
+      return response.json();
+    };
+    let prediction = refreshPrediction ? await requestPrediction() : null;
+    let monitoring = { latest: null, history: {}, metrics: {} };
+    let historyUnavailable = false;
+    const readMonitoring = async () => {
+      const response = await fetch(
+        `${mlApiBase}/monitoring?latitude=${mlLocation.latitude}&longitude=${mlLocation.longitude}`,
+        { signal: AbortSignal.timeout(15000) },
+      );
+      if (!response.ok) throw new Error(`Monitoring history returned ${response.status}.`);
+      return response.json();
+    };
+    try {
+      monitoring = await readMonitoring();
+    } catch (error) {
+      if (!prediction) throw error;
+      historyUnavailable = true;
+    }
+    if (!prediction) prediction = monitoring.latest;
+    if (!prediction) {
+      prediction = await requestPrediction();
+      try {
+        monitoring = await readMonitoring();
+      } catch (_) {
+        historyUnavailable = true;
+      }
+    }
+    if (prediction) renderMlForecast(prediction);
+    if (!monitoring.latest && prediction) monitoring.latest = prediction;
+    renderMlEvaluation(monitoring);
+    if (historyUnavailable) {
+      document.querySelector('#ml-connection-state').textContent = 'Forecast live · history unavailable';
+      document.querySelector('#ml-connection-state').className = 'ml-state unavailable';
+      document.querySelector('#ml-message').textContent = 'Live predictions are available, but prediction history could not be read. Check SQLite storage and the monitoring endpoint.';
+      document.querySelector('#ml-message').hidden = false;
+    }
+  } catch (error) {
+    document.querySelector('#ml-connection-state').textContent = 'ML service unavailable';
+    document.querySelector('#ml-connection-state').className = 'ml-state unavailable';
+    const notice = document.querySelector('#ml-message');
+    notice.textContent = error.name === 'TimeoutError'
+      ? 'The ML service did not respond in time. Check the configured API URL and server status.'
+      : 'Could not retrieve ML monitoring data. Check the configured API URL, CORS origins, and server status.';
+    notice.hidden = false;
+    renderMlRisk();
+  } finally {
+    mlRefreshInFlight = false;
+    button.disabled = false;
+  }
+}
+
+document.querySelector('#ml-refresh-button').addEventListener('click', () =>
+  refreshMlMonitoring({ refreshPrediction: true }),
+);
+
+function updateMlFloodReading(value) {
+  let raw = value;
+  let sensorOnline = true;
+  if (value && typeof value === 'object') {
+    raw = value.distance;
+    let timestamp = Number(value.timestamp);
+    if (!Number.isFinite(timestamp)) {
+      sensorOnline = false;
+    } else {
+      if (timestamp < 100000000000) timestamp *= 1000;
+      const age = Date.now() - timestamp;
+      sensorOnline = age >= 0 && age <= 30000;
+    }
+  }
+  const distance = readMlNumber(raw);
+  // ESP32 publishes centimeters, as confirmed by its distance formula and UI.
+  mlFloodDistanceCm = sensorOnline && distance != null && distance < 200
+    ? distance
+    : null;
+  renderMlRisk();
+}
+
 function startAuthenticatedListeners() {
   if (!database) {
     message.hidden = false;
@@ -733,6 +1052,13 @@ function startAuthenticatedListeners() {
     announcementCaption.textContent = 'Unavailable';
     showAnnouncementMessage(`Could not load recent notifications: ${error.message}`, true);
   }));
+
+  databaseUnsubscribers.push(onValue(ref(database, 'flood'), (snapshot) => {
+    updateMlFloodReading(snapshot.val());
+  }, () => {
+    mlFloodDistanceCm = null;
+    renderMlRisk();
+  }));
 }
 
 function stopAuthenticatedListeners() {
@@ -741,6 +1067,13 @@ function stopAuthenticatedListeners() {
   authenticatedUiReady = false;
   if (expirationInterval != null) window.clearInterval(expirationInterval);
   expirationInterval = null;
+  if (mlRefreshInterval != null) window.clearInterval(mlRefreshInterval);
+  mlRefreshInterval = null;
+  mlFloodDistanceCm = null;
+  latestMlPrediction = null;
+  document.querySelector('#ml-evaluation-rows').replaceChildren();
+  document.querySelector('#ml-forecast-values').replaceChildren();
+  document.querySelector('#ml-forecast-chart').replaceChildren();
   for (const marker of markers.values()) map.removeLayer(marker);
   markers.clear();
   sessions = [];

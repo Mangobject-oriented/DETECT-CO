@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:ui' as ui;
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/services.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:geolocator/geolocator.dart';
@@ -11,7 +12,8 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:detectco/pages/menu.dart'; // change to your actual menu file name
 import 'package:detectco/services/weather_condition.dart';
 import 'package:detectco/services/flood_risk.dart';
-
+import 'package:detectco/services/ml_flood_risk.dart';
+import 'package:detectco/pages/notification.dart';
 
 // =====================================================
 // ONE-TIME DEVICE LOCATION (FOR OPEN-METEO)
@@ -50,12 +52,10 @@ bool _sessionLocationDone = false;
 Future<void>? _sessionLocationFuture;
 
 // Latitude used by every Open-Meteo request.
-double get _weatherLatitude =>
-    _sessionLatitude ?? _fallbackLatitude;
+double get _weatherLatitude => _sessionLatitude ?? _fallbackLatitude;
 
 // Longitude used by every Open-Meteo request.
-double get _weatherLongitude =>
-    _sessionLongitude ?? _fallbackLongitude;
+double get _weatherLongitude => _sessionLongitude ?? _fallbackLongitude;
 
 // Makes sure the one-time lookup has happened. Safe to call as many
 // times as you like: the real lookup only ever runs once.
@@ -71,8 +71,7 @@ Future<void> _lookupSessionLocationOnce() async {
   try {
     // Normal Android location permission dialog (only shown
     // when permission has not been decided yet).
-    LocationPermission permission =
-        await Geolocator.checkPermission();
+    LocationPermission permission = await Geolocator.checkPermission();
 
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
@@ -80,26 +79,21 @@ Future<void> _lookupSessionLocationOnce() async {
 
     final bool permissionGranted =
         permission == LocationPermission.whileInUse ||
-            permission == LocationPermission.always;
+        permission == LocationPermission.always;
 
     if (permissionGranted) {
-      final bool servicesEnabled =
-          await Geolocator.isLocationServiceEnabled();
+      final bool servicesEnabled = await Geolocator.isLocationServiceEnabled();
 
       if (servicesEnabled) {
         // ONE single position request (not a stream).
-        final Position position =
-            await Geolocator.getCurrentPosition(
+        final Position position = await Geolocator.getCurrentPosition(
           locationSettings: const LocationSettings(
             accuracy: LocationAccuracy.low,
             timeLimit: Duration(seconds: 15),
           ),
-        ).timeout(
-          const Duration(seconds: 20),
-        );
+        ).timeout(const Duration(seconds: 20));
 
-        if (position.latitude.isFinite &&
-            position.longitude.isFinite) {
+        if (position.latitude.isFinite && position.longitude.isFinite) {
           _sessionLatitude = position.latitude;
           _sessionLongitude = position.longitude;
         }
@@ -112,7 +106,6 @@ Future<void> _lookupSessionLocationOnce() async {
     _sessionLocationDone = true;
   }
 }
-
 
 // =====================================================
 // OPEN-METEO HOURLY ROW MATCHING (CURRENT LOCAL HOUR)
@@ -134,9 +127,7 @@ double? _toDouble(dynamic value) {
     return value.toDouble();
   }
 
-  return double.tryParse(
-    value?.toString() ?? '',
-  );
+  return double.tryParse(value?.toString() ?? '');
 }
 
 // Converts an Open-Meteo local timestamp such as "2026-10-07T15:30"
@@ -149,12 +140,7 @@ DateTime? _localHour(dynamic raw) {
 
   if (parsed == null) return null;
 
-  return DateTime.utc(
-    parsed.year,
-    parsed.month,
-    parsed.day,
-    parsed.hour,
-  );
+  return DateTime.utc(parsed.year, parsed.month, parsed.day, parsed.hour);
 }
 
 // Index of the hourly row that matches the current local hour.
@@ -170,12 +156,12 @@ int _currentHourlyIndex(
   // Fallback: build the local hour from the UTC offset that
   // Open-Meteo returns for the requested coordinates.
   if (nowLocalHour == null) {
-    final int offsetSeconds =
-        (_toDouble(result['utc_offset_seconds']) ?? 0).round();
+    final int offsetSeconds = (_toDouble(result['utc_offset_seconds']) ?? 0)
+        .round();
 
-    final DateTime shifted = DateTime.now()
-        .toUtc()
-        .add(Duration(seconds: offsetSeconds));
+    final DateTime shifted = DateTime.now().toUtc().add(
+      Duration(seconds: offsetSeconds),
+    );
 
     nowLocalHour = DateTime.utc(
       shifted.year,
@@ -244,25 +230,23 @@ _HourlyRainReading _readHourlyRain({
     );
   }
 
-  final List<dynamic> times =
-      hourly['time'] is List ? hourly['time'] as List : [];
+  final List<dynamic> times = hourly['time'] is List
+      ? hourly['time'] as List
+      : [];
 
-  final List<dynamic> precipitationValues =
-      hourly['precipitation'] is List
-          ? hourly['precipitation'] as List
-          : [];
+  final List<dynamic> precipitationValues = hourly['precipitation'] is List
+      ? hourly['precipitation'] as List
+      : [];
 
   final List<dynamic> probabilityValues =
       hourly['precipitation_probability'] is List
-          ? hourly['precipitation_probability'] as List
-          : [];
+      ? hourly['precipitation_probability'] as List
+      : [];
 
-  final int start =
-      _currentHourlyIndex(result, current, times);
+  final int start = _currentHourlyIndex(result, current, times);
 
   double sumRainfall(int count) {
-    final int end =
-        math.min(start + count, precipitationValues.length);
+    final int end = math.min(start + count, precipitationValues.length);
 
     double total = 0;
 
@@ -296,7 +280,6 @@ _HourlyRainReading _readHourlyRain({
   );
 }
 
-
 // =====================================================
 // DASHBOARD REFRESH RATE
 // =====================================================
@@ -314,14 +297,15 @@ _HourlyRainReading _readHourlyRain({
 //   setHomeRefreshRate(const Duration(minutes: 1));
 //   setHomeRefreshRate(Duration.zero); // back to real-time
 
-final ValueNotifier<Duration> homeRefreshInterval =
-    ValueNotifier<Duration>(Duration.zero);
+final ValueNotifier<Duration> homeRefreshInterval = ValueNotifier<Duration>(
+  Duration.zero,
+);
 
 void setHomeRefreshRate(Duration interval) {
-  homeRefreshInterval.value =
-      interval < Duration.zero ? Duration.zero : interval;
+  homeRefreshInterval.value = interval < Duration.zero
+      ? Duration.zero
+      : interval;
 }
-
 
 // =====================================================
 // WATER LITE MODE (NO WAVES, NO RUBBER DUCK)
@@ -342,13 +326,11 @@ void setHomeRefreshRate(Duration interval) {
 // or bind a switch directly to the notifier:
 //   homeWaterLite.value = newValue;
 
-final ValueNotifier<bool> homeWaterLite =
-    ValueNotifier<bool>(false);
+final ValueNotifier<bool> homeWaterLite = ValueNotifier<bool>(false);
 
 void setHomeWaterLiteMode(bool enabled) {
   homeWaterLite.value = enabled;
 }
-
 
 // =====================================================
 // LOW-END PERFORMANCE MODE
@@ -385,13 +367,11 @@ void setHomeWaterLiteMode(bool enabled) {
 // TIP: for the lightest result also turn on water lite mode:
 //   setHomeWaterLiteMode(true);
 
-final ValueNotifier<bool> homePerformanceMode =
-    ValueNotifier<bool>(false);
+final ValueNotifier<bool> homePerformanceMode = ValueNotifier<bool>(false);
 
 void setHomePerformanceMode(bool enabled) {
   homePerformanceMode.value = enabled;
 }
-
 
 // =====================================================
 // GLASSMORPHISM CARD HELPER
@@ -411,8 +391,7 @@ Widget _glassCard({
   EdgeInsetsGeometry padding = const EdgeInsets.all(14),
   BorderRadius? borderRadius,
 }) {
-  final BorderRadius radius =
-      borderRadius ?? BorderRadius.circular(18);
+  final BorderRadius radius = borderRadius ?? BorderRadius.circular(18);
 
   // ---------------------------------------------------
   // LOW-END VERSION (no blur)
@@ -434,10 +413,7 @@ Widget _glassCard({
           ),
           boxShadow: [
             if (glowColor != null)
-              BoxShadow(
-                color: glowColor.withOpacity(0.22),
-                blurRadius: 8,
-              ),
+              BoxShadow(color: glowColor.withOpacity(0.22), blurRadius: 8),
           ],
         ),
         child: child,
@@ -490,8 +466,7 @@ class HomeTab extends StatefulWidget {
   State<HomeTab> createState() => _HomeTabState();
 }
 
-class _HomeTabState extends State<HomeTab>
-    with SingleTickerProviderStateMixin {
+class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
   String _selectedBarangay = 'Uwisan';
 
   // Shortcut for the low-end performance switch.
@@ -501,21 +476,13 @@ class _HomeTabState extends State<HomeTab>
   // BARANGAY PICKER (opens directly below the pill)
   // =====================================================
 
-  static const List<String> _barangays = [
-    'Uwisan',
-    'Palingon',
-    'Lingga',
-  ];
+  static const List<String> _barangays = ['Uwisan', 'Palingon', 'Lingga'];
 
-  Future<void> _showBarangayMenu(
-    BuildContext fieldContext,
-  ) async {
-    final RenderBox button =
-        fieldContext.findRenderObject() as RenderBox;
+  Future<void> _showBarangayMenu(BuildContext fieldContext) async {
+    final RenderBox button = fieldContext.findRenderObject() as RenderBox;
 
     final RenderBox overlay =
-        Overlay.of(fieldContext).context.findRenderObject()
-            as RenderBox;
+        Overlay.of(fieldContext).context.findRenderObject() as RenderBox;
 
     final Offset position = button.localToGlobal(
       Offset.zero,
@@ -526,9 +493,7 @@ class _HomeTabState extends State<HomeTab>
       context: fieldContext,
       color: const Color(0xFF303030),
       elevation: 8,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       constraints: BoxConstraints(
         minWidth: math.max(button.size.width, 200),
         maxWidth: 260,
@@ -558,11 +523,7 @@ class _HomeTabState extends State<HomeTab>
                 ),
               ),
               if (name == _selectedBarangay)
-                const Icon(
-                  Icons.check_rounded,
-                  color: Colors.white,
-                  size: 20,
-                ),
+                const Icon(Icons.check_rounded, color: Colors.white, size: 20),
             ],
           ),
         );
@@ -642,14 +603,20 @@ class _HomeTabState extends State<HomeTab>
   // ML FLOOD PREDICTION API
   // =====================================================
 
-  static const String mlApiUrl =
-      'http://192.168.18.14:8000/predict';
+  static const String mlApiUrl = String.fromEnvironment(
+    'ML_API_URL',
+    defaultValue: 'http://192.168.18.14:8000/predict',
+  );
 
   double? _mlRainfall1h;
   double? _mlRainfall3h;
   double? _mlRainfall6h;
   double? _mlRainfall12h;
   double? _mlRainfall24h;
+  DateTime? _mlLastPredictionAt;
+  double? _mlCurrentRainfallMm;
+  double _latestWaterRiseCm = 0;
+  bool _latestWaterSensorActive = false;
 
   bool _mlLoading = false;
   String? _mlError;
@@ -785,14 +752,13 @@ class _HomeTabState extends State<HomeTab>
 
     _fetchWeatherCondition();
 
-    _weatherConnectivitySub = Connectivity().onConnectivityChanged.listen(
-      (results) {
-        if (results.any((result) => result != ConnectivityResult.none)) {
-          _fetchWeatherCondition();
-        }
-      },
-      onError: (_) {},
-    );
+    _weatherConnectivitySub = Connectivity().onConnectivityChanged.listen((
+      results,
+    ) {
+      if (results.any((result) => result != ConnectivityResult.none)) {
+        _fetchWeatherCondition();
+      }
+    }, onError: (_) {});
 
     _weatherConditionTimer = Timer.periodic(
       const Duration(minutes: 10),
@@ -888,9 +854,7 @@ class _HomeTabState extends State<HomeTab>
   // - No data received yet      -> live values (so startup is not delayed).
   // - Interval has passed       -> take a new snapshot of live values.
   // - Interval has NOT passed   -> keep showing the previous snapshot.
-  _DashboardSnapshot _applyRefreshRate(
-    _DashboardSnapshot live,
-  ) {
+  _DashboardSnapshot _applyRefreshRate(_DashboardSnapshot live) {
     final Duration interval = homeRefreshInterval.value;
 
     if (interval <= Duration.zero || !_hasReceivedFirebaseData) {
@@ -903,9 +867,7 @@ class _HomeTabState extends State<HomeTab>
     final _DashboardSnapshot? cached = _displayedSnapshot;
     final DateTime? last = _lastDashboardUpdate;
 
-    if (cached == null ||
-        last == null ||
-        now.difference(last) >= interval) {
+    if (cached == null || last == null || now.difference(last) >= interval) {
       _displayedSnapshot = live;
       _lastDashboardUpdate = now;
       return live;
@@ -924,18 +886,13 @@ class _HomeTabState extends State<HomeTab>
     bool newOnlineStatus = false;
 
     if (_latestEsp32Timestamp != null) {
-      final int now =
-          DateTime.now().millisecondsSinceEpoch;
+      final int now = DateTime.now().millisecondsSinceEpoch;
 
-      final int age =
-          now - _latestEsp32Timestamp!;
+      final int age = now - _latestEsp32Timestamp!;
 
       newOnlineStatus =
           age >= 0 &&
-          age <=
-              const Duration(
-                seconds: esp32TimeoutSeconds,
-              ).inMilliseconds;
+          age <= const Duration(seconds: esp32TimeoutSeconds).inMilliseconds;
     }
 
     // If Firebase has not provided any ESP32 data yet,
@@ -981,9 +938,7 @@ class _HomeTabState extends State<HomeTab>
       return value.toDouble();
     }
 
-    return double.tryParse(
-      value?.toString() ?? '',
-    );
+    return double.tryParse(value?.toString() ?? '');
   }
 
   // =====================================================
@@ -1002,35 +957,25 @@ class _HomeTabState extends State<HomeTab>
       final response = await http
           .post(
             Uri.parse(mlApiUrl),
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: jsonEncode({
-              'latitude': 14.15,
-              'longitude': 121.05,
-            }),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'latitude': 14.15, 'longitude': 121.05}),
           )
-          .timeout(
-        const Duration(seconds: 20),
-      );
+          .timeout(const Duration(seconds: 20));
 
       if (response.statusCode != 200) {
-        throw Exception(
-          'ML API returned HTTP ${response.statusCode}',
-        );
+        throw Exception('ML API returned HTTP ${response.statusCode}');
       }
 
-      final Map<String, dynamic> result =
-          jsonDecode(response.body);
+      final Map<String, dynamic> result = jsonDecode(response.body);
 
       // =================================================
       // CHECK IF ML IS IDLE
       // =================================================
 
-      final String mlStatus =
-          result['status']?.toString().toLowerCase() ?? '';
+      final String mlStatus = result['status']?.toString().toLowerCase() ?? '';
 
       if (mlStatus == 'idle') {
+        MlFloodRiskStore.instance.markUnavailable('ML prediction is idle.');
         if (!mounted) return;
 
         setState(() {
@@ -1051,10 +996,12 @@ class _HomeTabState extends State<HomeTab>
       // GET ML PREDICTIONS
       // =================================================
 
-      final dynamic rawPredictions =
-          result['predictions'];
+      final dynamic rawPredictions = result['predictions'];
 
       if (rawPredictions is! Map) {
+        MlFloodRiskStore.instance.markUnavailable(
+          'ML predictions are unavailable.',
+        );
         if (!mounted) return;
 
         setState(() {
@@ -1071,35 +1018,19 @@ class _HomeTabState extends State<HomeTab>
         return;
       }
 
-      final Map<String, dynamic> predictions =
-          Map<String, dynamic>.from(
+      final Map<String, dynamic> predictions = Map<String, dynamic>.from(
         rawPredictions,
       );
 
-      final double? rainfall1h =
-          _parseDouble(
-        predictions['rainfall_1h_mm'],
-      );
+      final double? rainfall1h = _parseDouble(predictions['rainfall_1h_mm']);
 
-      final double? rainfall3h =
-          _parseDouble(
-        predictions['rainfall_3h_mm'],
-      );
+      final double? rainfall3h = _parseDouble(predictions['rainfall_3h_mm']);
 
-      final double? rainfall6h =
-          _parseDouble(
-        predictions['rainfall_6h_mm'],
-      );
+      final double? rainfall6h = _parseDouble(predictions['rainfall_6h_mm']);
 
-      final double? rainfall12h =
-          _parseDouble(
-        predictions['rainfall_12h_mm'],
-      );
+      final double? rainfall12h = _parseDouble(predictions['rainfall_12h_mm']);
 
-      final double? rainfall24h =
-          _parseDouble(
-        predictions['rainfall_24h_mm'],
-      );
+      final double? rainfall24h = _parseDouble(predictions['rainfall_24h_mm']);
 
       // =================================================
       // CHECK FOR COMPLETELY MISSING ML FORECAST
@@ -1115,6 +1046,9 @@ class _HomeTabState extends State<HomeTab>
           rainfall6h == null &&
           rainfall12h == null &&
           rainfall24h == null) {
+        MlFloodRiskStore.instance.markUnavailable(
+          'ML predictions are unavailable.',
+        );
         if (!mounted) return;
 
         setState(() {
@@ -1137,6 +1071,9 @@ class _HomeTabState extends State<HomeTab>
 
       if (!mounted) return;
 
+      final mlSnapshot = MlForecastSnapshot.fromApi(result);
+      MlFloodRiskStore.instance.update(result);
+
       setState(() {
         _mlRainfall1h = rainfall1h;
         _mlRainfall3h = rainfall3h;
@@ -1146,13 +1083,31 @@ class _HomeTabState extends State<HomeTab>
 
         _mlError = null;
         _mlForecastIdle = false;
+        _mlLastPredictionAt = mlSnapshot.generatedAt;
+        _mlCurrentRainfallMm = mlSnapshot.currentRainfallMm;
       });
+
+      if (_latestWaterSensorActive) {
+        final assessment = MlFloodRiskAssessment.calculate(
+          waterRiseCm: _latestWaterRiseCm,
+          forecast: mlSnapshot,
+        );
+        await NotificationStorage.maybeSendMlFloodWarning(
+          riskLevel: assessment.label,
+          waterRiseCm: assessment.waterRiseCm,
+          currentRainfallMm: assessment.currentRainfallMm,
+          predicted3hMm: mlSnapshot.rainfall3hMm,
+        );
+      }
     } catch (e) {
       if (!mounted) return;
 
+      MlFloodRiskStore.instance.markUnavailable(
+        'ML prediction is unavailable while offline.',
+      );
+
       setState(() {
-        _mlError =
-            'Unable to connect to ML server';
+        _mlError = 'Unable to connect to ML server';
 
         _mlForecastIdle = true;
 
@@ -1202,73 +1157,51 @@ class _HomeTabState extends State<HomeTab>
         '&timezone=auto',
       );
 
-      final response = await http
-          .get(uri)
-          .timeout(
-        const Duration(seconds: 15),
-      );
+      final response = await http.get(uri).timeout(const Duration(seconds: 15));
 
       if (response.statusCode != 200) {
-        throw Exception(
-          'Open-Meteo returned HTTP ${response.statusCode}',
-        );
+        throw Exception('Open-Meteo returned HTTP ${response.statusCode}');
       }
 
-      final Map<String, dynamic> result =
-          jsonDecode(response.body);
+      final Map<String, dynamic> result = jsonDecode(response.body);
 
-      final Map<String, dynamic>? current =
-          result['current'] is Map
-              ? Map<String, dynamic>.from(
-                  result['current'] as Map,
-                )
-              : null;
+      final Map<String, dynamic>? current = result['current'] is Map
+          ? Map<String, dynamic>.from(result['current'] as Map)
+          : null;
 
       if (current == null) {
-        throw Exception(
-          'Open-Meteo current weather data missing',
-        );
+        throw Exception('Open-Meteo current weather data missing');
       }
 
-      final dynamic temperatureRaw =
-          current['temperature_2m'];
+      final dynamic temperatureRaw = current['temperature_2m'];
 
-      final dynamic humidityRaw =
-          current['relative_humidity_2m'];
+      final dynamic humidityRaw = current['relative_humidity_2m'];
 
-      final double? temperature =
-          _parseDouble(temperatureRaw);
+      final double? temperature = _parseDouble(temperatureRaw);
 
-      final double? humidity =
-          _parseDouble(humidityRaw);
+      final double? humidity = _parseDouble(humidityRaw);
 
       if (temperature == null || humidity == null) {
-        throw Exception(
-          'Invalid Open-Meteo weather values',
-        );
+        throw Exception('Invalid Open-Meteo weather values');
       }
 
       // =================================================
       // ALSO READ RAINFALL DATA
       // =================================================
 
-      final double? currentRain =
-          _parseDouble(current['rain']);
+      final double? currentRain = _parseDouble(current['rain']);
 
-      final double? currentPrecipitation =
-          _parseDouble(current['precipitation']);
+      final double? currentPrecipitation = _parseDouble(
+        current['precipitation'],
+      );
 
-      final Map<String, dynamic>? hourly =
-          result['hourly'] is Map
-              ? Map<String, dynamic>.from(
-                  result['hourly'] as Map,
-                )
-              : null;
+      final Map<String, dynamic>? hourly = result['hourly'] is Map
+          ? Map<String, dynamic>.from(result['hourly'] as Map)
+          : null;
 
       // Read rainfall + probability from the hourly row that
       // matches the CURRENT LOCAL HOUR (see _readHourlyRain).
-      final _HourlyRainReading hourlyReading =
-          _readHourlyRain(
+      final _HourlyRainReading hourlyReading = _readHourlyRain(
         result: result,
         current: current,
         hourly: hourly,
@@ -1293,34 +1226,25 @@ class _HomeTabState extends State<HomeTab>
         // =================================================
 
         _openMeteoCurrentRainfall =
-            currentRain ??
-                currentPrecipitation ??
-                hourlyReading.rainNow;
+            currentRain ?? currentPrecipitation ?? hourlyReading.rainNow;
 
-        _openMeteoRainfall1h =
-            rainfall1h;
+        _openMeteoRainfall1h = rainfall1h;
 
-        _openMeteoRainfall3h =
-            rainfall3h;
+        _openMeteoRainfall3h = rainfall3h;
 
-        _openMeteoRainfall6h =
-            rainfall6h;
+        _openMeteoRainfall6h = rainfall6h;
 
-        _openMeteoRainfall12h =
-            rainfall12h;
+        _openMeteoRainfall12h = rainfall12h;
 
-        _openMeteoRainfall24h =
-            rainfall24h;
+        _openMeteoRainfall24h = rainfall24h;
 
-        _openMeteoRainProbability =
-            hourlyReading.probabilityNow;
+        _openMeteoRainProbability = hourlyReading.probabilityNow;
       });
     } catch (e) {
       if (!mounted) return;
 
       setState(() {
-        _fallbackWeatherError =
-            'Unable to load Open-Meteo weather';
+        _fallbackWeatherError = 'Unable to load Open-Meteo weather';
       });
     } finally {
       _loadingUpdate(() {
@@ -1356,51 +1280,35 @@ class _HomeTabState extends State<HomeTab>
         '&timezone=auto',
       );
 
-      final response = await http
-          .get(uri)
-          .timeout(
-        const Duration(seconds: 15),
-      );
+      final response = await http.get(uri).timeout(const Duration(seconds: 15));
 
       if (response.statusCode != 200) {
-        throw Exception(
-          'Open-Meteo returned HTTP ${response.statusCode}',
-        );
+        throw Exception('Open-Meteo returned HTTP ${response.statusCode}');
       }
 
-      final Map<String, dynamic> result =
-          jsonDecode(response.body);
+      final Map<String, dynamic> result = jsonDecode(response.body);
 
-      final Map<String, dynamic>? current =
-          result['current'] is Map
-              ? Map<String, dynamic>.from(
-                  result['current'] as Map,
-                )
-              : null;
+      final Map<String, dynamic>? current = result['current'] is Map
+          ? Map<String, dynamic>.from(result['current'] as Map)
+          : null;
 
       if (current == null) {
-        throw Exception(
-          'Open-Meteo current rainfall data missing',
-        );
+        throw Exception('Open-Meteo current rainfall data missing');
       }
 
-      final double? currentRain =
-          _parseDouble(current['rain']);
+      final double? currentRain = _parseDouble(current['rain']);
 
-      final double? currentPrecipitation =
-          _parseDouble(current['precipitation']);
+      final double? currentPrecipitation = _parseDouble(
+        current['precipitation'],
+      );
 
-      final Map<String, dynamic>? hourly =
-          result['hourly'] is Map
-              ? Map<String, dynamic>.from(
-                  result['hourly'] as Map,
-                )
-              : null;
+      final Map<String, dynamic>? hourly = result['hourly'] is Map
+          ? Map<String, dynamic>.from(result['hourly'] as Map)
+          : null;
 
       // Read rainfall + probability from the hourly row that
       // matches the CURRENT LOCAL HOUR (see _readHourlyRain).
-      final _HourlyRainReading hourlyReading =
-          _readHourlyRain(
+      final _HourlyRainReading hourlyReading = _readHourlyRain(
         result: result,
         current: current,
         hourly: hourly,
@@ -1416,27 +1324,19 @@ class _HomeTabState extends State<HomeTab>
 
       setState(() {
         _openMeteoCurrentRainfall =
-            currentRain ??
-                currentPrecipitation ??
-                hourlyReading.rainNow;
+            currentRain ?? currentPrecipitation ?? hourlyReading.rainNow;
 
-        _openMeteoRainfall1h =
-            rainfall1h;
+        _openMeteoRainfall1h = rainfall1h;
 
-        _openMeteoRainfall3h =
-            rainfall3h;
+        _openMeteoRainfall3h = rainfall3h;
 
-        _openMeteoRainfall6h =
-            rainfall6h;
+        _openMeteoRainfall6h = rainfall6h;
 
-        _openMeteoRainfall12h =
-            rainfall12h;
+        _openMeteoRainfall12h = rainfall12h;
 
-        _openMeteoRainfall24h =
-            rainfall24h;
+        _openMeteoRainfall24h = rainfall24h;
 
-        _openMeteoRainProbability =
-            hourlyReading.probabilityNow;
+        _openMeteoRainProbability = hourlyReading.probabilityNow;
 
         _openMeteoRainError = null;
       });
@@ -1444,8 +1344,7 @@ class _HomeTabState extends State<HomeTab>
       if (!mounted) return;
 
       setState(() {
-        _openMeteoRainError =
-            'Unable to load Open-Meteo rainfall';
+        _openMeteoRainError = 'Unable to load Open-Meteo rainfall';
       });
     } finally {
       _loadingUpdate(() {
@@ -1486,8 +1385,8 @@ class _HomeTabState extends State<HomeTab>
     if (_weatherConditionLoading) return;
     _weatherConditionLoading = true;
     try {
-      final List<ConnectivityResult> connectivity =
-          await Connectivity().checkConnectivity();
+      final List<ConnectivityResult> connectivity = await Connectivity()
+          .checkConnectivity();
       if (connectivity.isEmpty ||
           connectivity.every((result) => result == ConnectivityResult.none)) {
         return;
@@ -1504,55 +1403,47 @@ class _HomeTabState extends State<HomeTab>
         '&timezone=auto',
       );
 
-      final response = await http
-          .get(uri)
-          .timeout(
-        const Duration(seconds: 15),
-      );
+      final response = await http.get(uri).timeout(const Duration(seconds: 15));
 
       if (response.statusCode != 200) {
         return;
       }
 
-      final Map<String, dynamic> result =
-          jsonDecode(response.body);
+      final Map<String, dynamic> result = jsonDecode(response.body);
 
-      final Map<String, dynamic>? current =
-          result['current'] is Map
-              ? Map<String, dynamic>.from(
-                  result['current'] as Map,
-                )
-              : null;
+      final Map<String, dynamic>? current = result['current'] is Map
+          ? Map<String, dynamic>.from(result['current'] as Map)
+          : null;
 
       if (current == null) {
         return;
       }
 
-      final double? weatherCodeValue =
-          _parseDouble(current['weather_code']);
+      final double? weatherCodeValue = _parseDouble(current['weather_code']);
 
-      final double? cloudCoverValue =
-          _parseDouble(current['cloud_cover']);
+      final double? cloudCoverValue = _parseDouble(current['cloud_cover']);
       final double? precipitationValue = _parseDouble(current['precipitation']);
       final double? rainValue = _parseDouble(current['rain']);
       final double? currentPrecipitation = precipitationValue == null
           ? rainValue
           : rainValue == null
-              ? precipitationValue
-              : math.max(precipitationValue, rainValue).toDouble();
+          ? precipitationValue
+          : math.max(precipitationValue, rainValue).toDouble();
 
       if (!mounted) return;
 
       // LOW-END MODE: skip the rebuild completely when
       // nothing changed since the last fetch.
       if (_perf) {
-        final bool codeSame = weatherCodeValue == null ||
+        final bool codeSame =
+            weatherCodeValue == null ||
             weatherCodeValue.round() == _weatherCode;
 
-        final bool cloudSame = cloudCoverValue == null ||
-            cloudCoverValue == _cloudCover;
+        final bool cloudSame =
+            cloudCoverValue == null || cloudCoverValue == _cloudCover;
 
-        final bool precipitationSame = currentPrecipitation == null ||
+        final bool precipitationSame =
+            currentPrecipitation == null ||
             currentPrecipitation == _weatherCurrentPrecipitation;
 
         if (codeSame && cloudSame && precipitationSame) {
@@ -1615,9 +1506,7 @@ class _HomeTabState extends State<HomeTab>
     return _modeForWeatherCondition(condition);
   }
 
-  _WeatherBackgroundMode _modeForWeatherCondition(
-    WeatherCondition condition,
-  ) {
+  _WeatherBackgroundMode _modeForWeatherCondition(WeatherCondition condition) {
     switch (condition) {
       case WeatherCondition.thunderstorm:
         return _WeatherBackgroundMode.storm;
@@ -1653,9 +1542,7 @@ class _HomeTabState extends State<HomeTab>
     if (timestampRaw is num) {
       timestamp = timestampRaw.toDouble();
     } else {
-      timestamp = double.tryParse(
-        timestampRaw.toString(),
-      );
+      timestamp = double.tryParse(timestampRaw.toString());
     }
 
     if (timestamp == null || !timestamp.isFinite) {
@@ -1668,21 +1555,15 @@ class _HomeTabState extends State<HomeTab>
       timestamp *= 1000;
     }
 
-    final int now =
-        DateTime.now().millisecondsSinceEpoch;
+    final int now = DateTime.now().millisecondsSinceEpoch;
 
-    final int timestampMilliseconds =
-        timestamp.round();
+    final int timestampMilliseconds = timestamp.round();
 
-    final int age =
-        now - timestampMilliseconds;
+    final int age = now - timestampMilliseconds;
 
     // Future timestamps are also treated as valid within
     // the timeout range to tolerate a small clock difference.
-    return age <=
-        const Duration(
-          seconds: esp32TimeoutSeconds,
-        ).inMilliseconds;
+    return age <= const Duration(seconds: esp32TimeoutSeconds).inMilliseconds;
   }
 
   // =====================================================
@@ -1709,1266 +1590,1286 @@ class _HomeTabState extends State<HomeTab>
         systemNavigationBarDividerColor: Color(0xFF212121),
       ),
       child: AnimatedContainer(
-      duration: const Duration(milliseconds: 400),
-      color: isDarkMode
-          ? const Color(0xFF212121)
-          : Colors.white,
-      child: Scaffold(
-        backgroundColor: isDarkMode
-            ? const Color(0xFF212121)
-            : Colors.white,
-        // =====================================================
-        // RAIN BACKGROUND (BEHIND EVERYTHING) + PAGE CONTENT
-        // =====================================================
-        body: Stack(
-          fit: StackFit.expand,
-          children: [
-
-            // Weather-based background.
-            // IgnorePointer keeps all taps and double-taps working.
-            //
-            // ValueListenableBuilder makes the background react
-            // instantly when the Menu's Home Background dropdown
-            // changes (Default / Storm / Rain / Cloudy / Sunny),
-            // and when the Menu's quality setting changes
-            // (High / Low). The quality setting lives in menu.dart.
-            //
-            // LOW-END MODE: always uses the lite background.
-            Positioned.fill(
-              child: IgnorePointer(
-                child: RepaintBoundary(
-                  child: ValueListenableBuilder<HomeBgChoice>(
-                    valueListenable: homeBgChoice,
-                    builder: (context, choice, _) {
-                      return ValueListenableBuilder<HomeBgQuality>(
-                        valueListenable: homeBgQuality,
-                        builder: (context, quality, _) {
-                          return _RainBackground(
-                            mode: _computeWeatherMode(),
-                            lite: quality == HomeBgQuality.low ||
-                                homePerformanceMode.value,
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ),
-            ),
-
-            StreamBuilder<DatabaseEvent>(
-          stream: dbRef.child('flood').onValue,
-          builder: (context, snapshot) {
-            if (snapshot.hasError) {
-              return const Center(
-                child: Text(
-                  'Error loading data',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.red,
-                  ),
-                ),
-              );
-            }
-
-            // =====================================================
-            // SENSOR DATA
-            // =====================================================
-
-            Map<String, dynamic> data = {};
-
-            double waterLevel =
-                idleWaterLevel;
-
-            bool sensorActive = false;
-
-            bool esp32Online = _esp32Online;
-
-            if (snapshot.hasData &&
-                snapshot.data!.snapshot.value != null) {
-              final rawValue =
-                  snapshot.data!.snapshot.value;
-
-              if (rawValue is Map) {
-                final rawData =
-                    rawValue as Map<dynamic, dynamic>;
-
-                data = rawData.map(
-                  (key, value) =>
-                      MapEntry(
-                    key.toString(),
-                    value,
-                  ),
-                );
-
-                // =================================================
-                // ESP32 TIMESTAMP
-                // =================================================
-
-                final dynamic timestampRaw =
-                    data['timestamp'];
-
-                // Store the latest Firebase timestamp.
-                //
-                // This value will continue to be checked by
-                // _esp32StatusTimer even after the ESP32 stops
-                // sending Firebase updates.
-                double? parsedTimestamp;
-
-                if (timestampRaw is num) {
-                  parsedTimestamp =
-                      timestampRaw.toDouble();
-                } else {
-                  parsedTimestamp =
-                      double.tryParse(
-                    timestampRaw?.toString() ?? '',
-                  );
-                }
-
-                if (parsedTimestamp != null &&
-                    parsedTimestamp.isFinite) {
-                  if (parsedTimestamp <
-                      100000000000) {
-                    parsedTimestamp *= 1000;
-                  }
-
-                  _latestEsp32Timestamp =
-                      parsedTimestamp.round();
-
-                  _hasReceivedFirebaseData = true;
-                }
-
-                // Use the timestamp immediately for the current
-                // Firebase rebuild.
-                esp32Online =
-                    _isEsp32TimestampRecent(
-                  timestampRaw,
-                );
-
-                _esp32Online = esp32Online;
-              }
-            }
-
-            // =====================================================
-            // OPEN-METEO FALLBACK
-            // =====================================================
-
-            if (!esp32Online) {
-              _scheduleFallbackWeather();
-            }
-
-            // =================================================
-            // DISTANCE FROM ULTRASONIC SENSOR
-            // =================================================
-
-            if (esp32Online) {
-              final dynamic distanceRaw =
-                  data['distance'];
-
-              final double? parsedDistance =
-                  FloodRiskReading.parseSensorDistanceCm(distanceRaw);
-
-              if (parsedDistance == null) {
-                // Keep invalid or out-of-range ultrasonic readings idle.
-                sensorActive = false;
-                waterLevel = idleWaterLevel;
-              } else {
-                sensorActive = true;
-                waterLevel = FloodRiskReading.waterRiseCm(parsedDistance);
-              }
-            } else {
-              // =================================================
-              // ESP32 OFFLINE
-              // =================================================
+        duration: const Duration(milliseconds: 400),
+        color: isDarkMode ? const Color(0xFF212121) : Colors.white,
+        child: Scaffold(
+          backgroundColor: isDarkMode ? const Color(0xFF212121) : Colors.white,
+          // =====================================================
+          // RAIN BACKGROUND (BEHIND EVERYTHING) + PAGE CONTENT
+          // =====================================================
+          body: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Weather-based background.
+              // IgnorePointer keeps all taps and double-taps working.
               //
-              // Do NOT use stale distance data.
-              // Do NOT display 0 as the water level.
+              // ValueListenableBuilder makes the background react
+              // instantly when the Menu's Home Background dropdown
+              // changes (Default / Storm / Rain / Cloudy / Sunny),
+              // and when the Menu's quality setting changes
+              // (High / Low). The quality setting lives in menu.dart.
               //
-              // Open-Meteo does not provide the physical
-              // ultrasonic water level, so the water section
-              // remains IDLE until the ESP32 reconnects.
-
-              sensorActive = false;
-              waterLevel =
-                  idleWaterLevel;
-            }
-
-            // =====================================================
-            // TEMPERATURE
-            // =====================================================
-
-            final dynamic temperatureRaw =
-                data['temperature'];
-
-            final double? sensorTemperature =
-                temperatureRaw is num
-                    ? temperatureRaw.toDouble()
-                    : double.tryParse(
-                        temperatureRaw
-                                ?.toString() ??
-                            '',
-                      );
-
-            double? displayedTemperature =
-                esp32Online
-                    ? sensorTemperature
-                    : _fallbackTemperature;
-
-            // =====================================================
-            // HUMIDITY
-            // =====================================================
-
-            final dynamic humidityRaw =
-                data['humidity'];
-
-            final double? sensorHumidity =
-                humidityRaw is num
-                    ? humidityRaw.toDouble()
-                    : double.tryParse(
-                        humidityRaw?.toString() ??
-                            '',
-                      );
-
-            double humidity =
-                (esp32Online
-                        ? sensorHumidity
-                        : _fallbackHumidity) ??
-                    0;
-
-            // =====================================================
-            // DASHBOARD REFRESH RATE
-            // =====================================================
-            //
-            // The values above are always the live values. Here they
-            // are passed through the refresh-rate function so the
-            // dashboard (temperature, humidity, water level and flood
-            // risk status) only changes once per chosen interval.
-            // With the default interval (Duration.zero) the live
-            // values are used as-is, exactly like before.
-
-            final _DashboardSnapshot shown =
-                _applyRefreshRate(
-              _DashboardSnapshot(
-                waterLevel: waterLevel,
-                sensorActive: sensorActive,
-                esp32Online: esp32Online,
-                temperature: displayedTemperature,
-                humidity: humidity,
-                humidityAvailable: esp32Online ||
-                    _fallbackHumidity != null,
-              ),
-            );
-
-            waterLevel = shown.waterLevel;
-            sensorActive = shown.sensorActive;
-            esp32Online = shown.esp32Online;
-            displayedTemperature = shown.temperature;
-            humidity = shown.humidity;
-            final bool humidityAvailable =
-                shown.humidityAvailable;
-
-            // =====================================================
-            // SCREEN / HEADER
-            // =====================================================
-            //
-            // LAYOUT FIX:
-            // The header used to take 32% of the screen height, which
-            // left a lot of unused space above the cards. It is now
-            // just tall enough for its content (status bar + logo +
-            // greeting + location row), and every remaining pixel goes
-            // to the cards below (mostly to the Water Level card).
-
-            final double topHeight =
-                MediaQuery.of(context).padding.top + 150;
-
-            // =====================================================
-            // WATER ANIMATION
-            // =====================================================
-
-            final double animationStart =
-                _previousWaterLevel;
-
-            final double animationEnd =
-                waterLevel;
-
-            _previousWaterLevel =
-                waterLevel;
-
-            // =====================================================
-            // FLOOD RISK STATUS from the baseline-adjusted water rise.
-            // =====================================================
-
-            final FloodRiskStatus floodRisk =
-                FloodRiskReading.statusForWaterRise(waterLevel);
-            final Color floodColor = !sensorActive
-                ? Colors.grey.shade500
-                : floodRisk == FloodRiskStatus.critical
-                    ? Colors.red.shade400
-                    : floodRisk == FloodRiskStatus.warning
-                        ? Colors.orange.shade400
-                        : Colors.green.shade400;
-
-            final String floodStatusText = !sensorActive
-                ? 'IDLE'
-                : floodRisk == FloodRiskStatus.critical
-                    ? 'CRITICAL'
-                    : floodRisk == FloodRiskStatus.warning
-                        ? 'FLOODING'
-                        : 'SAFE';
-
-            final String floodMessage = !sensorActive
-                ? 'Waiting for sensor data'
-                : floodRisk == FloodRiskStatus.critical
-                    ? 'Critical water rise detected'
-                    : floodRisk == FloodRiskStatus.warning
-                        ? 'Flooding detected — monitor conditions closely'
-                        : 'Conditions are normal';
-
-            // =====================================================
-            // FIXED PAGE - NO SCROLLING
-            // =====================================================
-
-            return Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
-              children: [
-
-                // =================================================
-                // HEADER
-                // =================================================
-
-                Container(
-                  height: topHeight,
-                  width: double.infinity,
-                  alignment: Alignment.topCenter,
-                  // Transparent so the rainy background shows
-                  // through. The background gradient starts with the
-                  // same blue (light) / dark grey (dark) as before.
-                  color: Colors.transparent,
-                  child: SafeArea(
-                    bottom: false,
-                    child: Padding(
-                      padding:
-                          const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      child: Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
-                        children: [
-
-                          // =====================================
-                          // HEADER TOP ROW
-                          // =====================================
-
-                          Row(
-                            children: [
-
-                              SizedBox(
-                                width: 50,
-                                height: 50,
-                                child: Image.asset(
-                                  "assets/icon/detect-co_logo.png",
-                                  // LOW-END MODE: decode the logo at
-                                  // its displayed size only.
-                                  cacheWidth: perf
-                                      ? (50 *
-                                              MediaQuery.of(context)
-                                                  .devicePixelRatio)
-                                          .round()
-                                      : null,
-                                ),
-                              ),
-
-                              const SizedBox(
-                                width: 8,
-                              ),
-
-                              const Text(
-                                'DETECT-CO',
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight:
-                                      FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-
-                              const Spacer(),
-                            ],
-                          ),
-
-                          const SizedBox(
-                            height: 12,
-                          ),
-
-                          // =====================================
-                          // GREETING
-                          // =====================================
-
-                          Row(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.start,
-                            children: [
-
-                              const Expanded(
-                                child: Text(
-                                  'Hello!',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight:
-                                        FontWeight.w500,
-                                    color:
-                                        Colors.white,
-                                  ),
-                                ),
-                              ),
-
-                              Text(
-                                'Last Synced',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.white
-                                      .withOpacity(
-                                    0.85,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-
-                          const SizedBox(
-                            height: 4,
-                          ),
-
-                          // =====================================
-                          // LOCATION
-                          // =====================================
-                          //
-                          // The Manila clock was removed from this
-                          // row (it rebuilt the whole screen every
-                          // second).
-
-                          Row(
-                            children: [
-
-                              const Icon(
-                                Icons.location_on,
-                                color:
-                                    Colors.white70,
-                                size: 16,
-                              ),
-
-                              const SizedBox(
-                                width: 4,
-                              ),
-
-                              // =================================
-                              // BARANGAY PICKER
-                              // =================================
-                              //
-                              // Custom popup (showMenu) so the menu
-                              // always opens directly below the pill.
-
-                              Builder(
-                                builder: (fieldContext) {
-                                  return Container(
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.025),
-                                      borderRadius: BorderRadius.circular(18),
-                                      border: Border.all(
-                                        color: Colors.white.withOpacity(0.12),
-                                        width: 1,
-                                      ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(0.22),
-                                          blurRadius: 12,
-                                          offset: const Offset(0, 5),
-                                        ),
-                                      ],
-                                    ),
-                                    child: Material(
-                                      color: Colors.transparent,
-                                      child: InkWell(
-                                        borderRadius: BorderRadius.circular(18),
-                                        onTap: () =>
-                                            _showBarangayMenu(fieldContext),
-                                        child: Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                            vertical: 4,
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Text(
-                                                'Barangay $_selectedBarangay',
-                                                style: const TextStyle(
-                                                  fontSize: 14,
-                                                  color: Colors.white,
-                                                  fontWeight: FontWeight.w500,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 6),
-                                              const Icon(
-                                                Icons
-                                                    .keyboard_arrow_down_rounded,
-                                                color: Colors.white70,
-                                                size: 20,
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
+              // LOW-END MODE: always uses the lite background.
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: RepaintBoundary(
+                    child: ValueListenableBuilder<HomeBgChoice>(
+                      valueListenable: homeBgChoice,
+                      builder: (context, choice, _) {
+                        return ValueListenableBuilder<HomeBgQuality>(
+                          valueListenable: homeBgQuality,
+                          builder: (context, quality, _) {
+                            return _RainBackground(
+                              mode: _computeWeatherMode(),
+                              lite:
+                                  quality == HomeBgQuality.low ||
+                                  homePerformanceMode.value,
+                            );
+                          },
+                        );
+                      },
                     ),
                   ),
                 ),
+              ),
 
-                // =================================================
-                // SENSOR CARD (glassmorphism dashboard)
-                // =================================================
-                //
-                // LAYOUT FIX:
-                // The old Transform.translate(0, -28) only moved the
-                // painting up while the layout box stayed the same,
-                // which wasted 28px at the bottom. The header is now
-                // 28px shorter instead, so the cards start at the same
-                // visual position and use the full remaining height.
-
-                Expanded(
-                  child: Padding(
-                      padding:
-                          const EdgeInsets.symmetric(
-                        horizontal: 14,
+              StreamBuilder<DatabaseEvent>(
+                stream: dbRef.child('flood').onValue,
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return const Center(
+                      child: Text(
+                        'Error loading data',
+                        style: TextStyle(fontSize: 16, color: Colors.red),
                       ),
-                      child: Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.stretch,
-                        children: [
+                    );
+                  }
 
-                          // =========================================
-                          // FLOOD RISK STATUS
-                          // =========================================
-                          //
-                          // LAYOUT FIX: slightly smaller (less vertical
-                          // padding, smaller badge, slightly smaller title).
-                          //
-                          // (Placed ABOVE the temperature + humidity row.)
+                  // =====================================================
+                  // SENSOR DATA
+                  // =====================================================
 
-                          _glassCard(
-                            glowColor: floodColor,
+                  Map<String, dynamic> data = {};
+
+                  double waterLevel = idleWaterLevel;
+
+                  bool sensorActive = false;
+
+                  bool esp32Online = _esp32Online;
+
+                  if (snapshot.hasData &&
+                      snapshot.data!.snapshot.value != null) {
+                    final rawValue = snapshot.data!.snapshot.value;
+
+                    if (rawValue is Map) {
+                      final rawData = rawValue as Map<dynamic, dynamic>;
+
+                      data = rawData.map(
+                        (key, value) => MapEntry(key.toString(), value),
+                      );
+
+                      // =================================================
+                      // ESP32 TIMESTAMP
+                      // =================================================
+
+                      final dynamic timestampRaw = data['timestamp'];
+
+                      // Store the latest Firebase timestamp.
+                      //
+                      // This value will continue to be checked by
+                      // _esp32StatusTimer even after the ESP32 stops
+                      // sending Firebase updates.
+                      double? parsedTimestamp;
+
+                      if (timestampRaw is num) {
+                        parsedTimestamp = timestampRaw.toDouble();
+                      } else {
+                        parsedTimestamp = double.tryParse(
+                          timestampRaw?.toString() ?? '',
+                        );
+                      }
+
+                      if (parsedTimestamp != null && parsedTimestamp.isFinite) {
+                        if (parsedTimestamp < 100000000000) {
+                          parsedTimestamp *= 1000;
+                        }
+
+                        _latestEsp32Timestamp = parsedTimestamp.round();
+
+                        _hasReceivedFirebaseData = true;
+                      }
+
+                      // Use the timestamp immediately for the current
+                      // Firebase rebuild.
+                      esp32Online = _isEsp32TimestampRecent(timestampRaw);
+
+                      _esp32Online = esp32Online;
+                    }
+                  }
+
+                  // =====================================================
+                  // OPEN-METEO FALLBACK
+                  // =====================================================
+
+                  if (!esp32Online) {
+                    _scheduleFallbackWeather();
+                  }
+
+                  // =================================================
+                  // DISTANCE FROM ULTRASONIC SENSOR
+                  // =================================================
+
+                  if (esp32Online) {
+                    final dynamic distanceRaw = data['distance'];
+
+                    final double? parsedDistance =
+                        FloodRiskReading.parseSensorDistanceCm(distanceRaw);
+
+                    if (parsedDistance == null) {
+                      // Keep invalid or out-of-range ultrasonic readings idle.
+                      sensorActive = false;
+                      waterLevel = idleWaterLevel;
+                    } else {
+                      sensorActive = true;
+                      waterLevel = FloodRiskReading.waterRiseCm(parsedDistance);
+                    }
+                  } else {
+                    // =================================================
+                    // ESP32 OFFLINE
+                    // =================================================
+                    //
+                    // Do NOT use stale distance data.
+                    // Do NOT display 0 as the water level.
+                    //
+                    // Open-Meteo does not provide the physical
+                    // ultrasonic water level, so the water section
+                    // remains IDLE until the ESP32 reconnects.
+
+                    sensorActive = false;
+                    waterLevel = idleWaterLevel;
+                  }
+
+                  // =====================================================
+                  // TEMPERATURE
+                  // =====================================================
+
+                  final dynamic temperatureRaw = data['temperature'];
+
+                  final double? sensorTemperature = temperatureRaw is num
+                      ? temperatureRaw.toDouble()
+                      : double.tryParse(temperatureRaw?.toString() ?? '');
+
+                  double? displayedTemperature = esp32Online
+                      ? sensorTemperature
+                      : _fallbackTemperature;
+
+                  // =====================================================
+                  // HUMIDITY
+                  // =====================================================
+
+                  final dynamic humidityRaw = data['humidity'];
+
+                  final double? sensorHumidity = humidityRaw is num
+                      ? humidityRaw.toDouble()
+                      : double.tryParse(humidityRaw?.toString() ?? '');
+
+                  double humidity =
+                      (esp32Online ? sensorHumidity : _fallbackHumidity) ?? 0;
+
+                  // =====================================================
+                  // DASHBOARD REFRESH RATE
+                  // =====================================================
+                  //
+                  // The values above are always the live values. Here they
+                  // are passed through the refresh-rate function so the
+                  // dashboard (temperature, humidity, water level and flood
+                  // risk status) only changes once per chosen interval.
+                  // With the default interval (Duration.zero) the live
+                  // values are used as-is, exactly like before.
+
+                  final _DashboardSnapshot shown = _applyRefreshRate(
+                    _DashboardSnapshot(
+                      waterLevel: waterLevel,
+                      sensorActive: sensorActive,
+                      esp32Online: esp32Online,
+                      temperature: displayedTemperature,
+                      humidity: humidity,
+                      humidityAvailable:
+                          esp32Online || _fallbackHumidity != null,
+                    ),
+                  );
+
+                  waterLevel = shown.waterLevel;
+                  sensorActive = shown.sensorActive;
+                  esp32Online = shown.esp32Online;
+                  _latestWaterRiseCm = waterLevel;
+                  _latestWaterSensorActive = sensorActive;
+                  displayedTemperature = shown.temperature;
+                  humidity = shown.humidity;
+                  final bool humidityAvailable = shown.humidityAvailable;
+
+                  // =====================================================
+                  // SCREEN / HEADER
+                  // =====================================================
+                  //
+                  // LAYOUT FIX:
+                  // The header used to take 32% of the screen height, which
+                  // left a lot of unused space above the cards. It is now
+                  // just tall enough for its content (status bar + logo +
+                  // greeting + location row), and every remaining pixel goes
+                  // to the cards below (mostly to the Water Level card).
+
+                  final double topHeight =
+                      MediaQuery.of(context).padding.top + 150;
+
+                  // =====================================================
+                  // WATER ANIMATION
+                  // =====================================================
+
+                  final double animationStart = _previousWaterLevel;
+
+                  final double animationEnd = waterLevel;
+
+                  _previousWaterLevel = waterLevel;
+
+                  // =====================================================
+                  // FLOOD RISK STATUS from the baseline-adjusted water rise.
+                  // =====================================================
+
+                  final FloodRiskStatus floodRisk =
+                      FloodRiskReading.statusForWaterRise(waterLevel);
+                  final MlFloodRiskAssessment mlRiskAssessment =
+                      MlFloodRiskAssessment.calculate(
+                        waterRiseCm: waterLevel,
+                        forecast: MlFloodRiskStore.instance.forecast,
+                      );
+                  final Color floodColor = !sensorActive
+                      ? Colors.grey.shade500
+                      : floodRisk == FloodRiskStatus.critical
+                      ? Colors.red.shade400
+                      : floodRisk == FloodRiskStatus.warning
+                      ? Colors.orange.shade400
+                      : Colors.green.shade400;
+
+                  final String floodStatusText = !sensorActive
+                      ? 'IDLE'
+                      : mlRiskAssessment.label;
+
+                  final String floodMessage = !sensorActive
+                      ? 'Waiting for sensor data'
+                      : floodRisk == FloodRiskStatus.critical
+                      ? 'Critical water rise detected'
+                      : floodRisk == FloodRiskStatus.warning
+                      ? 'Flooding detected — monitor conditions closely'
+                      : 'Conditions are normal';
+
+                  final mlForecastValues = [
+                    _mlRainfall1h,
+                    _mlRainfall3h,
+                    _mlRainfall6h,
+                    _mlRainfall12h,
+                    _mlRainfall24h,
+                  ];
+                  final bool hasMlForecast =
+                      !_mlForecastIdle &&
+                      _mlError == null &&
+                      mlForecastValues.any((value) => value != null);
+                  final fallbackForecastValues = [
+                    _openMeteoRainfall1h,
+                    _openMeteoRainfall3h,
+                    _openMeteoRainfall6h,
+                    _openMeteoRainfall12h,
+                    _openMeteoRainfall24h,
+                  ];
+                  final forecastDisplayValues = hasMlForecast
+                      ? mlForecastValues
+                      : fallbackForecastValues;
+
+                  // =====================================================
+                  // FIXED PAGE - NO SCROLLING
+                  // =====================================================
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // =================================================
+                      // HEADER
+                      // =================================================
+
+                      Container(
+                        height: topHeight,
+                        width: double.infinity,
+                        alignment: Alignment.topCenter,
+                        // Transparent so the rainy background shows
+                        // through. The background gradient starts with the
+                        // same blue (light) / dark grey (dark) as before.
+                        color: Colors.transparent,
+                        child: SafeArea(
+                          bottom: false,
+                          child: Padding(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 16,
-                              vertical: 9,
+                              vertical: 12,
                             ),
-                            child: Row(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                SizedBox(
-                                  width: 40,
-                                  height: 40,
-                                  child: Stack(
-                                    alignment: Alignment.center,
-                                    children: [
-                                      Container(
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          color:
-                                              floodColor.withOpacity(0.18),
-                                          border: Border.all(
-                                            color:
-                                                floodColor.withOpacity(0.6),
-                                            width: 1.4,
-                                          ),
-                                        ),
+                                // =====================================
+                                // HEADER TOP ROW
+                                // =====================================
+
+                                Row(
+                                  children: [
+                                    SizedBox(
+                                      width: 50,
+                                      height: 50,
+                                      child: Image.asset(
+                                        "assets/icon/detect-co_logo.png",
+                                        // LOW-END MODE: decode the logo at
+                                        // its displayed size only.
+                                        cacheWidth: perf
+                                            ? (50 *
+                                                      MediaQuery.of(
+                                                        context,
+                                                      ).devicePixelRatio)
+                                                  .round()
+                                            : null,
                                       ),
-                                      Icon(
-                                        Icons.shield_outlined,
-                                        color: floodColor,
-                                        size: 25,
+                                    ),
+
+                                    const SizedBox(width: 8),
+
+                                    const Text(
+                                      'DETECT-CO',
+                                      style: TextStyle(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
                                       ),
-                                      Positioned(
-                                        bottom: 7,
-                                        right: 7,
-                                        child: Icon(
-                                          Icons.check_circle,
-                                          color: floodColor,
-                                          size: 14,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                                    ),
+
+                                    const Spacer(),
+                                  ],
                                 ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      const Text(
-                                        'FLOOD RISK STATUS',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w700,
-                                          letterSpacing: 1.0,
-                                          color: Colors.white60,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        floodStatusText,
+
+                                const SizedBox(height: 12),
+
+                                // =====================================
+                                // GREETING
+                                // =====================================
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Expanded(
+                                      child: Text(
+                                        'Hello!',
                                         style: TextStyle(
                                           fontSize: 18,
-                                          fontWeight: FontWeight.w900,
-                                          color: floodColor,
-                                          letterSpacing: 0.5,
+                                          fontWeight: FontWeight.w500,
+                                          color: Colors.white,
                                         ),
                                       ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        floodMessage,
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          color: Colors.white60,
-                                        ),
+                                    ),
+
+                                    Text(
+                                      'Last Synced',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.white.withOpacity(0.85),
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 ),
-                                const Icon(
-                                  Icons.chevron_right_rounded,
-                                  color: Colors.white38,
+
+                                const SizedBox(height: 4),
+
+                                // =====================================
+                                // LOCATION
+                                // =====================================
+                                //
+                                // The Manila clock was removed from this
+                                // row (it rebuilt the whole screen every
+                                // second).
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.location_on,
+                                      color: Colors.white70,
+                                      size: 16,
+                                    ),
+
+                                    const SizedBox(width: 4),
+
+                                    // =================================
+                                    // BARANGAY PICKER
+                                    // =================================
+                                    //
+                                    // Custom popup (showMenu) so the menu
+                                    // always opens directly below the pill.
+                                    Builder(
+                                      builder: (fieldContext) {
+                                        return Container(
+                                          decoration: BoxDecoration(
+                                            color: Colors.white.withOpacity(
+                                              0.025,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              18,
+                                            ),
+                                            border: Border.all(
+                                              color: Colors.white.withOpacity(
+                                                0.12,
+                                              ),
+                                              width: 1,
+                                            ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withOpacity(
+                                                  0.22,
+                                                ),
+                                                blurRadius: 12,
+                                                offset: const Offset(0, 5),
+                                              ),
+                                            ],
+                                          ),
+                                          child: Material(
+                                            color: Colors.transparent,
+                                            child: InkWell(
+                                              borderRadius:
+                                                  BorderRadius.circular(18),
+                                              onTap: () => _showBarangayMenu(
+                                                fieldContext,
+                                              ),
+                                              child: Padding(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 4,
+                                                    ),
+                                                child: Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    Text(
+                                                      'Barangay $_selectedBarangay',
+                                                      style: const TextStyle(
+                                                        fontSize: 14,
+                                                        color: Colors.white,
+                                                        fontWeight:
+                                                            FontWeight.w500,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 6),
+                                                    const Icon(
+                                                      Icons
+                                                          .keyboard_arrow_down_rounded,
+                                                      color: Colors.white70,
+                                                      size: 20,
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
                           ),
+                        ),
+                      ),
 
-                          const SizedBox(height: 10),
-
-                          // =========================================
-                          // TOP ROW: TEMPERATURE + HUMIDITY
-                          // =========================================
-                          //
-                          // (Placed BELOW the flood risk status card.)
-
-                          Row(
+                      // =================================================
+                      // SENSOR CARD (glassmorphism dashboard)
+                      // =================================================
+                      //
+                      // LAYOUT FIX:
+                      // The old Transform.translate(0, -28) only moved the
+                      // painting up while the layout box stayed the same,
+                      // which wasted 28px at the bottom. The header is now
+                      // 28px shorter instead, so the cards start at the same
+                      // visual position and use the full remaining height.
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              Expanded(
-                                child: _glassCard(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 14,
-                                    vertical: 12,
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(
-                                        Icons.thermostat_rounded,
-                                        color: Colors.orangeAccent,
-                                        size: 26,
-                                      ),
-                                      const SizedBox(width: 9),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            const Text(
-                                              'TEMPERATURE',
-                                              style: TextStyle(
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w700,
-                                                letterSpacing: 0.8,
-                                                color: Colors.white60,
+                              // =========================================
+                              // FLOOD RISK STATUS
+                              // =========================================
+                              //
+                              // LAYOUT FIX: slightly smaller (less vertical
+                              // padding, smaller badge, slightly smaller title).
+                              //
+                              // (Placed ABOVE the temperature + humidity row.)
+
+                              _glassCard(
+                                glowColor: floodColor,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 9,
+                                ),
+                                child: Row(
+                                  children: [
+                                    SizedBox(
+                                      width: 40,
+                                      height: 40,
+                                      child: Stack(
+                                        alignment: Alignment.center,
+                                        children: [
+                                          Container(
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              color: floodColor.withOpacity(
+                                                0.18,
+                                              ),
+                                              border: Border.all(
+                                                color: floodColor.withOpacity(
+                                                  0.6,
+                                                ),
+                                                width: 1.4,
                                               ),
                                             ),
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              displayedTemperature != null
-                                                  ? '${displayedTemperature.toStringAsFixed(1)}°C'
-                                                  : '--°C',
-                                              style: const TextStyle(
-                                                fontSize: 20,
-                                                fontWeight: FontWeight.bold,
-                                                color: Colors.white,
-                                              ),
+                                          ),
+                                          Icon(
+                                            Icons.shield_outlined,
+                                            color: floodColor,
+                                            size: 25,
+                                          ),
+                                          Positioned(
+                                            bottom: 7,
+                                            right: 7,
+                                            child: Icon(
+                                              Icons.check_circle,
+                                              color: floodColor,
+                                              size: 14,
                                             ),
-                                          ],
-                                        ),
+                                          ),
+                                        ],
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'FLOOD RISK STATUS',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w700,
+                                              letterSpacing: 1.0,
+                                              color: Colors.white60,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            floodStatusText,
+                                            style: TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.w900,
+                                              color: floodColor,
+                                              letterSpacing: 0.5,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            floodMessage,
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              color: Colors.white60,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const Icon(
+                                      Icons.chevron_right_rounded,
+                                      color: Colors.white38,
+                                    ),
+                                  ],
                                 ),
                               ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: _glassCard(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 14,
-                                    vertical: 12,
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(
-                                        Icons.water_drop_rounded,
-                                        color: Colors.lightBlueAccent,
-                                        size: 26,
-                                      ),
-                                      const SizedBox(width: 9),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            const Text(
-                                              'HUMIDITY',
-                                              style: TextStyle(
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w700,
-                                                letterSpacing: 0.8,
-                                                color: Colors.white60,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              humidityAvailable
-                                                  ? '${humidity.toStringAsFixed(0)}%'
-                                                  : '--%',
-                                              style: const TextStyle(
-                                                fontSize: 20,
-                                                fontWeight: FontWeight.bold,
-                                                color: Colors.white,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
 
-                          const SizedBox(height: 10),
+                              const SizedBox(height: 10),
 
-                          // =========================================
-                          // WATER LEVEL
-                          // =========================================
-                          //
-                          // LAYOUT FIX: this is the only flexible
-                          // (Expanded) card, so it receives all the space
-                          // left over after the other cards. Because the
-                          // header, flood card and rainfall card are now
-                          // smaller / fixed, it is much taller than before.
-
-                          Expanded(
-                            child: _glassCard(
-                              padding: const EdgeInsets.all(16),
-                              child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.center,
+                              // =========================================
+                              // TOP ROW: TEMPERATURE + HUMIDITY
+                              // =========================================
+                              //
+                              // (Placed BELOW the flood risk status card.)
+                              Row(
                                 children: [
-                                  const Text(
-                                    'Water Rise',
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.white,
+                                  Expanded(
+                                    child: _glassCard(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 14,
+                                        vertical: 12,
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.thermostat_rounded,
+                                            color: Colors.orangeAccent,
+                                            size: 26,
+                                          ),
+                                          const SizedBox(width: 9),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                const Text(
+                                                  'TEMPERATURE',
+                                                  style: TextStyle(
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w700,
+                                                    letterSpacing: 0.8,
+                                                    color: Colors.white60,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  displayedTemperature != null
+                                                      ? '${displayedTemperature.toStringAsFixed(1)}°C'
+                                                      : '--°C',
+                                                  style: const TextStyle(
+                                                    fontSize: 20,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Colors.white,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ),
-                                  const SizedBox(height: 6),
+                                  const SizedBox(width: 10),
                                   Expanded(
-                                    child: LayoutBuilder(
-                                      builder: (context, constraints) {
-                                        final double tubeCanvasWidth =
-                                            math.min(
-                                          180,
-                                          constraints.maxWidth * 0.62,
-                                        );
-
-                                        // OVERFLOW FIX:
-                                        // The gauge has 11 labels that used to
-                                        // need ~132px of height no matter how
-                                        // small the card was, which caused the
-                                        // 40+px overflow. The font now scales
-                                        // down only if the space is too small,
-                                        // so the labels can never overflow.
-                                        final double gaugeFontSize =
-                                            ((constraints.maxHeight - 40) /
-                                                    11 /
-                                                    1.3)
-                                                .clamp(6.0, 10.0)
-                                                .toDouble();
-
-                                        // The water gauge widget.
-                                        // LOW-END MODE: wrapped in its own
-                                        // RepaintBoundary so its animation
-                                        // never repaints the rest of the card.
-                                        final Widget waterGauge =
-                                            _WaterWithDuck(
-                                          width: tubeCanvasWidth,
-                                          height:
-                                              constraints.maxHeight - 40,
-                                          animation:
-                                              _waterAnimationController,
-                                          animationStart: animationStart,
-                                          animationEnd: animationEnd,
-                                          maxWaterLevel: maxWaterLevel,
-                                          isDark: isDarkMode,
-                                          lite: homeWaterLite.value,
-                                          performance: perf,
-                                        );
-
-                                        return Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-
-                                            // WATER CONTAINER
-                                            SizedBox(
-                                              width: tubeCanvasWidth + 8,
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment
-                                                        .center,
-                                                children: [
-
-                                                  // FLOATING PILL WITH VALUE
-                                                  TweenAnimationBuilder<
-                                                      double>(
-                                                    tween: Tween<double>(
-                                                      begin: animationStart,
-                                                      end: animationEnd,
-                                                    ),
-                                                    duration: const Duration(
-                                                      milliseconds: 800,
-                                                    ),
-                                                    curve: Curves.easeInOut,
-                                                    builder: (
-                                                      context,
-                                                      animatedLevel,
-                                                      child,
-                                                    ) {
-                                                      return Container(
-                                                        padding:
-                                                            const EdgeInsets
-                                                                .symmetric(
-                                                          horizontal: 12,
-                                                          vertical: 4,
-                                                        ),
-                                                        decoration:
-                                                            BoxDecoration(
-                                                          color: Colors.white
-                                                              .withOpacity(
-                                                            0.10,
-                                                          ),
-                                                          borderRadius:
-                                                              BorderRadius
-                                                                  .circular(
-                                                            20,
-                                                          ),
-                                                          border: Border.all(
-                                                            color: Colors
-                                                                .lightBlueAccent
-                                                                .withOpacity(
-                                                              0.45,
-                                                            ),
-                                                            width: 1,
-                                                          ),
-                                                        ),
-                                                        child: Text(
-                                                          sensorActive
-                                                              ? '${animatedLevel.toStringAsFixed(1)} cm rise'
-                                                              : 'IDLE',
-                                                          style:
-                                                              const TextStyle(
-                                                            fontSize: 16,
-                                                            fontWeight:
-                                                                FontWeight
-                                                                    .bold,
-                                                            color:
-                                                                Colors.white,
-                                                          ),
-                                                        ),
-                                                      );
-                                                    },
+                                    child: _glassCard(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 14,
+                                        vertical: 12,
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.water_drop_rounded,
+                                            color: Colors.lightBlueAccent,
+                                            size: 26,
+                                          ),
+                                          const SizedBox(width: 9),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                const Text(
+                                                  'HUMIDITY',
+                                                  style: TextStyle(
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w700,
+                                                    letterSpacing: 0.8,
+                                                    color: Colors.white60,
                                                   ),
-
-                                                  const SizedBox(height: 4),
-
-                                                  Expanded(
-                                                    child: Center(
-                                                      child: perf
-                                                          ? RepaintBoundary(
-                                                              child:
-                                                                  waterGauge,
-                                                            )
-                                                          : waterGauge,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-
-                                            const SizedBox(width: 8),
-
-                                            // GAUGE SCALE
-                                            Expanded(
-                                              child: Padding(
-                                                padding:
-                                                    const EdgeInsets.only(
-                                                  top: 40,
-                                                  left: 0,
                                                 ),
-                                                child: SizedBox(
-                                                  height:
-                                                      constraints.maxHeight -
-                                                          40,
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  humidityAvailable
+                                                      ? '${humidity.toStringAsFixed(0)}%'
+                                                      : '--%',
+                                                  style: const TextStyle(
+                                                    fontSize: 20,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Colors.white,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+
+                              const SizedBox(height: 10),
+
+                              // =========================================
+                              // WATER LEVEL
+                              // =========================================
+                              //
+                              // LAYOUT FIX: this is the only flexible
+                              // (Expanded) card, so it receives all the space
+                              // left over after the other cards. Because the
+                              // header, flood card and rainfall card are now
+                              // smaller / fixed, it is much taller than before.
+                              Expanded(
+                                child: _glassCard(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    children: [
+                                      const Text(
+                                        'Water Rise',
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Expanded(
+                                        child: LayoutBuilder(
+                                          builder: (context, constraints) {
+                                            final double tubeCanvasWidth = math
+                                                .min(
+                                                  180,
+                                                  constraints.maxWidth * 0.62,
+                                                );
+
+                                            // OVERFLOW FIX:
+                                            // The gauge has 11 labels that used to
+                                            // need ~132px of height no matter how
+                                            // small the card was, which caused the
+                                            // 40+px overflow. The font now scales
+                                            // down only if the space is too small,
+                                            // so the labels can never overflow.
+                                            final double gaugeFontSize =
+                                                ((constraints.maxHeight - 40) /
+                                                        11 /
+                                                        1.3)
+                                                    .clamp(6.0, 10.0)
+                                                    .toDouble();
+
+                                            // The water gauge widget.
+                                            // LOW-END MODE: wrapped in its own
+                                            // RepaintBoundary so its animation
+                                            // never repaints the rest of the card.
+                                            final Widget
+                                            waterGauge = _WaterWithDuck(
+                                              width: tubeCanvasWidth,
+                                              height:
+                                                  constraints.maxHeight - 40,
+                                              animation:
+                                                  _waterAnimationController,
+                                              animationStart: animationStart,
+                                              animationEnd: animationEnd,
+                                              maxWaterLevel: maxWaterLevel,
+                                              isDark: isDarkMode,
+                                              lite: homeWaterLite.value,
+                                              performance: perf,
+                                            );
+
+                                            return Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                // WATER CONTAINER
+                                                SizedBox(
+                                                  width: tubeCanvasWidth + 8,
                                                   child: Column(
-                                                    mainAxisAlignment:
-                                                        MainAxisAlignment
-                                                            .spaceBetween,
                                                     crossAxisAlignment:
                                                         CrossAxisAlignment
-                                                            .start,
+                                                            .center,
                                                     children: [
-                                                      Text(
-                                                        '150 cm',
-                                                        style: TextStyle(
-                                                          color: Colors
-                                                              .red.shade400,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          fontSize: gaugeFontSize,
+                                                      // FLOATING PILL WITH VALUE
+                                                      TweenAnimationBuilder<
+                                                        double
+                                                      >(
+                                                        tween: Tween<double>(
+                                                          begin: animationStart,
+                                                          end: animationEnd,
                                                         ),
+                                                        duration:
+                                                            const Duration(
+                                                              milliseconds: 800,
+                                                            ),
+                                                        curve: Curves.easeInOut,
+                                                        builder:
+                                                            (
+                                                              context,
+                                                              animatedLevel,
+                                                              child,
+                                                            ) {
+                                                              return Container(
+                                                                padding:
+                                                                    const EdgeInsets.symmetric(
+                                                                      horizontal:
+                                                                          12,
+                                                                      vertical:
+                                                                          4,
+                                                                    ),
+                                                                decoration: BoxDecoration(
+                                                                  color: Colors
+                                                                      .white
+                                                                      .withOpacity(
+                                                                        0.10,
+                                                                      ),
+                                                                  borderRadius:
+                                                                      BorderRadius.circular(
+                                                                        20,
+                                                                      ),
+                                                                  border: Border.all(
+                                                                    color: Colors
+                                                                        .lightBlueAccent
+                                                                        .withOpacity(
+                                                                          0.45,
+                                                                        ),
+                                                                    width: 1,
+                                                                  ),
+                                                                ),
+                                                                child: Text(
+                                                                  sensorActive
+                                                                      ? '${animatedLevel.toStringAsFixed(1)} cm rise'
+                                                                      : 'IDLE',
+                                                                  style: const TextStyle(
+                                                                    fontSize:
+                                                                        16,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .bold,
+                                                                    color: Colors
+                                                                        .white,
+                                                                  ),
+                                                                ),
+                                                              );
+                                                            },
                                                       ),
-                                                      Text(
-                                                        '135 cm',
-                                                        style: TextStyle(
-                                                          color: Colors
-                                                              .red.shade400,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          fontSize: gaugeFontSize,
-                                                        ),
-                                                      ),
-                                                      Text(
-                                                        '120 cm',
-                                                        style: TextStyle(
-                                                          color: Colors
-                                                              .red.shade400,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          fontSize: gaugeFontSize,
-                                                        ),
-                                                      ),
-                                                      Text(
-                                                        '105 cm',
-                                                        style: TextStyle(
-                                                          color: Colors
-                                                              .red.shade400,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          fontSize: gaugeFontSize,
-                                                        ),
-                                                      ),
-                                                      Text(
-                                                        '90 cm',
-                                                        style: TextStyle(
-                                                          color: Colors
-                                                              .red.shade400,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          fontSize: gaugeFontSize,
-                                                        ),
-                                                      ),
-                                                      Text(
-                                                        '75 cm',
-                                                        style: TextStyle(
-                                                          color: Colors
-                                                              .red.shade400,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          fontSize: gaugeFontSize,
-                                                        ),
-                                                      ),
-                                                      Text(
-                                                        '60 cm',
-                                                        style: TextStyle(
-                                                          color: Colors
-                                                              .red.shade400,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          fontSize: gaugeFontSize,
-                                                        ),
-                                                      ),
-                                                      Text(
-                                                        '45 cm',
-                                                        style: TextStyle(
-                                                          color: Colors
-                                                              .red.shade400,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          fontSize: gaugeFontSize,
-                                                        ),
-                                                      ),
-                                                      Text(
-                                                        '30 cm',
-                                                        style: TextStyle(
-                                                          color: Colors
-                                                              .orange
-                                                              .shade300,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          fontSize: gaugeFontSize,
-                                                        ),
-                                                      ),
-                                                      Text(
-                                                        '15 cm',
-                                                        style: TextStyle(
-                                                          color: Colors.orange
-                                                              .shade300,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          fontSize: gaugeFontSize,
-                                                        ),
-                                                      ),
-                                                      Text(
-                                                        '0 cm',
-                                                        style: TextStyle(
-                                                          color: Colors.green
-                                                              .shade600,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          fontSize: gaugeFontSize,
+
+                                                      const SizedBox(height: 4),
+
+                                                      Expanded(
+                                                        child: Center(
+                                                          child: perf
+                                                              ? RepaintBoundary(
+                                                                  child:
+                                                                      waterGauge,
+                                                                )
+                                                              : waterGauge,
                                                         ),
                                                       ),
                                                     ],
                                                   ),
                                                 ),
-                                              ),
-                                            ),
-                                          ],
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
 
-                          const SizedBox(height: 12),
+                                                const SizedBox(width: 8),
 
-                          // =========================================
-                          // RAINFALL FORECAST (always visible)
-                          // =========================================
-                          //
-                          // LAYOUT FIX: fixed height (SizedBox) so the card
-                          // never changes size when the forecast content
-                          // changes (ML vs Open-Meteo, extra lines, etc.).
-                          // The content sits in a FittedBox(scaleDown) so it
-                          // can never overflow the fixed height.
-                          //
-                          // LOW-END MODE: the loading spinners are hidden
-                          // (loading flags no longer trigger a rebuild).
-
-                          SizedBox(
-                            height: 108,
-                            child: _glassCard(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 10,
-                              ),
-                              child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.stretch,
-                                children: [
-                                  Row(
-                                    children: [
-                                      const Icon(
-                                        Icons.cloud_queue_rounded,
-                                        color: Colors.white70,
-                                        size: 24,
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: Text(
-                                          _mlForecastIdle ||
-                                                  _mlError != null
-                                              ? 'RAINFALL FORECAST'
-                                              : 'ML RAINFALL FORECAST',
-                                          style: const TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w700,
-                                            letterSpacing: 1.0,
-                                            color: Colors.white70,
-                                          ),
+                                                // GAUGE SCALE
+                                                Expanded(
+                                                  child: Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                          top: 40,
+                                                          left: 0,
+                                                        ),
+                                                    child: SizedBox(
+                                                      height:
+                                                          constraints
+                                                              .maxHeight -
+                                                          40,
+                                                      child: Column(
+                                                        mainAxisAlignment:
+                                                            MainAxisAlignment
+                                                                .spaceBetween,
+                                                        crossAxisAlignment:
+                                                            CrossAxisAlignment
+                                                                .start,
+                                                        children: [
+                                                          Text(
+                                                            '150 cm',
+                                                            style: TextStyle(
+                                                              color: Colors
+                                                                  .red
+                                                                  .shade400,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                              fontSize:
+                                                                  gaugeFontSize,
+                                                            ),
+                                                          ),
+                                                          Text(
+                                                            '135 cm',
+                                                            style: TextStyle(
+                                                              color: Colors
+                                                                  .red
+                                                                  .shade400,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                              fontSize:
+                                                                  gaugeFontSize,
+                                                            ),
+                                                          ),
+                                                          Text(
+                                                            '120 cm',
+                                                            style: TextStyle(
+                                                              color: Colors
+                                                                  .red
+                                                                  .shade400,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                              fontSize:
+                                                                  gaugeFontSize,
+                                                            ),
+                                                          ),
+                                                          Text(
+                                                            '105 cm',
+                                                            style: TextStyle(
+                                                              color: Colors
+                                                                  .red
+                                                                  .shade400,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                              fontSize:
+                                                                  gaugeFontSize,
+                                                            ),
+                                                          ),
+                                                          Text(
+                                                            '90 cm',
+                                                            style: TextStyle(
+                                                              color: Colors
+                                                                  .red
+                                                                  .shade400,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                              fontSize:
+                                                                  gaugeFontSize,
+                                                            ),
+                                                          ),
+                                                          Text(
+                                                            '75 cm',
+                                                            style: TextStyle(
+                                                              color: Colors
+                                                                  .red
+                                                                  .shade400,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                              fontSize:
+                                                                  gaugeFontSize,
+                                                            ),
+                                                          ),
+                                                          Text(
+                                                            '60 cm',
+                                                            style: TextStyle(
+                                                              color: Colors
+                                                                  .red
+                                                                  .shade400,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                              fontSize:
+                                                                  gaugeFontSize,
+                                                            ),
+                                                          ),
+                                                          Text(
+                                                            '45 cm',
+                                                            style: TextStyle(
+                                                              color: Colors
+                                                                  .red
+                                                                  .shade400,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                              fontSize:
+                                                                  gaugeFontSize,
+                                                            ),
+                                                          ),
+                                                          Text(
+                                                            '30 cm',
+                                                            style: TextStyle(
+                                                              color: Colors
+                                                                  .orange
+                                                                  .shade300,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                              fontSize:
+                                                                  gaugeFontSize,
+                                                            ),
+                                                          ),
+                                                          Text(
+                                                            '15 cm',
+                                                            style: TextStyle(
+                                                              color: Colors
+                                                                  .orange
+                                                                  .shade300,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                              fontSize:
+                                                                  gaugeFontSize,
+                                                            ),
+                                                          ),
+                                                          Text(
+                                                            '0 cm',
+                                                            style: TextStyle(
+                                                              color: Colors
+                                                                  .green
+                                                                  .shade600,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                              fontSize:
+                                                                  gaugeFontSize,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            );
+                                          },
                                         ),
                                       ),
-                                      if (!perf &&
-                                          _mlLoading &&
-                                          !_mlForecastIdle &&
-                                          _mlError == null)
-                                        const SizedBox(
-                                          width: 14,
-                                          height: 14,
-                                          child:
-                                              CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                          ),
-                                        )
-                                      else if (!perf &&
-                                          _openMeteoRainLoading)
-                                        const SizedBox(
-                                          width: 14,
-                                          height: 14,
-                                          child:
-                                              CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                          ),
-                                        ),
                                     ],
                                   ),
-                                  Expanded(
-                                    child: Padding(
-                                      padding: const EdgeInsets.only(
-                                        top: 4,
+                                ),
+                              ),
+
+                              const SizedBox(height: 12),
+
+                              // =========================================
+                              // RAINFALL FORECAST (always visible)
+                              // =========================================
+                              //
+                              // LAYOUT FIX: fixed height (SizedBox) so the card
+                              // never changes size when the forecast content
+                              // changes (ML vs Open-Meteo, extra lines, etc.).
+                              // The content sits in a FittedBox(scaleDown) so it
+                              // can never overflow the fixed height.
+                              //
+                              // LOW-END MODE: the loading spinners are hidden
+                              // (loading flags no longer trigger a rebuild).
+                              SizedBox(
+                                height: 154,
+                                child: _glassCard(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 9,
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.cloud_queue_rounded,
+                                            color: Colors.white70,
+                                            size: 22,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              hasMlForecast
+                                                  ? 'ML RAINFALL FORECAST'
+                                                  : 'OPEN-METEO RAINFALL · ML UNAVAILABLE',
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w700,
+                                                letterSpacing: 0.7,
+                                                color: Colors.white70,
+                                              ),
+                                            ),
+                                          ),
+                                          if (!perf && _mlLoading)
+                                            const SizedBox(
+                                              width: 14,
+                                              height: 14,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
+                                            ),
+                                        ],
                                       ),
-                                      child: Center(
-                                        child: FittedBox(
-                                          fit: BoxFit.scaleDown,
-                                          child: Column(
-                                            mainAxisSize:
-                                                MainAxisSize.min,
-                                            children: [
-
-                                              // MAIN RAINFALL VALUE
-                                              if (!_mlForecastIdle &&
-                                                  _mlError == null &&
-                                                  _mlRainfall24h != null)
-                                                Text(
-                                                  '24h: ${_mlRainfall24h!.toStringAsFixed(2)} mm',
-                                                  textAlign: TextAlign.center,
-                                                  style: const TextStyle(
-                                                    fontSize: 18,
-                                                    fontWeight:
-                                                        FontWeight.bold,
-                                                    color: Colors.white,
+                                      const SizedBox(height: 6),
+                                      SizedBox(
+                                        height: 37,
+                                        child: Row(
+                                          children: List.generate(5, (index) {
+                                            const periods = [
+                                              '1h',
+                                              '3h',
+                                              '6h',
+                                              '12h',
+                                              '24h',
+                                            ];
+                                            final value =
+                                                forecastDisplayValues[index];
+                                            return Expanded(
+                                              child: Column(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                children: [
+                                                  Text(
+                                                    periods[index],
+                                                    style: TextStyle(
+                                                      fontSize: 10,
+                                                      color: Colors.grey[400],
+                                                    ),
                                                   ),
-                                                )
-                                              else if (_openMeteoRainfall24h !=
-                                                  null)
-                                                Text(
-                                                  '24h: ${_openMeteoRainfall24h!.toStringAsFixed(2)} mm',
-                                                  textAlign: TextAlign.center,
-                                                  style: const TextStyle(
-                                                    fontSize: 16,
-                                                    fontWeight:
-                                                        FontWeight.bold,
-                                                    color: Colors.white,
+                                                  FittedBox(
+                                                    fit: BoxFit.scaleDown,
+                                                    child: Text(
+                                                      value == null
+                                                          ? '-- mm'
+                                                          : '${value.toStringAsFixed(1)} mm',
+                                                      style: const TextStyle(
+                                                        fontSize: 11,
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                        color: Colors.white,
+                                                      ),
+                                                    ),
                                                   ),
-                                                )
-                                              else
-                                                const Text(
-                                                  '--',
-                                                  style: TextStyle(
-                                                    fontSize: 16,
-                                                    fontWeight:
-                                                        FontWeight.bold,
-                                                    color: Colors.white,
-                                                  ),
-                                                ),
-
-                                              const SizedBox(height: 2),
-
-                                              // 1 HOUR RAINFALL
-                                              if (!_mlForecastIdle &&
-                                                  _mlError == null &&
-                                                  _mlRainfall1h != null)
-                                                Text(
-                                                  '1h: ${_mlRainfall1h!.toStringAsFixed(2)} mm',
-                                                  textAlign: TextAlign.center,
-                                                  style: TextStyle(
-                                                    fontSize: 11,
-                                                    color: Colors.grey[300],
-                                                  ),
-                                                )
-                                              else if (_openMeteoRainfall1h !=
-                                                  null)
-                                                Text(
-                                                  '1h: ${_openMeteoRainfall1h!.toStringAsFixed(2)} mm',
-                                                  textAlign: TextAlign.center,
-                                                  style: TextStyle(
-                                                    fontSize: 11,
-                                                    color: Colors.grey[300],
-                                                  ),
-                                                ),
-
-                                              // CURRENT RAIN
-                                              if ((_mlForecastIdle ||
-                                                      _mlError != null) &&
-                                                  _openMeteoCurrentRainfall !=
-                                                      null)
-                                                Text(
-                                                  'Current rain: '
-                                                  '${_openMeteoCurrentRainfall!.toStringAsFixed(2)} mm',
-                                                  textAlign: TextAlign.center,
+                                                ],
+                                              ),
+                                            );
+                                          }),
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: hasMlForecast
+                                            ? CustomPaint(
+                                                painter:
+                                                    _MlRainfallChartPainter(
+                                                      values: mlForecastValues,
+                                                      color: Colors
+                                                          .lightBlueAccent,
+                                                    ),
+                                                child: const SizedBox.expand(),
+                                              )
+                                            : Center(
+                                                child: Text(
+                                                  _mlLoading
+                                                      ? 'Loading ML predictions…'
+                                                      : (_mlError ??
+                                                            'ML prediction unavailable'),
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
                                                   style: TextStyle(
                                                     fontSize: 11,
-                                                    color: Colors.grey[300],
+                                                    color: Colors.grey[400],
                                                   ),
                                                 ),
-
-                                              // RAIN PROBABILITY
-                                              if ((_mlForecastIdle ||
-                                                      _mlError != null) &&
-                                                  _openMeteoRainProbability !=
-                                                      null)
-                                                Text(
-                                                  'Rain probability: '
-                                                  '${_openMeteoRainProbability!.toStringAsFixed(0)}%',
-                                                  textAlign: TextAlign.center,
-                                                  style: TextStyle(
-                                                    fontSize: 11,
-                                                    color: Colors.grey[300],
-                                                  ),
-                                                ),
-                                            ],
+                                              ),
+                                      ),
+                                      Align(
+                                        alignment: Alignment.centerRight,
+                                        child: Text(
+                                          hasMlForecast &&
+                                                  _mlLastPredictionAt != null
+                                              ? 'Last prediction ${TimeOfDay.fromDateTime(_mlLastPredictionAt!).format(context)}'
+                                              : (_mlCurrentRainfallMm != null
+                                                    ? 'Current rainfall ${_mlCurrentRainfallMm!.toStringAsFixed(1)} mm'
+                                                    : (_openMeteoCurrentRainfall !=
+                                                              null
+                                                          ? 'Open-Meteo current rain ${_openMeteoCurrentRainfall!.toStringAsFixed(1)} mm'
+                                                          : 'Forecast unavailable offline')),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 9,
+                                            color: Colors.grey[500],
                                           ),
                                         ),
                                       ),
-                                    ),
+                                    ],
                                   ),
-                                ],
+                                ),
                               ),
-                            ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
-                    ),
-                ),
-              ],
-            );
-          },
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
         ),
-          ],
-        ),
-      ),
       ),
     );
   }
+}
+
+class _MlRainfallChartPainter extends CustomPainter {
+  const _MlRainfallChartPainter({required this.values, required this.color});
+
+  final List<double?> values;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final valid = values
+        .asMap()
+        .entries
+        .where((entry) => entry.value != null && entry.value!.isFinite)
+        .toList();
+    if (valid.isEmpty || size.width <= 0 || size.height <= 0) return;
+
+    final maxValue = valid.fold<double>(
+      0,
+      (maximum, entry) => math.max(maximum, entry.value!),
+    );
+    final usableHeight = math.max(1.0, size.height - 8);
+    final points = valid.map((entry) {
+      final x = values.length <= 1
+          ? size.width / 2
+          : size.width * entry.key / (values.length - 1);
+      final y =
+          size.height -
+          4 -
+          (maxValue == 0
+              ? usableHeight / 2
+              : entry.value! / maxValue * usableHeight);
+      return Offset(x, y);
+    }).toList();
+
+    final path = Path()..moveTo(points.first.dx, points.first.dy);
+    for (var index = 1; index < points.length; index++) {
+      path.lineTo(points[index].dx, points[index].dy);
+    }
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = color.withOpacity(0.9)
+        ..strokeWidth = 2
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
+    );
+
+    final pointPaint = Paint()..color = color;
+    for (final point in points) {
+      canvas.drawCircle(point, 3, pointPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _MlRainfallChartPainter oldDelegate) =>
+      !listEquals(oldDelegate.values, values) || oldDelegate.color != color;
 }
 
 // =====================================================
@@ -3001,14 +2902,7 @@ class _DashboardSnapshot {
 // BACKGROUND WEATHER MODE
 // =====================================================
 
-enum _WeatherBackgroundMode {
-  sunny,
-  cloudy,
-  fog,
-  snow,
-  rain,
-  storm,
-}
+enum _WeatherBackgroundMode { sunny, cloudy, fog, snow, rain, storm }
 
 // =====================================================
 // RAIN BACKGROUND
@@ -3052,18 +2946,13 @@ class _RainBackground extends StatefulWidget {
   // True = use the low-end (lightweight) backgrounds.
   final bool lite;
 
-  const _RainBackground({
-    required this.mode,
-    this.lite = false,
-  });
+  const _RainBackground({required this.mode, this.lite = false});
 
   @override
-  State<_RainBackground> createState() =>
-      _RainBackgroundState();
+  State<_RainBackground> createState() => _RainBackgroundState();
 }
 
-class _RainBackgroundState
-    extends State<_RainBackground>
+class _RainBackgroundState extends State<_RainBackground>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final List<_RainDrop> _drops;
@@ -3218,8 +3107,7 @@ class _RainBackgroundState
                   size: Size.infinite,
                   painter: _LiteCloudsPainter(
                     progress: _controller.value,
-                    color: const Color(0xFF4A5560)
-                        .withOpacity(0.55),
+                    color: const Color(0xFF4A5560).withOpacity(0.55),
                     clouds: _liteCloudyClouds,
                     drift: 14,
                     scroll: 0.10,
@@ -3239,7 +3127,11 @@ class _RainBackgroundState
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Color(0xFF343B42), Color(0xFF242A30), Color(0xFF212121)],
+                  colors: [
+                    Color(0xFF343B42),
+                    Color(0xFF242A30),
+                    Color(0xFF212121),
+                  ],
                 ),
               ),
             ),
@@ -3262,7 +3154,11 @@ class _RainBackgroundState
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Color(0xFF27333D), Color(0xFF20272D), Color(0xFF212121)],
+                  colors: [
+                    Color(0xFF27333D),
+                    Color(0xFF20272D),
+                    Color(0xFF212121),
+                  ],
                 ),
               ),
             ),
@@ -3351,10 +3247,7 @@ class _RainBackgroundState
             ),
 
             // Simple whole-screen flash only (no bolt drawing).
-            const _LightningOverlay(
-              enabled: true,
-              simple: true,
-            ),
+            const _LightningOverlay(enabled: true, simple: true),
           ],
         );
     }
@@ -3367,8 +3260,7 @@ class _RainBackgroundState
       return _buildLite();
     }
 
-    final bool isStorm =
-        widget.mode == _WeatherBackgroundMode.storm;
+    final bool isStorm = widget.mode == _WeatherBackgroundMode.storm;
 
     return Stack(
       fit: StackFit.expand,
@@ -3380,17 +3272,13 @@ class _RainBackgroundState
               case _WeatherBackgroundMode.sunny:
                 return CustomPaint(
                   size: Size.infinite,
-                  painter: _SunnyPainter(
-                    progress: _controller.value,
-                  ),
+                  painter: _SunnyPainter(progress: _controller.value),
                 );
 
               case _WeatherBackgroundMode.cloudy:
                 return CustomPaint(
                   size: Size.infinite,
-                  painter: _CloudyPainter(
-                    progress: _controller.value,
-                  ),
+                  painter: _CloudyPainter(progress: _controller.value),
                 );
 
               case _WeatherBackgroundMode.fog:
@@ -3450,7 +3338,14 @@ class _FogPainter extends CustomPainter {
       final double phase = (progress + i * 0.27) % 1;
       final double x = (phase * 1.35 - 0.15) * size.width;
       final double y = size.height * (0.38 + i * 0.12);
-      canvas.drawOval(Rect.fromCenter(center: Offset(x, y), width: size.width * 0.72, height: 34), mist);
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset(x, y),
+          width: size.width * 0.72,
+          height: 34,
+        ),
+        mist,
+      );
     }
   }
 
@@ -3479,9 +3374,11 @@ class _SnowPainter extends CustomPainter {
       ..color = const Color(0xFFDCE7EF).withValues(alpha: 0.62);
     for (int i = 0; i < 22; i++) {
       final double seed = i * 37.71;
-      final double x = ((math.sin(seed) + 1) / 2) * size.width +
+      final double x =
+          ((math.sin(seed) + 1) / 2) * size.width +
           math.sin((progress * math.pi * 2) + seed) * 9;
-      final double y = (((progress * (0.35 + (i % 4) * 0.12)) + i / 22) % 1) * size.height;
+      final double y =
+          (((progress * (0.35 + (i % 4) * 0.12)) + i / 22) % 1) * size.height;
       canvas.drawCircle(Offset(x, y), 1.3 + (i % 3) * 0.55, flake);
     }
   }
@@ -3515,16 +3412,8 @@ class _RainPainter extends CustomPainter {
     // =====================================================
 
     final List<Color> colors = isDark
-        ? const [
-            Color(0xFF0E1218),
-            Color(0xFF161C24),
-            Color(0xFF212121),
-          ]
-        : const [
-            Color(0xFF4877F7),
-            Color(0xFFA9C4FB),
-            Color(0xFFE8F0FE),
-          ];
+        ? const [Color(0xFF0E1218), Color(0xFF161C24), Color(0xFF212121)]
+        : const [Color(0xFF4877F7), Color(0xFFA9C4FB), Color(0xFFE8F0FE)];
 
     const List<double> stops = [0.0, 0.45, 1.0];
 
@@ -3544,8 +3433,7 @@ class _RainPainter extends CustomPainter {
     // =====================================================
 
     final Paint cloudPaint = Paint()
-      ..maskFilter =
-          const MaskFilter.blur(BlurStyle.normal, 32)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 32)
       ..color = isDark
           ? const Color(0xFF3A4652).withOpacity(0.35)
           : Colors.white.withOpacity(0.40);
@@ -3560,14 +3448,10 @@ class _RainPainter extends CustomPainter {
     ];
 
     for (int i = 0; i < clouds.length; i++) {
-      final double drift =
-          math.sin(progress * math.pi * 2 + i) * 12;
+      final double drift = math.sin(progress * math.pi * 2 + i) * 12;
 
       canvas.drawCircle(
-        Offset(
-          clouds[i][0] * size.width + drift,
-          clouds[i][1] * size.height,
-        ),
+        Offset(clouds[i][0] * size.width + drift, clouds[i][1] * size.height),
         clouds[i][2] * size.width,
         cloudPaint,
       );
@@ -3592,16 +3476,13 @@ class _RainPainter extends CustomPainter {
       final double travel = size.height + d.length;
 
       final double y =
-          ((d.phase + progress * d.speed * speedMultiplier) %
-                      1.0) *
-                  travel -
-              d.length;
+          ((d.phase + progress * d.speed * speedMultiplier) % 1.0) * travel -
+          d.length;
 
       final double x = d.x * size.width;
 
       // 0 in the center, 1 at the very edges.
-      final double edgeDistance =
-          ((d.x - 0.5).abs() * 2).clamp(0.0, 1.0);
+      final double edgeDistance = ((d.x - 0.5).abs() * 2).clamp(0.0, 1.0);
 
       // Center stays very faint, edges are strongest.
       final double alpha =
@@ -3622,9 +3503,7 @@ class _RainPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(
-    covariant _RainPainter oldDelegate,
-  ) =>
+  bool shouldRepaint(covariant _RainPainter oldDelegate) =>
       oldDelegate.progress != progress ||
       oldDelegate.isDark != isDark ||
       oldDelegate.speedMultiplier != speedMultiplier ||
@@ -3675,17 +3554,12 @@ class _SunnyPainter extends CustomPainter {
     // SUN GLOW
     // =====================================================
 
-    final Offset sunCenter = Offset(
-      size.width * 0.80,
-      size.height * 0.13,
-    );
+    final Offset sunCenter = Offset(size.width * 0.80, size.height * 0.13);
 
     // Slow, gentle pulse.
-    final double pulse =
-        0.92 + math.sin(progress * math.pi * 2) * 0.08;
+    final double pulse = 0.92 + math.sin(progress * math.pi * 2) * 0.08;
 
-    final double glowRadius =
-        size.width * 0.55 * pulse;
+    final double glowRadius = size.width * 0.55 * pulse;
 
     final Paint glowPaint = Paint()
       ..shader = RadialGradient(
@@ -3695,12 +3569,7 @@ class _SunnyPainter extends CustomPainter {
           const Color(0xFFFFE28A).withOpacity(0.0),
         ],
         stops: const [0.0, 0.35, 1.0],
-      ).createShader(
-        Rect.fromCircle(
-          center: sunCenter,
-          radius: glowRadius,
-        ),
-      );
+      ).createShader(Rect.fromCircle(center: sunCenter, radius: glowRadius));
 
     canvas.drawCircle(sunCenter, glowRadius, glowPaint);
 
@@ -3713,18 +3582,14 @@ class _SunnyPainter extends CustomPainter {
       ..strokeWidth = 3
       ..strokeCap = StrokeCap.round;
 
-    final double rotation =
-        progress * math.pi * 2 * 0.1;
+    final double rotation = progress * math.pi * 2 * 0.1;
 
     for (int i = 0; i < 10; i++) {
-      final double angle =
-          rotation + (i * math.pi / 5);
+      final double angle = rotation + (i * math.pi / 5);
 
       final Offset rayEnd = Offset(
-        sunCenter.dx +
-            math.cos(angle) * size.width * 0.75,
-        sunCenter.dy +
-            math.sin(angle) * size.width * 0.75,
+        sunCenter.dx + math.cos(angle) * size.width * 0.75,
+        sunCenter.dy + math.sin(angle) * size.width * 0.75,
       );
 
       canvas.drawLine(sunCenter, rayEnd, rayPaint);
@@ -3737,16 +3602,14 @@ class _SunnyPainter extends CustomPainter {
     canvas.drawCircle(
       sunCenter,
       size.width * 0.075,
-      Paint()
-        ..color = const Color(0xFFFFF8DC).withOpacity(0.80),
+      Paint()..color = const Color(0xFFFFF8DC).withOpacity(0.80),
     );
 
     canvas.drawCircle(
       sunCenter,
       size.width * 0.075,
       Paint()
-        ..maskFilter =
-            const MaskFilter.blur(BlurStyle.outer, 10)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.outer, 10)
         ..color = const Color(0xFFFFE9A0).withOpacity(0.5),
     );
 
@@ -3758,10 +3621,7 @@ class _SunnyPainter extends CustomPainter {
     // the inside). The rainbow gently "breathes" in opacity
     // and is softly blurred so it blends into the sky.
 
-    final Offset rainbowCenter = Offset(
-      size.width * 0.42,
-      size.height * 0.42,
-    );
+    final Offset rainbowCenter = Offset(size.width * 0.42, size.height * 0.42);
 
     const List<Color> rainbowColors = [
       Color(0xFFFF4B4B), // red
@@ -3776,8 +3636,7 @@ class _SunnyPainter extends CustomPainter {
     final double bandWidth = size.width * 0.028;
     final double outerRadius = size.width * 0.62;
 
-    final double shimmer =
-        0.5 + math.sin(progress * math.pi * 2) * 0.5; // 0..1
+    final double shimmer = 0.5 + math.sin(progress * math.pi * 2) * 0.5; // 0..1
 
     // Soft white glow behind the whole rainbow.
     canvas.drawArc(
@@ -3791,28 +3650,22 @@ class _SunnyPainter extends CustomPainter {
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = bandWidth * 8
-        ..maskFilter =
-            const MaskFilter.blur(BlurStyle.normal, 18)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 18)
         ..color = Colors.white.withOpacity(0.10 + 0.04 * shimmer),
     );
 
     final Paint bandPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = bandWidth + 0.8
-      ..maskFilter =
-          const MaskFilter.blur(BlurStyle.normal, 1.6);
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.6);
 
     for (int i = 0; i < rainbowColors.length; i++) {
       final double radius = outerRadius - i * bandWidth;
 
-      bandPaint.color = rainbowColors[i]
-          .withOpacity(0.34 + 0.08 * shimmer);
+      bandPaint.color = rainbowColors[i].withOpacity(0.34 + 0.08 * shimmer);
 
       canvas.drawArc(
-        Rect.fromCircle(
-          center: rainbowCenter,
-          radius: radius,
-        ),
+        Rect.fromCircle(center: rainbowCenter, radius: radius),
         math.pi,
         math.pi,
         false,
@@ -3828,8 +3681,7 @@ class _SunnyPainter extends CustomPainter {
     // rises out of them; the others just drift across the sky.
 
     final Paint cloudPaint = Paint()
-      ..maskFilter =
-          const MaskFilter.blur(BlurStyle.normal, 20)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20)
       ..color = Colors.white.withOpacity(0.36);
 
     final List<List<double>> clouds = [
@@ -3846,14 +3698,10 @@ class _SunnyPainter extends CustomPainter {
     ];
 
     for (int i = 0; i < clouds.length; i++) {
-      final double drift =
-          math.sin(progress * math.pi * 2 + i) * 10;
+      final double drift = math.sin(progress * math.pi * 2 + i) * 10;
 
       canvas.drawCircle(
-        Offset(
-          clouds[i][0] * size.width + drift,
-          clouds[i][1] * size.height,
-        ),
+        Offset(clouds[i][0] * size.width + drift, clouds[i][1] * size.height),
         clouds[i][2] * size.width,
         cloudPaint,
       );
@@ -3861,9 +3709,7 @@ class _SunnyPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(
-    covariant _SunnyPainter oldDelegate,
-  ) =>
+  bool shouldRepaint(covariant _SunnyPainter oldDelegate) =>
       oldDelegate.progress != progress;
 }
 
@@ -3901,8 +3747,7 @@ class _CloudyPainter extends CustomPainter {
     );
 
     final Paint cloudPaint = Paint()
-      ..maskFilter =
-          const MaskFilter.blur(BlurStyle.normal, 34)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 34)
       ..color = const Color(0xFF4A5560).withOpacity(0.45);
 
     final List<List<double>> clouds = [
@@ -3918,12 +3763,11 @@ class _CloudyPainter extends CustomPainter {
     for (int i = 0; i < clouds.length; i++) {
       final double drift =
           math.sin(progress * math.pi * 2 * 0.5 + i) * 20 +
-              progress * size.width * 0.15;
+          progress * size.width * 0.15;
 
       final double x =
-          (clouds[i][0] * size.width + drift) %
-                  (size.width * 1.3) -
-              size.width * 0.15;
+          (clouds[i][0] * size.width + drift) % (size.width * 1.3) -
+          size.width * 0.15;
 
       canvas.drawCircle(
         Offset(x, clouds[i][1] * size.height),
@@ -3934,9 +3778,7 @@ class _CloudyPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(
-    covariant _CloudyPainter oldDelegate,
-  ) =>
+  bool shouldRepaint(covariant _CloudyPainter oldDelegate) =>
       oldDelegate.progress != progress;
 }
 
@@ -4001,15 +3843,12 @@ class _LiteRainPainter extends CustomPainter {
       final double travel = size.height + d.length;
 
       final double y =
-          ((d.phase + progress * d.speed * speedMultiplier) %
-                      1.0) *
-                  travel -
-              d.length;
+          ((d.phase + progress * d.speed * speedMultiplier) % 1.0) * travel -
+          d.length;
 
       final double x = d.x * size.width;
 
-      final double edgeDistance =
-          ((d.x - 0.5).abs() * 2).clamp(0.0, 1.0);
+      final double edgeDistance = ((d.x - 0.5).abs() * 2).clamp(0.0, 1.0);
 
       final double alpha =
           (maxAlpha *
@@ -4029,9 +3868,7 @@ class _LiteRainPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(
-    covariant _LiteRainPainter oldDelegate,
-  ) =>
+  bool shouldRepaint(covariant _LiteRainPainter oldDelegate) =>
       oldDelegate.progress != progress ||
       oldDelegate.speedMultiplier != speedMultiplier ||
       oldDelegate.alphaMultiplier != alphaMultiplier;
@@ -4067,19 +3904,17 @@ class _LiteCloudsPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     for (int i = 0; i < clouds.length; i++) {
-      final double sway =
-          math.sin(progress * math.pi * 2 + i) * drift;
+      final double sway = math.sin(progress * math.pi * 2 + i) * drift;
 
       double x = clouds[i][0] * size.width + sway;
 
       if (scroll > 0) {
-        x = (x + progress * size.width * scroll) %
-                (size.width * 1.3) -
+        x =
+            (x + progress * size.width * scroll) % (size.width * 1.3) -
             size.width * 0.15;
       }
 
-      final Offset center =
-          Offset(x, clouds[i][1] * size.height);
+      final Offset center = Offset(x, clouds[i][1] * size.height);
 
       final double radius = clouds[i][2] * size.width;
 
@@ -4088,21 +3923,14 @@ class _LiteCloudsPainter extends CustomPainter {
         radius,
         Paint()
           ..shader = RadialGradient(
-            colors: [
-              color,
-              color.withOpacity(0.0),
-            ],
-          ).createShader(
-            Rect.fromCircle(center: center, radius: radius),
-          ),
+            colors: [color, color.withOpacity(0.0)],
+          ).createShader(Rect.fromCircle(center: center, radius: radius)),
       );
     }
   }
 
   @override
-  bool shouldRepaint(
-    covariant _LiteCloudsPainter oldDelegate,
-  ) =>
+  bool shouldRepaint(covariant _LiteCloudsPainter oldDelegate) =>
       oldDelegate.progress != progress;
 }
 
@@ -4114,10 +3942,7 @@ class _LiteSunPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     // Sun glow.
-    final Offset sunCenter = Offset(
-      size.width * 0.80,
-      size.height * 0.13,
-    );
+    final Offset sunCenter = Offset(size.width * 0.80, size.height * 0.13);
 
     final double glowRadius = size.width * 0.50;
 
@@ -4132,27 +3957,18 @@ class _LiteSunPainter extends CustomPainter {
             const Color(0xFFFFE28A).withOpacity(0.0),
           ],
           stops: const [0.0, 0.35, 1.0],
-        ).createShader(
-          Rect.fromCircle(
-            center: sunCenter,
-            radius: glowRadius,
-          ),
-        ),
+        ).createShader(Rect.fromCircle(center: sunCenter, radius: glowRadius)),
     );
 
     // Sun core.
     canvas.drawCircle(
       sunCenter,
       size.width * 0.075,
-      Paint()
-        ..color = const Color(0xFFFFF8DC).withOpacity(0.85),
+      Paint()..color = const Color(0xFFFFF8DC).withOpacity(0.85),
     );
 
     // Flat rainbow (no blur, no animation).
-    final Offset rainbowCenter = Offset(
-      size.width * 0.42,
-      size.height * 0.42,
-    );
+    final Offset rainbowCenter = Offset(size.width * 0.42, size.height * 0.42);
 
     const List<Color> rainbowColors = [
       Color(0xFFFF4B4B),
@@ -4188,10 +4004,7 @@ class _LiteSunPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(
-    covariant _LiteSunPainter oldDelegate,
-  ) =>
-      false;
+  bool shouldRepaint(covariant _LiteSunPainter oldDelegate) => false;
 }
 
 // =====================================================
@@ -4209,18 +4022,13 @@ class _LightningOverlay extends StatefulWidget {
   final bool enabled;
   final bool simple;
 
-  const _LightningOverlay({
-    required this.enabled,
-    this.simple = false,
-  });
+  const _LightningOverlay({required this.enabled, this.simple = false});
 
   @override
-  State<_LightningOverlay> createState() =>
-      _LightningOverlayState();
+  State<_LightningOverlay> createState() => _LightningOverlayState();
 }
 
-class _LightningOverlayState
-    extends State<_LightningOverlay>
+class _LightningOverlayState extends State<_LightningOverlay>
     with SingleTickerProviderStateMixin {
   late final AnimationController _flashController;
   Timer? _flashTimer;
@@ -4242,9 +4050,7 @@ class _LightningOverlayState
   }
 
   @override
-  void didUpdateWidget(
-    covariant _LightningOverlay oldWidget,
-  ) {
+  void didUpdateWidget(covariant _LightningOverlay oldWidget) {
     super.didUpdateWidget(oldWidget);
 
     if (widget.enabled && !oldWidget.enabled) {
@@ -4260,21 +4066,18 @@ class _LightningOverlayState
 
     final int delaySeconds = 4 + _rnd.nextInt(9); // 4-12s
 
-    _flashTimer = Timer(
-      Duration(seconds: delaySeconds),
-      () {
-        if (!mounted || !widget.enabled) return;
+    _flashTimer = Timer(Duration(seconds: delaySeconds), () {
+      if (!mounted || !widget.enabled) return;
 
-        _boltX = 0.15 + _rnd.nextDouble() * 0.7;
+      _boltX = 0.15 + _rnd.nextDouble() * 0.7;
 
-        _flashController.forward(from: 0).then((_) {
-          if (!mounted) return;
-          _flashController.reverse();
-        });
+      _flashController.forward(from: 0).then((_) {
+        if (!mounted) return;
+        _flashController.reverse();
+      });
 
-        _scheduleFlash();
-      },
-    );
+      _scheduleFlash();
+    });
   }
 
   @override
@@ -4325,8 +4128,7 @@ class _LightningPainter extends CustomPainter {
 
     canvas.drawRect(
       rect,
-      Paint()
-        ..color = Colors.white.withOpacity(0.22 * intensity),
+      Paint()..color = Colors.white.withOpacity(0.22 * intensity),
     );
 
     // Low-end mode: flash only, skip the jagged bolt.
@@ -4343,8 +4145,7 @@ class _LightningPainter extends CustomPainter {
 
       final Path bolt = Path()..moveTo(startX, 0);
 
-      final math.Random rnd =
-          math.Random(boltX.hashCode);
+      final math.Random rnd = math.Random(boltX.hashCode);
 
       double x = startX;
       double y = 0;
@@ -4360,9 +4161,7 @@ class _LightningPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(
-    covariant _LightningPainter oldDelegate,
-  ) =>
+  bool shouldRepaint(covariant _LightningPainter oldDelegate) =>
       oldDelegate.intensity != intensity ||
       oldDelegate.boltX != boltX ||
       oldDelegate.simple != simple;
@@ -4406,13 +4205,11 @@ class _WaterWithDuck extends StatefulWidget {
   });
 
   @override
-  State<_WaterWithDuck> createState() =>
-      _WaterWithDuckState();
+  State<_WaterWithDuck> createState() => _WaterWithDuckState();
 }
 
 class _WaterWithDuckState extends State<_WaterWithDuck>
     with SingleTickerProviderStateMixin {
-
   // =====================================================
   // DUCK ANIMATION
   // =====================================================
@@ -4461,9 +4258,7 @@ class _WaterWithDuckState extends State<_WaterWithDuck>
   // =====================================================
 
   @override
-  void didUpdateWidget(
-    covariant _WaterWithDuck oldWidget,
-  ) {
+  void didUpdateWidget(covariant _WaterWithDuck oldWidget) {
     super.didUpdateWidget(oldWidget);
 
     if (widget.lite && !oldWidget.lite) {
@@ -4487,13 +4282,9 @@ class _WaterWithDuckState extends State<_WaterWithDuck>
   void _scheduleDuck() {
     _duckTimer?.cancel();
 
-    final int delaySeconds =
-        8 + _random.nextInt(11);
+    final int delaySeconds = 8 + _random.nextInt(11);
 
-    _duckTimer = Timer(
-      Duration(seconds: delaySeconds),
-      _startDuck,
-    );
+    _duckTimer = Timer(Duration(seconds: delaySeconds), _startDuck);
   }
 
   // =====================================================
@@ -4510,21 +4301,19 @@ class _WaterWithDuckState extends State<_WaterWithDuck>
       _showDuck = true;
     });
 
-    _duckController.forward(from: 0).then(
-      (_) {
-        if (!mounted) return;
+    _duckController.forward(from: 0).then((_) {
+      if (!mounted) return;
 
-        // If lite was turned on while the duck was swimming,
-        // the controller was stopped and nothing more to do.
-        if (widget.lite) return;
+      // If lite was turned on while the duck was swimming,
+      // the controller was stopped and nothing more to do.
+      if (widget.lite) return;
 
-        setState(() {
-          _showDuck = false;
-        });
+      setState(() {
+        _showDuck = false;
+      });
 
-        _scheduleDuck();
-      },
-    );
+      _scheduleDuck();
+    });
   }
 
   @override
@@ -4557,10 +4346,7 @@ class _WaterWithDuckState extends State<_WaterWithDuck>
         : null;
 
     return AnimatedBuilder(
-      animation: Listenable.merge([
-        widget.animation,
-        _duckController,
-      ]),
+      animation: Listenable.merge([widget.animation, _duckController]),
       child: cachedHuman,
       builder: (context, child) {
         return SizedBox(
@@ -4569,7 +4355,6 @@ class _WaterWithDuckState extends State<_WaterWithDuck>
           child: Stack(
             clipBehavior: Clip.hardEdge,
             children: [
-
               // =================================================
               // HUMAN
               // =================================================
@@ -4577,10 +4362,7 @@ class _WaterWithDuckState extends State<_WaterWithDuck>
               if (perf && child != null)
                 child
               else
-                ClipPath(
-                  clipper: _TubeInteriorClipper(),
-                  child: _buildHuman(),
-                ),
+                ClipPath(clipper: _TubeInteriorClipper(), child: _buildHuman()),
 
               // =================================================
               // WATER
@@ -4596,10 +4378,7 @@ class _WaterWithDuckState extends State<_WaterWithDuck>
                     level: widget.animationEnd,
                     maxLevel: widget.maxWaterLevel,
                     isDark: widget.isDark,
-                    wavePhase:
-                        widget.animation.value *
-                            math.pi *
-                            2,
+                    wavePhase: widget.animation.value * math.pi * 2,
                     straight: widget.lite,
                     // LOW-END MODE: fewer wave points.
                     step: perf ? 4.0 : 2.0,
@@ -4610,28 +4389,19 @@ class _WaterWithDuckState extends State<_WaterWithDuck>
               // =================================================
               // DUCK
               // =================================================
-
               if (_showDuck && !widget.lite)
-                ClipPath(
-                  clipper: _TubeInteriorClipper(),
-                  child: _buildDuck(),
-                ),
+                ClipPath(clipper: _TubeInteriorClipper(), child: _buildDuck()),
 
               // =================================================
               // BLUE TUBE OUTLINE
               // =================================================
-
               Positioned.fill(
                 child: IgnorePointer(
                   child: perf
                       ? RepaintBoundary(
-                          child: CustomPaint(
-                            painter: _TubeOutlinePainter(),
-                          ),
+                          child: CustomPaint(painter: _TubeOutlinePainter()),
                         )
-                      : CustomPaint(
-                          painter: _TubeOutlinePainter(),
-                        ),
+                      : CustomPaint(painter: _TubeOutlinePainter()),
                 ),
               ),
             ],
@@ -4662,18 +4432,14 @@ class _WaterWithDuckState extends State<_WaterWithDuck>
     // This preserves the PNG's original proportions while making
     // its actual height approximately 159 cm inside the 200 cm tube.
 
-    final double tubeInteriorHeight =
-        widget.height - 8;
+    final double tubeInteriorHeight = widget.height - 8;
 
     final double humanHeight =
-        tubeInteriorHeight *
-            (humanHeightCm / tubeHeightCm);
+        tubeInteriorHeight * (humanHeightCm / tubeHeightCm);
 
     // LOW-END MODE: decode the PNG at the size it is shown.
     final int? humanCacheHeight = widget.performance
-        ? (humanHeight *
-                MediaQuery.of(context).devicePixelRatio)
-            .round()
+        ? (humanHeight * MediaQuery.of(context).devicePixelRatio).round()
         : null;
 
     return SizedBox(
@@ -4706,39 +4472,29 @@ class _WaterWithDuckState extends State<_WaterWithDuck>
     // TUBE DIMENSIONS
     // =====================================================
 
-    final double tubeWidth =
-        widget.width * 0.9;
+    final double tubeWidth = widget.width * 0.9;
 
-    final double left =
-        (widget.width - tubeWidth) / 2;
+    final double left = (widget.width - tubeWidth) / 2;
 
-    final double right =
-        left + tubeWidth;
+    final double right = left + tubeWidth;
 
     const double top = 4;
 
-    final double bottom =
-        widget.height - 4;
+    final double bottom = widget.height - 4;
 
     // =====================================================
     // DUCK MOVEMENT
     // =====================================================
 
-    final double startX =
-        right - duckWidth * 0.35;
+    final double startX = right - duckWidth * 0.35;
 
-    final double endX =
-        left - duckWidth * 0.65;
+    final double endX = left - duckWidth * 0.65;
 
-    final double curvedProgress =
-        Curves.easeInOut.transform(
+    final double curvedProgress = Curves.easeInOut.transform(
       _duckController.value,
     );
 
-    final double duckX =
-        startX +
-            (endX - startX) *
-                curvedProgress;
+    final double duckX = startX + (endX - startX) * curvedProgress;
 
     // =====================================================
     // CURRENT WATER LEVEL
@@ -4746,86 +4502,60 @@ class _WaterWithDuckState extends State<_WaterWithDuck>
 
     final double currentLevel =
         widget.animationStart +
-            (widget.animationEnd -
-                    widget.animationStart) *
-                Curves.easeInOut.transform(
-                  widget.animation.value,
-                );
+        (widget.animationEnd - widget.animationStart) *
+            Curves.easeInOut.transform(widget.animation.value);
 
-    final double percent =
-        (currentLevel /
-                widget.maxWaterLevel)
-            .clamp(0, 1)
-            .toDouble();
+    final double percent = (currentLevel / widget.maxWaterLevel)
+        .clamp(0, 1)
+        .toDouble();
 
     // =====================================================
     // WATER LEVEL POSITION
     // =====================================================
 
-    final double fillHeight =
-        (bottom - top) * percent;
+    final double fillHeight = (bottom - top) * percent;
 
-    final double fillTop =
-        bottom - fillHeight;
+    final double fillTop = bottom - fillHeight;
 
     // =====================================================
     // DUCK CENTER
     // =====================================================
 
-    final double duckCenterX =
-        duckX + duckWidth / 2;
+    final double duckCenterX = duckX + duckWidth / 2;
 
     // =====================================================
     // WAVE POSITION
     // =====================================================
 
-    final double normalizedX =
-        ((duckCenterX - left) /
-                tubeWidth)
-            .clamp(0.0, 1.0);
+    final double normalizedX = ((duckCenterX - left) / tubeWidth).clamp(
+      0.0,
+      1.0,
+    );
 
     const double waveHeight = 3.5;
 
     final double wave =
         math.sin(
-              normalizedX *
-                      math.pi *
-                      2 *
-                      1.5 +
-                  widget.animation.value *
-                      math.pi *
-                      2,
-            ) *
-            waveHeight;
+          normalizedX * math.pi * 2 * 1.5 +
+              widget.animation.value * math.pi * 2,
+        ) *
+        waveHeight;
 
     // =====================================================
     // SLOW FLOATING / BOBBING
     // =====================================================
 
-    final double bob =
-        math.sin(
-              _duckController.value *
-                  math.pi *
-                  2,
-            ) *
-            1.5;
+    final double bob = math.sin(_duckController.value * math.pi * 2) * 1.5;
 
     // =====================================================
     // DUCK VERTICAL POSITION
     // =====================================================
 
-    final double duckY =
-        fillTop +
-            wave +
-            bob -
-            duckHeight +
-            5;
+    final double duckY = fillTop + wave + bob - duckHeight + 5;
 
     // LOW-END MODE: decode the PNG at the size it is shown.
     final int? duckCacheWidth = widget.performance
-        ? (duckWidth *
-                MediaQuery.of(context).devicePixelRatio)
-            .round()
+        ? (duckWidth * MediaQuery.of(context).devicePixelRatio).round()
         : null;
 
     // =====================================================
@@ -4866,55 +4596,30 @@ class _WaterWithDuckState extends State<_WaterWithDuck>
 class _TubeInteriorClipper extends CustomClipper<Path> {
   @override
   Path getClip(Size size) {
-    final double tubeWidth =
-        size.width * 0.9;
+    final double tubeWidth = size.width * 0.9;
 
-    final double left =
-        (size.width - tubeWidth) / 2;
+    final double left = (size.width - tubeWidth) / 2;
 
-    final double right =
-        left + tubeWidth;
+    final double right = left + tubeWidth;
 
     const double top = 4;
 
-    final double bottom =
-        size.height - 4;
+    final double bottom = size.height - 4;
 
     const double cornerRadius = 14;
 
     return Path()
       ..moveTo(left, top)
-      ..lineTo(
-        left,
-        bottom - cornerRadius,
-      )
-      ..quadraticBezierTo(
-        left,
-        bottom,
-        left + cornerRadius,
-        bottom,
-      )
-      ..lineTo(
-        right - cornerRadius,
-        bottom,
-      )
-      ..quadraticBezierTo(
-        right,
-        bottom,
-        right,
-        bottom - cornerRadius,
-      )
-      ..lineTo(
-        right,
-        top,
-      )
+      ..lineTo(left, bottom - cornerRadius)
+      ..quadraticBezierTo(left, bottom, left + cornerRadius, bottom)
+      ..lineTo(right - cornerRadius, bottom)
+      ..quadraticBezierTo(right, bottom, right, bottom - cornerRadius)
+      ..lineTo(right, top)
       ..close();
   }
 
   @override
-  bool shouldReclip(
-    covariant _TubeInteriorClipper oldClipper,
-  ) {
+  bool shouldReclip(covariant _TubeInteriorClipper oldClipper) {
     return false;
   }
 }
@@ -4925,23 +4630,16 @@ class _TubeInteriorClipper extends CustomClipper<Path> {
 
 class _TubeOutlinePainter extends CustomPainter {
   @override
-  void paint(
-    Canvas canvas,
-    Size size,
-  ) {
-    final double tubeWidth =
-        size.width * 0.9;
+  void paint(Canvas canvas, Size size) {
+    final double tubeWidth = size.width * 0.9;
 
-    final double left =
-        (size.width - tubeWidth) / 2;
+    final double left = (size.width - tubeWidth) / 2;
 
-    final double right =
-        left + tubeWidth;
+    final double right = left + tubeWidth;
 
     const double top = 4;
 
-    final double bottom =
-        size.height - 4;
+    final double bottom = size.height - 4;
 
     const double cornerRadius = 14;
 
@@ -4953,41 +4651,17 @@ class _TubeOutlinePainter extends CustomPainter {
 
     final tubePath = Path()
       ..moveTo(left, top)
-      ..lineTo(
-        left,
-        bottom - cornerRadius,
-      )
-      ..quadraticBezierTo(
-        left,
-        bottom,
-        left + cornerRadius,
-        bottom,
-      )
-      ..lineTo(
-        right - cornerRadius,
-        bottom,
-      )
-      ..quadraticBezierTo(
-        right,
-        bottom,
-        right,
-        bottom - cornerRadius,
-      )
-      ..lineTo(
-        right,
-        top,
-      );
+      ..lineTo(left, bottom - cornerRadius)
+      ..quadraticBezierTo(left, bottom, left + cornerRadius, bottom)
+      ..lineTo(right - cornerRadius, bottom)
+      ..quadraticBezierTo(right, bottom, right, bottom - cornerRadius)
+      ..lineTo(right, top);
 
-    canvas.drawPath(
-      tubePath,
-      outlinePaint,
-    );
+    canvas.drawPath(tubePath, outlinePaint);
   }
 
   @override
-  bool shouldRepaint(
-    covariant _TubeOutlinePainter oldDelegate,
-  ) {
+  bool shouldRepaint(covariant _TubeOutlinePainter oldDelegate) {
     return false;
   }
 }
@@ -5014,9 +4688,7 @@ class SensorCard extends StatelessWidget {
 
   Color _getCardColor() {
     if (waterLevel == null) {
-      return isDark
-          ? const Color(0xFF2C2C2C)
-          : Colors.white;
+      return isDark ? const Color(0xFF2C2C2C) : Colors.white;
     }
 
     final level = waterLevel!;
@@ -5034,70 +4706,48 @@ class SensorCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedContainer(
-      duration:
-          const Duration(milliseconds: 400),
+      duration: const Duration(milliseconds: 400),
       width: double.infinity,
-      padding:
-          const EdgeInsets.symmetric(
-        vertical: 12,
-        horizontal: 8,
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
       decoration: BoxDecoration(
         color: _getCardColor(),
-        borderRadius:
-            BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isDark
-              ? Colors.grey.shade800
-              : Colors.grey.shade300,
+          color: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(
-              isDark ? 0.25 : 0.08,
-            ),
+            color: Colors.black.withOpacity(isDark ? 0.25 : 0.08),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-
           Text(
             title,
             style: TextStyle(
               fontSize: 12,
-              fontWeight:
-                  FontWeight.w500,
-              color: isDark
-                  ? Colors.grey[300]
-                  : Colors.grey,
+              fontWeight: FontWeight.w500,
+              color: isDark ? Colors.grey[300] : Colors.grey,
             ),
           ),
 
           const SizedBox(height: 6),
 
           Row(
-            mainAxisAlignment:
-                MainAxisAlignment.center,
-            crossAxisAlignment:
-                CrossAxisAlignment.baseline,
-            textBaseline:
-                TextBaseline.alphabetic,
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
             children: [
-
               Text(
                 value,
                 style: TextStyle(
                   fontSize: 24,
-                  fontWeight:
-                      FontWeight.bold,
-                  color: isDark
-                      ? Colors.white
-                      : Colors.black,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : Colors.black,
                 ),
               ),
 
@@ -5107,9 +4757,7 @@ class SensorCard extends StatelessWidget {
                 unit,
                 style: TextStyle(
                   fontSize: 12,
-                  color: isDark
-                      ? Colors.grey[300]
-                      : Colors.grey,
+                  color: isDark ? Colors.grey[300] : Colors.grey,
                 ),
               ),
             ],
@@ -5159,20 +4807,12 @@ class WarningCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedContainer(
-      duration:
-          const Duration(milliseconds: 400),
+      duration: const Duration(milliseconds: 400),
       width: double.infinity,
-      padding:
-          const EdgeInsets.symmetric(
-        vertical: 16,
-        horizontal: 12,
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
       decoration: BoxDecoration(
-        color: isDark
-            ? const Color(0xFF2C2C2C)
-            : statusColor,
-        borderRadius:
-            BorderRadius.circular(12),
+        color: isDark ? const Color(0xFF2C2C2C) : statusColor,
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
             color: statusColor.withOpacity(0.3),
@@ -5182,16 +4822,13 @@ class WarningCard extends StatelessWidget {
         ],
       ),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-
           const Text(
             'Flood Risk Status',
             style: TextStyle(
               fontSize: 14,
-              fontWeight:
-                  FontWeight.w500,
+              fontWeight: FontWeight.w500,
               color: Colors.white70,
             ),
           ),
@@ -5202,8 +4839,7 @@ class WarningCard extends StatelessWidget {
             statusText,
             style: const TextStyle(
               fontSize: 28,
-              fontWeight:
-                  FontWeight.bold,
+              fontWeight: FontWeight.bold,
               color: Colors.white,
             ),
           ),
@@ -5217,8 +4853,7 @@ class WarningCard extends StatelessWidget {
 // WATER BUCKET PAINTER
 // =====================================================
 
-class _WaterBucketPainter
-    extends CustomPainter {
+class _WaterBucketPainter extends CustomPainter {
   final double level;
   final double maxLevel;
   final bool isDark;
@@ -5242,26 +4877,18 @@ class _WaterBucketPainter
   });
 
   @override
-  void paint(
-    Canvas canvas,
-    Size size,
-  ) {
-    final double tubeWidth =
-        size.width * 0.9;
+  void paint(Canvas canvas, Size size) {
+    final double tubeWidth = size.width * 0.9;
 
-    final double left =
-        (size.width - tubeWidth) / 2;
+    final double left = (size.width - tubeWidth) / 2;
 
-    final double right =
-        left + tubeWidth;
+    final double right = left + tubeWidth;
 
     final double top = 4;
 
-    final double bottom =
-        size.height - 4;
+    final double bottom = size.height - 4;
 
-    final double cornerRadius =
-        14;
+    final double cornerRadius = 14;
 
     // =====================================================
     // TUBE OUTLINE
@@ -5269,53 +4896,27 @@ class _WaterBucketPainter
 
     final outlinePaint = Paint()
       ..color = Colors.blue.shade600
-      ..style =
-          PaintingStyle.stroke
+      ..style = PaintingStyle.stroke
       ..strokeWidth = 4
-      ..strokeCap =
-          StrokeCap.round;
+      ..strokeCap = StrokeCap.round;
 
     final tubePath = Path()
       ..moveTo(left, top)
-      ..lineTo(
-        left,
-        bottom - cornerRadius,
-      )
-      ..quadraticBezierTo(
-        left,
-        bottom,
-        left + cornerRadius,
-        bottom,
-      )
-      ..lineTo(
-        right - cornerRadius,
-        bottom,
-      )
-      ..quadraticBezierTo(
-        right,
-        bottom,
-        right,
-        bottom - cornerRadius,
-      )
-      ..lineTo(
-        right,
-        top,
-      );
+      ..lineTo(left, bottom - cornerRadius)
+      ..quadraticBezierTo(left, bottom, left + cornerRadius, bottom)
+      ..lineTo(right - cornerRadius, bottom)
+      ..quadraticBezierTo(right, bottom, right, bottom - cornerRadius)
+      ..lineTo(right, top);
 
     // =====================================================
     // WATER LEVEL
     // =====================================================
 
-    final double percent =
-        (level / maxLevel)
-            .clamp(0, 1)
-            .toDouble();
+    final double percent = (level / maxLevel).clamp(0, 1).toDouble();
 
-    final double fillHeight =
-        (bottom - top) * percent;
+    final double fillHeight = (bottom - top) * percent;
 
-    final double fillTop =
-        bottom - fillHeight;
+    final double fillTop = bottom - fillHeight;
 
     // =====================================================
     // SEMI-TRANSPARENT WATER
@@ -5323,10 +4924,8 @@ class _WaterBucketPainter
 
     final fillPaint = Paint()
       ..color = isDark
-          ? Colors.blue.shade900
-              .withOpacity(0.45)
-          : Colors.blue.shade100
-              .withOpacity(0.45);
+          ? Colors.blue.shade900.withOpacity(0.45)
+          : Colors.blue.shade100.withOpacity(0.45);
 
     canvas.save();
 
@@ -5337,30 +4936,11 @@ class _WaterBucketPainter
     canvas.clipPath(
       Path()
         ..moveTo(left, top)
-        ..lineTo(
-          left,
-          bottom - cornerRadius,
-        )
-        ..quadraticBezierTo(
-          left,
-          bottom,
-          left + cornerRadius,
-          bottom,
-        )
-        ..lineTo(
-          right - cornerRadius,
-          bottom,
-        )
-        ..quadraticBezierTo(
-          right,
-          bottom,
-          right,
-          bottom - cornerRadius,
-        )
-        ..lineTo(
-          right,
-          top,
-        )
+        ..lineTo(left, bottom - cornerRadius)
+        ..quadraticBezierTo(left, bottom, left + cornerRadius, bottom)
+        ..lineTo(right - cornerRadius, bottom)
+        ..quadraticBezierTo(right, bottom, right, bottom - cornerRadius)
+        ..lineTo(right, top)
         ..close(),
     );
 
@@ -5377,102 +4957,54 @@ class _WaterBucketPainter
 
     // Wave offset at a given x position.
     double waveAt(double x) {
-      final double normalizedX =
-          (x - left) / waveLength;
+      final double normalizedX = (x - left) / waveLength;
 
-      return math.sin(
-            normalizedX *
-                    math.pi *
-                    2 *
-                    1.5 +
-                wavePhase,
-          ) *
-          waveHeight;
+      return math.sin(normalizedX * math.pi * 2 * 1.5 + wavePhase) * waveHeight;
     }
 
-    waterPath.moveTo(
-      left,
-      fillTop,
-    );
+    waterPath.moveTo(left, fillTop);
 
-    for (
-      double x = left;
-      x <= right;
-      x += step
-    ) {
-      waterPath.lineTo(
-        x,
-        fillTop + waveAt(x),
-      );
+    for (double x = left; x <= right; x += step) {
+      waterPath.lineTo(x, fillTop + waveAt(x));
     }
 
     // With a larger step the loop may stop a little before the
     // right edge, so the last point is added explicitly.
     if (step > 2.0) {
-      waterPath.lineTo(
-        right,
-        fillTop + waveAt(right),
-      );
+      waterPath.lineTo(right, fillTop + waveAt(right));
     }
 
     waterPath
-      ..lineTo(
-        right,
-        bottom,
-      )
-      ..lineTo(
-        left,
-        bottom,
-      )
+      ..lineTo(right, bottom)
+      ..lineTo(left, bottom)
       ..close();
 
-    canvas.drawPath(
-      waterPath,
-      fillPaint,
-    );
+    canvas.drawPath(waterPath, fillPaint);
 
     // =====================================================
     // WATER HIGHLIGHT
     // =====================================================
 
     final highlightPaint = Paint()
-      ..color = Colors.blue.shade400
-          .withOpacity(0.35)
-      ..style =
-          PaintingStyle.stroke
+      ..color = Colors.blue.shade400.withOpacity(0.35)
+      ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
 
     final highlightPath = Path();
 
-    for (
-      double x = left;
-      x <= right;
-      x += step
-    ) {
+    for (double x = left; x <= right; x += step) {
       if (x == left) {
-        highlightPath.moveTo(
-          x,
-          fillTop + waveAt(x),
-        );
+        highlightPath.moveTo(x, fillTop + waveAt(x));
       } else {
-        highlightPath.lineTo(
-          x,
-          fillTop + waveAt(x),
-        );
+        highlightPath.lineTo(x, fillTop + waveAt(x));
       }
     }
 
     if (step > 2.0) {
-      highlightPath.lineTo(
-        right,
-        fillTop + waveAt(right),
-      );
+      highlightPath.lineTo(right, fillTop + waveAt(right));
     }
 
-    canvas.drawPath(
-      highlightPath,
-      highlightPaint,
-    );
+    canvas.drawPath(highlightPath, highlightPaint);
 
     canvas.restore();
 
@@ -5480,16 +5012,11 @@ class _WaterBucketPainter
     // TUBE OUTLINE
     // =====================================================
 
-    canvas.drawPath(
-      tubePath,
-      outlinePaint,
-    );
+    canvas.drawPath(tubePath, outlinePaint);
   }
 
   @override
-  bool shouldRepaint(
-    covariant _WaterBucketPainter oldDelegate,
-  ) =>
+  bool shouldRepaint(covariant _WaterBucketPainter oldDelegate) =>
       oldDelegate.level != level ||
       oldDelegate.maxLevel != maxLevel ||
       oldDelegate.isDark != isDark ||
@@ -5502,25 +5029,17 @@ class _WaterBucketPainter
 // HUMIDITY GAUGE PAINTER
 // =====================================================
 
-class _HumidityGaugePainter
-    extends CustomPainter {
+class _HumidityGaugePainter extends CustomPainter {
   final double percent;
   final bool isDark;
 
-  _HumidityGaugePainter({
-    required this.percent,
-    required this.isDark,
-  });
+  _HumidityGaugePainter({required this.percent, required this.isDark});
 
   @override
-  void paint(
-    Canvas canvas,
-    Size size,
-  ) {
+  void paint(Canvas canvas, Size size) {
     final double strokeWidth = 14;
 
-    final Rect rect =
-        Rect.fromLTWH(
+    final Rect rect = Rect.fromLTWH(
       strokeWidth / 2,
       strokeWidth / 2,
       size.width - strokeWidth,
@@ -5529,44 +5048,24 @@ class _HumidityGaugePainter
 
     final bgPaint = Paint()
       ..color = isDark
-          ? Colors.blue.shade900
-              .withOpacity(0.5)
+          ? Colors.blue.shade900.withOpacity(0.5)
           : Colors.blue.shade100
-      ..style =
-          PaintingStyle.stroke
+      ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth
-      ..strokeCap =
-          StrokeCap.round;
+      ..strokeCap = StrokeCap.round;
 
     final fgPaint = Paint()
       ..color = Colors.blue.shade600
-      ..style =
-          PaintingStyle.stroke
+      ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth
-      ..strokeCap =
-          StrokeCap.round;
+      ..strokeCap = StrokeCap.round;
 
-    canvas.drawArc(
-      rect,
-      math.pi,
-      math.pi,
-      false,
-      bgPaint,
-    );
+    canvas.drawArc(rect, math.pi, math.pi, false, bgPaint);
 
-    canvas.drawArc(
-      rect,
-      math.pi,
-      math.pi * percent,
-      false,
-      fgPaint,
-    );
+    canvas.drawArc(rect, math.pi, math.pi * percent, false, fgPaint);
   }
 
   @override
-  bool shouldRepaint(
-    covariant _HumidityGaugePainter oldDelegate,
-  ) =>
-      oldDelegate.percent != percent ||
-      oldDelegate.isDark != isDark;
+  bool shouldRepaint(covariant _HumidityGaugePainter oldDelegate) =>
+      oldDelegate.percent != percent || oldDelegate.isDark != isDark;
 }
