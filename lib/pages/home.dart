@@ -10,6 +10,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:detectco/pages/menu.dart'; // change to your actual menu file name
 import 'package:detectco/services/weather_condition.dart';
+import 'package:detectco/services/flood_risk.dart';
 
 
 // =====================================================
@@ -579,9 +580,8 @@ class _HomeTabState extends State<HomeTab>
   // WATER SETTINGS
   // =====================================================
 
-  // Maximum water level is 200 cm.
-  // The value displayed to the user remains in centimeters.
-  static const double maxWaterLevel = 200.0;
+  // The gauge displays the maximum possible rise from the 150 cm baseline.
+  static const double maxWaterLevel = FloodRiskReading.baselineDistanceCm;
 
   static const double idleWaterLevel = 40.0;
 
@@ -1865,40 +1865,16 @@ class _HomeTabState extends State<HomeTab>
               final dynamic distanceRaw =
                   data['distance'];
 
-              if (distanceRaw != null) {
-                final double? parsedDistance =
-                    distanceRaw is num
-                        ? distanceRaw.toDouble()
-                        : double.tryParse(
-                            distanceRaw.toString(),
-                          );
+              final double? parsedDistance =
+                  FloodRiskReading.parseSensorDistanceCm(distanceRaw);
 
-                if (parsedDistance != null &&
-                    parsedDistance.isFinite) {
-                  if (parsedDistance >=
-                      maxWaterLevel) {
-                    sensorActive = false;
-                    waterLevel =
-                        idleWaterLevel;
-                  } else if (parsedDistance >= 0) {
-                    sensorActive = true;
-
-                    waterLevel =
-                        parsedDistance
-                            .clamp(
-                              0.0,
-                              maxWaterLevel,
-                            )
-                            .toDouble();
-                  } else {
-                    // Keep the ESP32 online but do not
-                    // treat an ultrasonic out-of-range
-                    // reading as a real water level.
-                    sensorActive = false;
-                    waterLevel =
-                        idleWaterLevel;
-                  }
-                }
+              if (parsedDistance == null) {
+                // Keep invalid or out-of-range ultrasonic readings idle.
+                sensorActive = false;
+                waterLevel = idleWaterLevel;
+              } else {
+                sensorActive = true;
+                waterLevel = FloodRiskReading.waterRiseCm(parsedDistance);
               }
             } else {
               // =================================================
@@ -2019,31 +1995,33 @@ class _HomeTabState extends State<HomeTab>
                 waterLevel;
 
             // =====================================================
-            // FLOOD RISK STATUS (dynamic — unchanged logic)
+            // FLOOD RISK STATUS from the baseline-adjusted water rise.
             // =====================================================
 
+            final FloodRiskStatus floodRisk =
+                FloodRiskReading.statusForWaterRise(waterLevel);
             final Color floodColor = !sensorActive
                 ? Colors.grey.shade500
-                : waterLevel > 50
+                : floodRisk == FloodRiskStatus.critical
                     ? Colors.red.shade400
-                    : waterLevel > 30
+                    : floodRisk == FloodRiskStatus.warning
                         ? Colors.orange.shade400
                         : Colors.green.shade400;
 
             final String floodStatusText = !sensorActive
                 ? 'IDLE'
-                : waterLevel > 50
-                    ? 'FLOODING'
-                    : waterLevel > 30
-                        ? 'MEDIUM RISK'
+                : floodRisk == FloodRiskStatus.critical
+                    ? 'CRITICAL'
+                    : floodRisk == FloodRiskStatus.warning
+                        ? 'FLOODING'
                         : 'SAFE';
 
             final String floodMessage = !sensorActive
                 ? 'Waiting for sensor data'
-                : waterLevel > 50
-                    ? 'High water levels detected'
-                    : waterLevel > 30
-                        ? 'Monitor conditions closely'
+                : floodRisk == FloodRiskStatus.critical
+                    ? 'Critical water rise detected'
+                    : floodRisk == FloodRiskStatus.warning
+                        ? 'Flooding detected — monitor conditions closely'
                         : 'Conditions are normal';
 
             // =====================================================
@@ -2500,7 +2478,7 @@ class _HomeTabState extends State<HomeTab>
                                     CrossAxisAlignment.center,
                                 children: [
                                   const Text(
-                                    'Water Level',
+                                    'Water Rise',
                                     style: TextStyle(
                                       fontSize: 15,
                                       fontWeight: FontWeight.w600,
@@ -2611,7 +2589,7 @@ class _HomeTabState extends State<HomeTab>
                                                         ),
                                                         child: Text(
                                                           sensorActive
-                                                              ? '${animatedLevel.toStringAsFixed(1)} cm'
+                                                              ? '${animatedLevel.toStringAsFixed(1)} cm rise'
                                                               : 'IDLE',
                                                           style:
                                                               const TextStyle(
@@ -2666,7 +2644,7 @@ class _HomeTabState extends State<HomeTab>
                                                             .start,
                                                     children: [
                                                       Text(
-                                                        '200 cm',
+                                                        '150 cm',
                                                         style: TextStyle(
                                                           color: Colors
                                                               .red.shade400,
@@ -2676,31 +2654,10 @@ class _HomeTabState extends State<HomeTab>
                                                         ),
                                                       ),
                                                       Text(
-                                                        '180 cm',
+                                                        '135 cm',
                                                         style: TextStyle(
                                                           color: Colors
                                                               .red.shade400,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          fontSize: gaugeFontSize,
-                                                        ),
-                                                      ),
-                                                      Text(
-                                                        '160 cm',
-                                                        style: TextStyle(
-                                                          color: Colors
-                                                              .red.shade400,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          fontSize: gaugeFontSize,
-                                                        ),
-                                                      ),
-                                                      Text(
-                                                        '140 cm',
-                                                        style: TextStyle(
-                                                          color: Colors
-                                                              .orange
-                                                              .shade700,
                                                           fontWeight:
                                                               FontWeight.bold,
                                                           fontSize: gaugeFontSize,
@@ -2710,30 +2667,37 @@ class _HomeTabState extends State<HomeTab>
                                                         '120 cm',
                                                         style: TextStyle(
                                                           color: Colors
-                                                              .orange
-                                                              .shade700,
+                                                              .red.shade400,
                                                           fontWeight:
                                                               FontWeight.bold,
                                                           fontSize: gaugeFontSize,
                                                         ),
                                                       ),
                                                       Text(
-                                                        '100 cm',
+                                                        '105 cm',
                                                         style: TextStyle(
                                                           color: Colors
-                                                              .orange
-                                                              .shade700,
+                                                              .red.shade400,
                                                           fontWeight:
                                                               FontWeight.bold,
                                                           fontSize: gaugeFontSize,
                                                         ),
                                                       ),
                                                       Text(
-                                                        '80 cm',
+                                                        '90 cm',
                                                         style: TextStyle(
                                                           color: Colors
-                                                              .orange
-                                                              .shade300,
+                                                              .red.shade400,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          fontSize: gaugeFontSize,
+                                                        ),
+                                                      ),
+                                                      Text(
+                                                        '75 cm',
+                                                        style: TextStyle(
+                                                          color: Colors
+                                                              .red.shade400,
                                                           fontWeight:
                                                               FontWeight.bold,
                                                           fontSize: gaugeFontSize,
@@ -2743,15 +2707,24 @@ class _HomeTabState extends State<HomeTab>
                                                         '60 cm',
                                                         style: TextStyle(
                                                           color: Colors
-                                                              .orange
-                                                              .shade300,
+                                                              .red.shade400,
                                                           fontWeight:
                                                               FontWeight.bold,
                                                           fontSize: gaugeFontSize,
                                                         ),
                                                       ),
                                                       Text(
-                                                        '40 cm',
+                                                        '45 cm',
+                                                        style: TextStyle(
+                                                          color: Colors
+                                                              .red.shade400,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          fontSize: gaugeFontSize,
+                                                        ),
+                                                      ),
+                                                      Text(
+                                                        '30 cm',
                                                         style: TextStyle(
                                                           color: Colors
                                                               .orange
@@ -2762,10 +2735,10 @@ class _HomeTabState extends State<HomeTab>
                                                         ),
                                                       ),
                                                       Text(
-                                                        '20 cm',
+                                                        '15 cm',
                                                         style: TextStyle(
-                                                          color: Colors.green
-                                                              .shade600,
+                                                          color: Colors.orange
+                                                              .shade300,
                                                           fontWeight:
                                                               FontWeight.bold,
                                                           fontSize: gaugeFontSize,
@@ -4466,6 +4439,7 @@ class _WaterWithDuckState extends State<_WaterWithDuck>
   // Human represents 1.59 meters = 159 cm.
   // The water container represents 200 cm.
   static const double humanHeightCm = 159.0;
+  static const double tubeHeightCm = 200.0;
 
   @override
   void initState() {
@@ -4693,8 +4667,7 @@ class _WaterWithDuckState extends State<_WaterWithDuck>
 
     final double humanHeight =
         tubeInteriorHeight *
-            (humanHeightCm /
-                widget.maxWaterLevel);
+            (humanHeightCm / tubeHeightCm);
 
     // LOW-END MODE: decode the PNG at the size it is shown.
     final int? humanCacheHeight = widget.performance
@@ -5048,15 +5021,14 @@ class SensorCard extends StatelessWidget {
 
     final level = waterLevel!;
 
-    if (level > 50) {
-      return Colors.red.shade700;
+    switch (FloodRiskReading.statusForWaterRise(level)) {
+      case FloodRiskStatus.critical:
+        return Colors.red.shade700;
+      case FloodRiskStatus.warning:
+        return Colors.orange.shade700;
+      case FloodRiskStatus.normal:
+        return Colors.green.shade700;
     }
-
-    if (level > 30) {
-      return Colors.orange.shade700;
-    }
-
-    return Colors.green.shade700;
   }
 
   @override
@@ -5163,32 +5135,25 @@ class WarningCard extends StatelessWidget {
   });
 
   String get statusText {
-    if (waterLevel > 50) {
-      return 'Flooding!';
+    switch (FloodRiskReading.statusForWaterRise(waterLevel)) {
+      case FloodRiskStatus.critical:
+        return 'Critical';
+      case FloodRiskStatus.warning:
+        return 'Flooding';
+      case FloodRiskStatus.normal:
+        return 'Safe';
     }
-
-    if (waterLevel > 30) {
-      return 'Medium Risk';
-    }
-
-    return 'Safe';
   }
 
   Color get statusColor {
-    if (waterLevel > 50) {
-      return Colors.red;
+    switch (FloodRiskReading.statusForWaterRise(waterLevel)) {
+      case FloodRiskStatus.critical:
+        return Colors.red;
+      case FloodRiskStatus.warning:
+        return Colors.orange;
+      case FloodRiskStatus.normal:
+        return const Color.fromRGBO(76, 175, 80, 1);
     }
-
-    if (waterLevel > 30) {
-      return Colors.orange;
-    }
-
-    return const Color.fromRGBO(
-      76,
-      175,
-      80,
-      1,
-    );
   }
 
   @override

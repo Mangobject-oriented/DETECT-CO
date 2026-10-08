@@ -17,6 +17,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:detectco/services/weather_condition.dart';
+import 'package:detectco/services/flood_risk.dart';
 
 // Firebase Realtime Database
 import 'package:firebase_database/firebase_database.dart';
@@ -1081,7 +1082,11 @@ class _MapTabState extends State<MapTab> {
   bool followMe = false;
   StreamSubscription<Position>? _positionStream;
 
+  // Water rise in centimeters, calculated from the 150 cm sensor baseline.
   double waterLevel = 0;
+
+  FloodRiskStatus get _currentFloodRisk =>
+      FloodRiskReading.statusForWaterRise(waterLevel);
 
   final DatabaseReference dbRef =
       FirebaseDatabase.instance.ref().child('flood');
@@ -1607,13 +1612,12 @@ class _MapTabState extends State<MapTab> {
   // FLOOD ZONE CHECK
   //
   // A place is treated as "inside an active flood-risk area"
-  // only when the live water level is at medium risk or
-  // higher (>= 20, same thresholds as the panel) AND the
+  // when the live water rise reaches the 5 cm warning threshold AND the
   // place lies within one of the monitored flood circles.
   // =====================================================
 
   bool _isInFloodZone(LatLng point) {
-    if (waterLevel < 20) return false;
+    if (_currentFloodRisk == FloodRiskStatus.normal) return false;
 
     const Distance distance = Distance();
 
@@ -1632,7 +1636,7 @@ class _MapTabState extends State<MapTab> {
       return 'Inside a monitored flood-risk area';
     }
 
-    if (waterLevel >= 20) {
+    if (_currentFloodRisk != FloodRiskStatus.normal) {
       return 'Outside monitored flood areas';
     }
 
@@ -1732,25 +1736,23 @@ class _MapTabState extends State<MapTab> {
 
     _firebaseSub = dbRef.onValue.listen(
       (event) {
-        final data =
-            event.snapshot.value as Map<dynamic, dynamic>?;
-
-        if (data == null) return;
-
-        final dynamic distanceRaw = data['distance'];
-
-        final double value = distanceRaw is num
-            ? distanceRaw.toDouble()
-            : double.tryParse(distanceRaw.toString()) ?? 0;
+        final rawData = event.snapshot.value;
+        final data = rawData is Map ? rawData : null;
+        final distanceCm = data == null
+            ? null
+            : FloodRiskReading.parseSensorDistanceCm(data['distance']);
 
         if (!mounted) return;
 
         setState(() {
-          waterLevel = value;
+          waterLevel = distanceCm == null
+              ? 0
+              : FloodRiskReading.waterRiseCm(distanceCm);
         });
       },
       onError: (Object e) {
         debugPrint('Flood data listener error: $e');
+        if (mounted) setState(() => waterLevel = 0);
       },
     );
 
@@ -2299,16 +2301,16 @@ class _MapTabState extends State<MapTab> {
     String riskText;
     Color riskColor;
 
-    if (waterLevel >= 40) {
-      riskText = "FLOODING";
+    if (_currentFloodRisk == FloodRiskStatus.critical) {
+      riskText = "CRITICAL";
       riskColor = const Color.fromRGBO(
         244,
         67,
         54,
         1,
       );
-    } else if (waterLevel >= 20 && waterLevel < 40) {
-      riskText = "MEDIUM RISK";
+    } else if (_currentFloodRisk == FloodRiskStatus.warning) {
+      riskText = "FLOODING";
       riskColor = Colors.orange;
     } else {
       riskText = "SAFE";
@@ -3432,10 +3434,9 @@ class _MapTabState extends State<MapTab> {
                                 ),
                                 radius: 600,
                                 useRadiusInMeter: true,
-                                color: waterLevel <= 0
+                                color: _currentFloodRisk == FloodRiskStatus.normal
                                     ? Colors.green.withOpacity(0.35)
-                                    : waterLevel >= 20 &&
-                                            waterLevel < 40
+                                    : _currentFloodRisk == FloodRiskStatus.warning
                                         ? Colors.orange.withOpacity(0.35)
                                         : const Color.fromRGBO(
                                             244,
@@ -3443,10 +3444,9 @@ class _MapTabState extends State<MapTab> {
                                             54,
                                             1,
                                           ).withOpacity(0.35),
-                                borderColor: waterLevel <= 0
+                                borderColor: _currentFloodRisk == FloodRiskStatus.normal
                                     ? Colors.green
-                                    : waterLevel >= 20 &&
-                                            waterLevel < 40
+                                    : _currentFloodRisk == FloodRiskStatus.warning
                                         ? Colors.orange
                                         : const Color.fromRGBO(
                                             244,
@@ -3464,10 +3464,9 @@ class _MapTabState extends State<MapTab> {
                                 ),
                                 radius: 600,
                                 useRadiusInMeter: true,
-                                color: waterLevel <= 0
+                                color: _currentFloodRisk == FloodRiskStatus.normal
                                     ? Colors.green.withOpacity(0.35)
-                                    : waterLevel >= 20 &&
-                                            waterLevel < 40
+                                    : _currentFloodRisk == FloodRiskStatus.warning
                                         ? Colors.orange.withOpacity(0.35)
                                         : const Color.fromRGBO(
                                             244,
@@ -3475,10 +3474,9 @@ class _MapTabState extends State<MapTab> {
                                             54,
                                             1,
                                           ).withOpacity(0.35),
-                                borderColor: waterLevel <= 0
+                                borderColor: _currentFloodRisk == FloodRiskStatus.normal
                                     ? Colors.green
-                                    : waterLevel >= 20 &&
-                                            waterLevel < 40
+                                    : _currentFloodRisk == FloodRiskStatus.warning
                                         ? Colors.orange
                                         : const Color.fromRGBO(
                                             244,
@@ -3496,10 +3494,9 @@ class _MapTabState extends State<MapTab> {
                                 ),
                                 radius: 600,
                                 useRadiusInMeter: true,
-                                color: waterLevel <= 0
+                                color: _currentFloodRisk == FloodRiskStatus.normal
                                     ? Colors.green.withOpacity(0.35)
-                                    : waterLevel >= 20 &&
-                                            waterLevel < 40
+                                    : _currentFloodRisk == FloodRiskStatus.warning
                                         ? Colors.orange.withOpacity(0.35)
                                         : const Color.fromRGBO(
                                             244,
@@ -3507,10 +3504,9 @@ class _MapTabState extends State<MapTab> {
                                             54,
                                             1,
                                           ).withOpacity(0.35),
-                                borderColor: waterLevel <= 0
+                                borderColor: _currentFloodRisk == FloodRiskStatus.normal
                                     ? Colors.green
-                                    : waterLevel >= 20 &&
-                                            waterLevel < 40
+                                    : _currentFloodRisk == FloodRiskStatus.warning
                                         ? Colors.orange
                                         : const Color.fromRGBO(
                                             244,

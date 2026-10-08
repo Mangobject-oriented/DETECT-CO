@@ -89,14 +89,12 @@ class DetectCoWidgetWorker(
                     ) <= ESP32_TIMEOUT_MS
 
             /*
-             * Match DETECT-CO home.dart exactly:
+             * The ESP32 stores ultrasonic distance in centimeters.
+             * Convert distance to rise above the 150 cm normal baseline.
              *
-             * distance >= 200 -> IDLE
-             * distance < 200  -> active
-             *
-             * waterLevel > 50 -> FLOODING
-             * waterLevel > 30 -> MEDIUM RISK
-             * otherwise       -> SAFE
+             * rise 0–4 cm  -> SAFE
+             * rise 5–40 cm -> FLOODING
+             * rise >40 cm  -> CRITICAL
              */
             val floodStatus =
                 if (!esp32Online) {
@@ -108,12 +106,15 @@ class DetectCoWidgetWorker(
                     distance < 0.0
                 ) {
                     "IDLE"
-                } else if (distance > 50.0) {
-                    "FLOODING"
-                } else if (distance > 30.0) {
-                    "MEDIUM RISK"
                 } else {
-                    "SAFE"
+                    val waterRiseCm =
+                        maxOf(0.0, 150.0 - distance)
+
+                    when {
+                        waterRiseCm <= 4.0 -> "SAFE"
+                        waterRiseCm <= 40.0 -> "FLOODING"
+                        else -> "CRITICAL"
+                    }
                 }
 
             val status =
@@ -122,7 +123,7 @@ class DetectCoWidgetWorker(
                 } else {
                     when (floodStatus) {
                         "FLOODING" -> "FLOODING"
-                        "MEDIUM RISK" -> "MEDIUM RISK"
+                        "CRITICAL" -> "CRITICAL"
                         else -> "SAFE"
                     }
                 }
