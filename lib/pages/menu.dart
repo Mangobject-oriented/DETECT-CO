@@ -998,7 +998,7 @@ class _MenuTabState extends State<MenuTab> {
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
         ),
         subtitle: const Text(
-          'Auto-discover on Wi-Fi, or save a manual address',
+          'Set the public HTTPS URL for ML forecasts',
           style: TextStyle(color: Colors.white60),
         ),
         trailing: const Icon(
@@ -1023,8 +1023,8 @@ class _MenuTabState extends State<MenuTab> {
           controller: controller,
           keyboardType: TextInputType.url,
           decoration: const InputDecoration(
-            hintText: '192.168.1.41:8000 or http://server:8000/predict',
-            helperText: 'Leave empty to use automatic discovery.',
+            hintText: 'https://your-public-ml-host/predict',
+            helperText: 'Leave empty to use the URL supplied in the app build.',
           ),
           autofocus: true,
         ),
@@ -1035,7 +1035,7 @@ class _MenuTabState extends State<MenuTab> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, ''),
-            child: const Text('Auto Discover'),
+            child: const Text('Clear URL'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, controller.text),

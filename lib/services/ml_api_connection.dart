@@ -1,33 +1,26 @@
-import 'dart:async';
 import 'dart:convert';
 
-import 'package:bonsoir/bonsoir.dart';
-import 'package:flutter/foundation.dart' show ValueNotifier, kIsWeb;
+import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Resolves, health-checks, and caches the local DETECT-CO ML API endpoint.
+/// Resolves, health-checks, and caches the DETECT-CO ML API endpoint.
 ///
-/// `ML_API_URL` has highest priority for development and CI. On mobile, the
-/// default path uses DNS-SD instead of assuming a fixed IP or `.local` lookup.
+/// Public deployments should set ML_API_URL to the HTTPS prediction endpoint.
 class MlApiConnection {
   MlApiConnection._();
 
   static final instance = MlApiConnection._();
   final ValueNotifier<int> configurationChanges = ValueNotifier<int>(0);
 
-  static const serviceType = '_detectco-ml._tcp';
   static const _manualUrlKey = 'ml_api_manual_url';
   static const _environmentUrl = String.fromEnvironment('ML_API_URL');
-  static const _discoveryTimeout = Duration(seconds: 5);
-  static const _healthTimeout = Duration(seconds: 4);
+  static const _healthTimeout = Duration(seconds: 8);
 
   Uri? _cachedPredictionUri;
   Future<Uri>? _resolveInFlight;
-  int _networkGeneration = 0;
 
   void invalidate() {
-    _networkGeneration++;
     _cachedPredictionUri = null;
   }
 
@@ -55,22 +48,28 @@ class MlApiConnection {
     if (value.contains(RegExp(r'\s'))) {
       throw const FormatException('The server address cannot contain spaces.');
     }
-    if (!value.contains('://')) value = 'http://$value';
+    if (!value.contains('://')) value = 'https://$value';
     final parsed = Uri.tryParse(value);
     if (parsed == null ||
         !parsed.hasAuthority ||
         parsed.host.isEmpty ||
-        !{'http', 'https'}.contains(parsed.scheme)) {
-      throw const FormatException('Enter a valid server IP or HTTP URL.');
+        !{'http', 'https'}.contains(parsed.scheme) ||
+        (parsed.scheme != 'https' &&
+            !{'localhost', '127.0.0.1'}.contains(parsed.host))) {
+      throw const FormatException('Enter a valid public HTTPS API URL.');
     }
-    final port = parsed.hasPort ? parsed.port : 8000;
-    if (port < 1 || port > 65535) {
+    final port = parsed.hasPort
+        ? parsed.port
+        : (parsed.scheme == 'http' ? 8000 : null);
+    if (port != null && (port < 1 || port > 65535)) {
       throw const FormatException(
         'The server port must be between 1 and 65535.',
       );
     }
     if (parsed.userInfo.isNotEmpty) {
-      throw const FormatException('Do not include credentials in the server URL.');
+      throw const FormatException(
+        'Do not include credentials in the server URL.',
+      );
     }
     return Uri(
       scheme: parsed.scheme,
@@ -111,54 +110,18 @@ class MlApiConnection {
       }
     }
 
-    if (kIsWeb) {
-      final manual = await manualUrl;
-      if (manual != null && manual.isNotEmpty) {
-        final manualUri = _predictionUri(manual);
-        await _requireHealthy(manualUri);
-        _cachedPredictionUri = manualUri;
-        return manualUri;
-      }
-      final local = Uri.parse('http://127.0.0.1:8000/predict');
-      await _requireHealthy(local);
-      _cachedPredictionUri = local;
-      return local;
-    }
-
-    final generation = _networkGeneration;
-    List<Uri> discovered = const [];
-    try {
-      discovered = await _discoverService();
-      for (final candidate in discovered) {
-        try {
-          await _requireHealthy(candidate);
-          if (generation == _networkGeneration) {
-            _cachedPredictionUri = candidate;
-          }
-          return candidate;
-        } catch (_) {
-          // A laptop can advertise several interfaces; check each resolved IP.
-        }
-      }
-    } catch (_) {
-      // Discovery is optional. Try the user-configured address next.
-    }
-
     final manual = await manualUrl;
     if (manual != null && manual.isNotEmpty) {
       final manualUri = _predictionUri(manual);
       await _requireHealthy(manualUri);
-      if (generation == _networkGeneration) {
-        _cachedPredictionUri = manualUri;
-      }
+      _cachedPredictionUri = manualUri;
       return manualUri;
     }
 
     throw StateError(
-      discovered.isEmpty
-          ? 'Could not discover the DETECT-CO ML server on this network. '
-                'Check that both devices share Wi-Fi, then set a server address in Menu > Display Settings.'
-          : 'The discovered ML server did not pass its health check.',
+      'The DETECT-CO ML service URL is not configured. Build with '
+      '--dart-define=ML_API_URL=https://your-api-host/predict, or set the '
+      'public HTTPS address in Menu > Display Settings.',
     );
   }
 
@@ -167,8 +130,10 @@ class MlApiConnection {
     if (parsed == null ||
         !parsed.hasAuthority ||
         parsed.host.isEmpty ||
-        !{'http', 'https'}.contains(parsed.scheme)) {
-      throw const FormatException('ML_API_URL is not a valid HTTP URL.');
+        !{'http', 'https'}.contains(parsed.scheme) ||
+        (parsed.scheme != 'https' &&
+            !{'localhost', '127.0.0.1'}.contains(parsed.host))) {
+      throw const FormatException('ML_API_URL must be a public HTTPS URL.');
     }
     if (parsed.userInfo.isNotEmpty) {
       throw const FormatException('Do not include credentials in ML_API_URL.');
@@ -179,7 +144,9 @@ class MlApiConnection {
     return Uri(
       scheme: parsed.scheme,
       host: parsed.host,
-      port: parsed.hasPort ? parsed.port : 8000,
+      port: parsed.hasPort
+          ? parsed.port
+          : (parsed.scheme == 'http' ? 8000 : null),
       path: path,
     );
   }
@@ -208,66 +175,5 @@ class MlApiConnection {
         decoded['models_loaded'] != true) {
       throw StateError('ML server responded but its models are not ready.');
     }
-  }
-
-  Future<List<Uri>> _discoverService() async {
-    final discovery = BonsoirDiscovery(type: serviceType);
-    StreamSubscription<BonsoirDiscoveryEvent>? subscription;
-    var initialized = false;
-    try {
-      await discovery.initialize().timeout(const Duration(seconds: 3));
-      initialized = true;
-      final events = discovery.eventStream;
-      if (events == null) return const [];
-
-      final found = Completer<List<Uri>>();
-      subscription = events.listen((event) {
-        if (event is BonsoirDiscoveryServiceFoundEvent) {
-          event.service.resolve(discovery.serviceResolver);
-        } else if (event is BonsoirDiscoveryServiceResolvedEvent) {
-          final service = event.service;
-          if (found.isCompleted || service.port != 8000) {
-            return;
-          }
-          final addresses = service.hostAddresses
-              .where(_isIpv4)
-              .map(
-                (address) => Uri(
-                  scheme: 'http',
-                  host: address,
-                  port: service.port,
-                  path: '/predict',
-                ),
-              )
-              .toList(growable: false);
-          if (addresses.isNotEmpty) {
-            found.complete(addresses);
-          }
-        }
-      });
-      await discovery.start().timeout(const Duration(seconds: 3));
-      return await found.future.timeout(
-        _discoveryTimeout,
-        onTimeout: () => const [],
-      );
-    } finally {
-      await subscription?.cancel();
-      if (initialized) {
-        try {
-          await discovery.stop();
-        } catch (_) {
-          // The native discovery session can already be stopped on network loss.
-        }
-      }
-    }
-  }
-
-  bool _isIpv4(String address) {
-    final parts = address.split('.');
-    if (parts.length != 4) return false;
-    return parts.every((part) {
-      final value = int.tryParse(part);
-      return value != null && value >= 0 && value <= 255;
-    });
   }
 }

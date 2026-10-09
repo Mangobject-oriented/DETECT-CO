@@ -1,18 +1,26 @@
-to turn on website 
+Start admin website
 
-cd ~/DETECT-CO/admin_web
+    cd ~/DETECT-CO/admin_web
+    npm run dev
 
-npm run dev
+Start laptop-hosted ML API and temporary HTTPS tunnel
 
+    cd ~/DETECT-CO-ML
+    bash ./start-tunnel.sh
 
-to turn on ml 
+Keep the tunnel terminal open. Copy the trycloudflare.com URL it prints, then
+run Flutter with that URL (temporary URLs change when the tunnel restarts):
 
-cd ~/DETECT-CO-ML
-source venv/bin/activate
-uvicorn api:app --host 0.0.0.0 --port 8000
+    cd ~/DETECT-CO
+    flutter run --dart-define=ML_API_URL=https://replace-me.trycloudflare.com/predict
 
+Stop the API and tunnel with Ctrl-C in the tunnel terminal, or from another
+terminal run:
 
-to turn on notif 
+    cd ~/DETECT-CO-ML
+    bash ./stop-tunnel.sh
 
-cd ~/DETECT-CO
-node functions/announcement-listener.js
+Start notification listener
+
+    cd ~/DETECT-CO
+    node functions/announcement-listener.js

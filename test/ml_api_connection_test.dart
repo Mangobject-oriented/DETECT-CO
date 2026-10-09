@@ -3,10 +3,17 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('MlApiConnection.normalizeManualUrl', () {
-    test('adds the default API port and prediction path to an IP address', () {
+    test('uses HTTPS and the prediction path for a public hostname', () {
       expect(
-        MlApiConnection.normalizeManualUrl('192.168.1.41'),
-        'http://192.168.1.41:8000/predict',
+        MlApiConnection.normalizeManualUrl('ml.example.org'),
+        'https://ml.example.org/predict',
+      );
+    });
+
+    test('keeps the local development port for explicit loopback HTTP', () {
+      expect(
+        MlApiConnection.normalizeManualUrl('http://127.0.0.1'),
+        'http://127.0.0.1:8000/predict',
       );
     });
 

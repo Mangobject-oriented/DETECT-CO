@@ -1,92 +1,110 @@
-# DETECT-CO ML API: local network discovery
+DETECT-CO ML API — laptop-hosted cross-network access
+====================================================
 
-The backend advertises `_detectco-ml._tcp.local` while FastAPI is running.
-The Flutter app discovers the service, uses its resolved IPv4 address, and
-checks `/health` before sending the existing `/predict` request. It caches the
-healthy endpoint, invalidates it when connectivity changes, and retries the
-normal five-minute prediction flow. A manual address is available in Menu >
-Display Settings > ML Server Address.
+Architecture
+------------
+The FastAPI service and existing LSTM + XGBoost + Random Forest models stay
+on the Pop!_OS laptop. Uvicorn listens only on 127.0.0.1:8000. An outbound
+Cloudflare Tunnel provides HTTPS access without router port forwarding, a
+private VPN, or weakening firewall protections. The active ~/DETECT-CO-ML API
+exposes /, /health, and /predict. /predict accepts latitude and longitude
+JSON and retains its existing response format.
 
-## Install and start the API
+Temporary tunnel for initial testing
+------------------------------------
+1. Install cloudflared using Cloudflare's official Linux instructions:
+   https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/
+   Ensure `cloudflared` is on PATH. A temporary quick tunnel needs no login.
+2. In a laptop terminal run:
+   cd ~/DETECT-CO-ML
+   bash ./start-tunnel.sh
+3. Wait until FastAPI is healthy. Copy the HTTPS trycloudflare.com URL printed
+   by cloudflared and leave this terminal open.
+4. In the Flutter project, replace the example URL and run:
+   cd ~/DETECT-CO
+   flutter run --dart-define=ML_API_URL=https://example.trycloudflare.com/predict
+   For a release APK use:
+   flutter build apk --dart-define=ML_API_URL=https://example.trycloudflare.com/predict
+5. Verify using a phone on mobile data or unrelated Wi-Fi. Open the URL with
+   /health and confirm status is healthy and models_loaded is true, then
+   request a prediction in the app.
 
-```bash
-cd ~/DETECT-CO/DETECT-CO-ML
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn api:app --host 0.0.0.0 --port 8000
-```
+Stop
+----
+Press Ctrl-C in the tunnel terminal; its exit handler stops FastAPI. To stop
+from a second terminal:
+   cd ~/DETECT-CO-ML
+   bash ./stop-tunnel.sh
 
-The server binds to all laptop interfaces for LAN access. The mDNS advertiser
-tracks local IPv4 changes while the process runs and unregisters when Uvicorn
-shuts down. If mDNS cannot start, FastAPI still runs and the manual address
-setting remains available. The API continues to use the real LSTM, XGBoost,
-Random Forest, and Open-Meteo prediction pipeline.
+Stable hostname
+---------------
+For long-term distribution, use a domain managed by Cloudflare and create a
+named tunnel. After adding the domain to Cloudflare, run these commands in
+the laptop shell (replace the two example values):
+   cloudflared tunnel login
+   cloudflared tunnel create detectco-ml
+   cloudflared tunnel route dns detectco-ml ml.your-domain.example
+Then create ~/.cloudflared/config.yml with:
+   tunnel: detectco-ml
+   credentials-file: /home/YOUR_USER/.cloudflared/TUNNEL_UUID.json
+   ingress:
+     - hostname: ml.your-domain.example
+       service: http://127.0.0.1:8000
+     - service: http_status:404
+Find the UUID and credentials file from the output of `cloudflared tunnel
+create`. Keep that file outside source control and restrict its permissions.
+Start FastAPI with the project's environment and run the named tunnel in a
+second terminal with:
+   cd ~/DETECT-CO-ML
+   venv/bin/uvicorn api:app --host 127.0.0.1 --port 8000
+   cloudflared tunnel run detectco-ml
+Follow Cloudflare's current named tunnel guide for dashboard alternatives:
+https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/
+Build Flutter with the stable URL:
+   flutter build apk --dart-define=ML_API_URL=https://ml.your-domain.example/predict
+Do not put a temporary URL or tunnel credentials in a production build or
+source control. Cloudflare account/domain authentication is a manual step.
 
-## Verify locally
+Configuration
+-------------
+`ML_API_URL` is the full HTTPS prediction URL. When omitted, the app does not
+fall back to a LAN address; it reports ML as unavailable until a URL is set
+under Menu > Display Settings. The admin web client reads VITE_ML_API_URL as
+its API base URL. Set it in the untracked admin_web/.env.local file:
+   VITE_ML_API_URL=https://ml.your-domain.example
 
-In another terminal on the laptop:
+Safety, limitations, and troubleshooting
+-----------------------------------------
+Coordinates are range-validated. /predict is limited to 30 requests per
+client per minute by default; DETECTCO_PREDICT_RATE_LIMIT changes that limit.
+The active API has no monitoring or administrative endpoint; /health only
+reports service readiness. Keep administrative tools behind authentication.
+CORS should list exact browser admin origins in DETECTCO_ALLOWED_ORIGINS.
+For example, before starting the API, export
+DETECTCO_ALLOWED_ORIGINS=https://admin.your-domain.example in its shell.
+The separately checked-in ML copy under the Flutter repository has a
+/monitoring endpoint. If that copy is ever served through a public tunnel,
+protect /monitoring with a Cloudflare Access application/policy before making
+the hostname public. The active ~/DETECT-CO-ML service does not implement that
+route.
 
-```bash
-curl -fsS http://127.0.0.1:8000/health
-curl -fsS -X POST http://127.0.0.1:8000/predict \
-  -H 'Content-Type: application/json' \
-  -d '{"latitude":14.15,"longitude":121.05}'
-```
+The laptop must stay powered on, awake, online, and keep FastAPI and
+cloudflared running. Sleep, network loss, laptop shutdown, model errors, or
+tunnel interruption make predictions unavailable. This has no guaranteed
+uptime and must not be the sole emergency-warning channel. ML unavailability
+is displayed separately from flood risk.
 
-The prediction response should contain `predictions` with the five rainfall
-fields for 1, 3, 6, 12, and 24 hours.
+* `cloudflared` missing: install it from the official download page above.
+* API fails health startup: inspect /tmp/detectco-ml-api.log and confirm the
+  existing Python environment and model files exist.
+* Tunnel cannot connect: inspect /tmp/detectco-cloudflared.log and ensure the
+  laptop has internet; quick URLs expire when the process stops.
+* App cannot connect: ensure ML_API_URL ends in /predict and /health reports
+  models_loaded true. Rebuild after changing `--dart-define`.
+* Browser CORS failure: configure the exact admin origin and restart API.
+* A local curl does not verify public access. Test /health from mobile data.
 
-To check the DNS-SD advertisement on Linux, install `avahi-utils` and run:
-
-```bash
-avahi-browse --resolve --terminate _detectco-ml._tcp
-```
-
-## Flutter
-
-```bash
-cd ~/DETECT-CO
-flutter pub get
-flutter run
-```
-
-`ML_API_URL` remains available for local development and tests and takes
-priority over discovery:
-
-```bash
-flutter run --dart-define=ML_API_URL=http://127.0.0.1:8000/predict
-```
-
-If Android mDNS is blocked by the Wi-Fi network or device, open Menu > Display
-Settings > ML Server Address and enter `192.168.1.41:8000` (or the laptop's
-current LAN address). Leave it empty or choose Auto Discover to return to
-DNS-SD discovery. On Android emulators, use `10.0.2.2:8000` as the manual
-address. Do not enter `0.0.0.0` or rely on `detectco-server.local` resolving.
-
-## Firewall and network
-
-Both devices must be on the same Wi-Fi/LAN, and the router must allow local
-device-to-device traffic and multicast DNS. For Linux firewalls, allow inbound
-TCP port 8000 only from the private Wi-Fi subnet and allow local UDP multicast
-to `224.0.0.251:5353` on the Wi-Fi interface. For UFW, replace the example
-subnet with the laptop's actual subnet:
-
-```bash
-sudo ufw allow from 192.168.1.0/24 to any port 8000 proto tcp
-```
-
-Do not create a public port-forward. Android debug builds permit HTTP for this
-LAN development API; release traffic should use an HTTPS deployment. The main
-Android manifest includes INTERNET permission, and Bonsoir supplies the
-multicast permission and short-lived receive lock needed for discovery.
-
-## Test a Wi-Fi change
-
-Keep Uvicorn running, move the laptop and phone to another shared Wi-Fi
-network, then wait for the network connection event and the laptop's mDNS
-address refresh. The Flutter app discards its cached IP and rediscovers the
-server. If that network blocks multicast, save the laptop's new IP in the
-manual setting. If the devices are separated or the laptop is off, ML requests
-fail with a connection message and the existing Open-Meteo fallback remains
-active.
+Local checks
+------------
+   curl -fsS http://127.0.0.1:8000/health
+   curl -fsS -X POST http://127.0.0.1:8000/predict -H 'Content-Type: application/json' -d '{"latitude":14.15,"longitude":121.05}'

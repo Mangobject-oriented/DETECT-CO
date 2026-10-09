@@ -8,12 +8,13 @@ comparisons, and metrics.
 
 ## Admin website
 
-The existing development default is `http://192.168.18.14:8000`, matching the
-Flutter app's current API host. Configure the Vite build with
+There is no hardcoded API host. Configure the Vite build with
 `VITE_ML_API_URL` set to the FastAPI base URL (for example
-`https://ml.example.org`) when deploying elsewhere. The API's `DETECTCO_ADMIN_ORIGINS`
-environment variable must include the exact admin website origin. The local
-default allows `http://127.0.0.1:5173` and `http://localhost:5173`.
+`https://ml.example.org`). For the Flutter app, set the full prediction URL
+using `--dart-define=ML_API_URL=https://ml.example.org/predict`. The API's
+`DETECTCO_ADMIN_ORIGINS` variable must include the exact admin website origin.
+Its development default allows only `http://127.0.0.1:5173` and
+`http://localhost:5173`; set the production admin origin explicitly.
 
 ## Flutter
 

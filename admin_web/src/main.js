@@ -92,7 +92,7 @@ let latestMlPrediction = null;
 let mlRefreshInFlight = false;
 
 const mlLocation = { latitude: 14.15, longitude: 121.05, label: 'Calamba model location' };
-const mlApiBase = (import.meta.env.VITE_ML_API_URL || 'http://192.168.18.14:8000').replace(/\/+$/, '');
+const mlApiBase = (import.meta.env.VITE_ML_API_URL || '').replace(/\/+$/, '');
 const mlHorizons = [1, 3, 6, 12, 24];
 
 togglePassword.addEventListener('click', () => {
@@ -931,6 +931,9 @@ async function refreshMlMonitoring({ refreshPrediction = false } = {}) {
   button.disabled = true;
   document.querySelector('#ml-connection-state').textContent = 'Refreshing…';
   try {
+    if (!mlApiBase) {
+      throw new Error('VITE_ML_API_URL is not configured.');
+    }
     const requestPrediction = async () => {
       const response = await fetch(`${mlApiBase}/predict`, {
         method: 'POST',
@@ -980,7 +983,9 @@ async function refreshMlMonitoring({ refreshPrediction = false } = {}) {
     document.querySelector('#ml-connection-state').textContent = 'ML service unavailable';
     document.querySelector('#ml-connection-state').className = 'ml-state unavailable';
     const notice = document.querySelector('#ml-message');
-    notice.textContent = error.name === 'TimeoutError'
+    notice.textContent = error.message === 'VITE_ML_API_URL is not configured.'
+      ? 'Set VITE_ML_API_URL in admin_web/.env.local to the public HTTPS ML API base URL.'
+      : error.name === 'TimeoutError'
       ? 'The ML service did not respond in time. Check the configured API URL and server status.'
       : 'Could not retrieve ML monitoring data. Check the configured API URL, CORS origins, and server status.';
     notice.hidden = false;

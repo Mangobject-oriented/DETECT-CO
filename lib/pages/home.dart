@@ -1137,9 +1137,9 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
 
       final String failure = switch (e) {
         TimeoutException() =>
-          'ML discovery or request timed out. Check the server and Wi-Fi.',
+          'ML service timed out. Check your internet connection and the public API status.',
         http.ClientException() =>
-          'ML request failed. Check the Wi-Fi connection and server address.',
+          'Could not reach the ML service. Check your internet connection and public API URL.',
         FormatException() => 'Invalid ML response: ${e.message}',
         StateError() => e.message.toString(),
         _ => 'ML request failed: $e',
