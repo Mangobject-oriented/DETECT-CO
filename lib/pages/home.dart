@@ -605,7 +605,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
 
   static const String mlApiUrl = String.fromEnvironment(
     'ML_API_URL',
-    defaultValue: 'http://192.168.18.14:8000/predict',
+    defaultValue: 'http://192.168.1.80:8000/predict',
   );
 
   double? _mlRainfall1h;
