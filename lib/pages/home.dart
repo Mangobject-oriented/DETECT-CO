@@ -13,6 +13,7 @@ import 'package:detectco/pages/menu.dart'; // change to your actual menu file na
 import 'package:detectco/services/weather_condition.dart';
 import 'package:detectco/services/flood_risk.dart';
 import 'package:detectco/services/ml_flood_risk.dart';
+import 'package:detectco/services/ml_api_connection.dart';
 import 'package:detectco/pages/notification.dart';
 
 // =====================================================
@@ -603,11 +604,6 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
   // ML FLOOD PREDICTION API
   // =====================================================
 
-  static const String mlApiUrl = String.fromEnvironment(
-    'ML_API_URL',
-    defaultValue: 'http://192.168.1.80:8000/predict',
-  );
-
   double? _mlRainfall1h;
   double? _mlRainfall3h;
   double? _mlRainfall6h;
@@ -626,6 +622,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
   bool _mlForecastIdle = false;
 
   Timer? _mlPredictionTimer;
+  bool _mlRetryRequested = false;
 
   // =====================================================
   // OPEN-METEO RAINFALL FALLBACK
@@ -706,6 +703,9 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     // widgets.
 
     homePerformanceMode.addListener(_onPerformanceModeChanged);
+    MlApiConnection.instance.configurationChanges.addListener(
+      _onMlConnectionConfigurationChanged,
+    );
 
     // =====================================================
     // ONE-TIME DEVICE LOCATION
@@ -755,8 +755,10 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     _weatherConnectivitySub = Connectivity().onConnectivityChanged.listen((
       results,
     ) {
+      MlApiConnection.instance.invalidate();
       if (results.any((result) => result != ConnectivityResult.none)) {
         _fetchWeatherCondition();
+        _requestMlPredictionRetry();
       }
     }, onError: (_) {});
 
@@ -771,6 +773,9 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     homeWaterLite.removeListener(_onWaterLiteChanged);
     homeRefreshInterval.removeListener(_onRefreshRateChanged);
     homePerformanceMode.removeListener(_onPerformanceModeChanged);
+    MlApiConnection.instance.configurationChanges.removeListener(
+      _onMlConnectionConfigurationChanged,
+    );
     _mlPredictionTimer?.cancel();
     _esp32StatusTimer?.cancel();
     _weatherConditionTimer?.cancel();
@@ -954,19 +959,35 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     });
 
     try {
+      final predictionUri = await MlApiConnection.instance
+          .resolvePredictionUri();
       final response = await http
           .post(
-            Uri.parse(mlApiUrl),
+            predictionUri,
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({'latitude': 14.15, 'longitude': 121.05}),
           )
-          .timeout(const Duration(seconds: 20));
+          .timeout(const Duration(seconds: 45));
 
       if (response.statusCode != 200) {
-        throw Exception('ML API returned HTTP ${response.statusCode}');
+        var detail = '';
+        try {
+          final body = jsonDecode(response.body);
+          if (body is Map) detail = body['detail']?.toString() ?? '';
+        } on FormatException {
+          // Keep non-JSON proxy errors diagnosable through their HTTP status.
+        }
+        throw StateError(
+          'ML prediction request failed (HTTP ${response.statusCode})'
+          '${detail.isEmpty ? '.' : ': $detail'}',
+        );
       }
 
-      final Map<String, dynamic> result = jsonDecode(response.body);
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map) {
+        throw const FormatException('ML /predict returned invalid data.');
+      }
+      final Map<String, dynamic> result = Map<String, dynamic>.from(decoded);
 
       // =================================================
       // CHECK IF ML IS IDLE
@@ -1031,6 +1052,18 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
       final double? rainfall12h = _parseDouble(predictions['rainfall_12h_mm']);
 
       final double? rainfall24h = _parseDouble(predictions['rainfall_24h_mm']);
+
+      if ([
+        rainfall1h,
+        rainfall3h,
+        rainfall6h,
+        rainfall12h,
+        rainfall24h,
+      ].whereType<double>().any((value) => !value.isFinite || value < 0)) {
+        throw const FormatException(
+          'ML /predict returned an invalid rainfall value.',
+        );
+      }
 
       // =================================================
       // CHECK FOR COMPLETELY MISSING ML FORECAST
@@ -1102,12 +1135,20 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     } catch (e) {
       if (!mounted) return;
 
-      MlFloodRiskStore.instance.markUnavailable(
-        'ML prediction is unavailable while offline.',
-      );
+      final String failure = switch (e) {
+        TimeoutException() =>
+          'ML discovery or request timed out. Check the server and Wi-Fi.',
+        http.ClientException() =>
+          'ML request failed. Check the Wi-Fi connection and server address.',
+        FormatException() => 'Invalid ML response: ${e.message}',
+        StateError() => e.message.toString(),
+        _ => 'ML request failed: $e',
+      };
+
+      MlFloodRiskStore.instance.markUnavailable(failure);
 
       setState(() {
-        _mlError = 'Unable to connect to ML server';
+        _mlError = failure;
 
         _mlForecastIdle = true;
 
@@ -1127,6 +1168,22 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
       _loadingUpdate(() {
         _mlLoading = false;
       });
+      if (_mlRetryRequested && mounted) {
+        _mlRetryRequested = false;
+        unawaited(_fetchMLPrediction());
+      }
+    }
+  }
+
+  void _onMlConnectionConfigurationChanged() {
+    _requestMlPredictionRetry();
+  }
+
+  void _requestMlPredictionRetry() {
+    if (_mlLoading) {
+      _mlRetryRequested = true;
+    } else {
+      unawaited(_fetchMLPrediction());
     }
   }
 
@@ -2682,7 +2739,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
                                             child: Text(
                                               hasMlForecast
                                                   ? 'ML RAINFALL FORECAST'
-                                                  : 'OPEN-METEO RAINFALL · ML UNAVAILABLE',
+                                                  : 'OPEN-METEO RAINFALL · ML AVAILABLE',
                                               style: const TextStyle(
                                                 fontSize: 12,
                                                 fontWeight: FontWeight.w700,

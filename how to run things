@@ -1,7 +1,7 @@
 to turn on website 
 
 cd ~/DETECT-CO/admin_web
-npm install
+
 npm run dev
 
 

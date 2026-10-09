@@ -6,6 +6,7 @@
 
 #include "generated_plugin_registrant.h"
 
+#include <bonsoir_windows/bonsoir_windows_plugin_c_api.h>
 #include <cloud_firestore/cloud_firestore_plugin_c_api.h>
 #include <connectivity_plus/connectivity_plus_windows_plugin.h>
 #include <firebase_core/firebase_core_plugin_c_api.h>
@@ -14,6 +15,8 @@
 #include <torch_flashlight/torch_flashlight_plugin_c_api.h>
 
 void RegisterPlugins(flutter::PluginRegistry* registry) {
+  BonsoirWindowsPluginCApiRegisterWithRegistrar(
+      registry->GetRegistrarForPlugin("BonsoirWindowsPluginCApi"));
   CloudFirestorePluginCApiRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("CloudFirestorePluginCApi"));
   ConnectivityPlusWindowsPluginRegisterWithRegistrar(

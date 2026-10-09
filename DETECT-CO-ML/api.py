@@ -9,17 +9,20 @@ import xgboost as xgb
 from pathlib import Path
 import requests
 import os
+import logging
+from contextlib import asynccontextmanager
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from fastapi.middleware.cors import CORSMiddleware
 from monitoring_store import get_monitoring, record_forecast
+from mdns_advertiser import MlMdnsAdvertiser
 
 
 # ============================================================
 # PATHS
 # ============================================================
 
-BASE_DIR = Path("/home/miguel/DETECT-CO-ML")
+BASE_DIR = Path(__file__).resolve().parent
 
 LSTM_MODEL_PATH = (
     BASE_DIR / "data/models/refined_lstm/lstm_refined_3.keras"
@@ -146,6 +149,30 @@ print("All models loaded successfully.")
 # FASTAPI
 # ============================================================
 
+logger = logging.getLogger("detectco.ml.discovery")
+
+
+@asynccontextmanager
+async def lifespan(_app):
+    advertiser = MlMdnsAdvertiser()
+    try:
+        addresses = advertiser.start()
+        logger.info("Advertising _detectco-ml._tcp on %s", ", ".join(addresses))
+    except Exception:
+        logger.warning(
+            "ML API started without mDNS advertisement; manual address fallback remains available",
+            exc_info=True,
+        )
+
+    try:
+        yield
+    finally:
+        try:
+            advertiser.stop()
+        except Exception:
+            logger.debug("Could not unregister the mDNS service cleanly", exc_info=True)
+
+
 app = FastAPI(
     title="DETECT CO ML Ensemble API",
     description=(
@@ -153,6 +180,7 @@ app = FastAPI(
         "ensemble using Open-Meteo weather data"
     ),
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 _admin_origins = [

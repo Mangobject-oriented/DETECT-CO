@@ -1,147 +1,92 @@
-# DETECT-CO ML API
+# DETECT-CO ML API: local network discovery
 
-This folder contains the trained ML models and FastAPI server used by DETECT-CO.
+The backend advertises `_detectco-ml._tcp.local` while FastAPI is running.
+The Flutter app discovers the service, uses its resolved IPv4 address, and
+checks `/health` before sending the existing `/predict` request. It caches the
+healthy endpoint, invalidates it when connectivity changes, and retries the
+normal five-minute prediction flow. A manual address is available in Menu >
+Display Settings > ML Server Address.
 
-## REQUIREMENTS
+## Install and start the API
 
-Python 3
-Internet connection
-Open-Meteo API access
-
-The API uses Open-Meteo to get updated weather data for the ML predictions.
-
-1. OPEN THE ML FOLDER
-
----
-
-Open a terminal in the DETECT-CO project folder and run:
-
-cd DETECT-CO/DETECT-CO-ML
-
-2. CREATE THE PYTHON VIRTUAL ENVIRONMENT
-
----
-
-Run:
-
+```bash
+cd ~/DETECT-CO/DETECT-CO-ML
 python3 -m venv .venv
-
-3. ACTIVATE THE VIRTUAL ENVIRONMENT
-
----
-
-Linux / Pop!_OS / Ubuntu:
-
 source .venv/bin/activate
-
-Windows:
-
-.venv\Scripts\activate
-
-4. INSTALL THE REQUIRED PYTHON PACKAGES
-
----
-
-Run:
-
 pip install -r requirements.txt
-
-5. START THE FASTAPI SERVER
-
----
-
-Run:
-
 uvicorn api:app --host 0.0.0.0 --port 8000
+```
 
-If successful, the terminal should show that the server is running on:
+The server binds to all laptop interfaces for LAN access. The mDNS advertiser
+tracks local IPv4 changes while the process runs and unregisters when Uvicorn
+shuts down. If mDNS cannot start, FastAPI still runs and the manual address
+setting remains available. The API continues to use the real LSTM, XGBoost,
+Random Forest, and Open-Meteo prediction pipeline.
 
-http://0.0.0.0:8000
+## Verify locally
 
-6. FIND THE COMPUTER'S IP ADDRESS
+In another terminal on the laptop:
 
----
+```bash
+curl -fsS http://127.0.0.1:8000/health
+curl -fsS -X POST http://127.0.0.1:8000/predict \
+  -H 'Content-Type: application/json' \
+  -d '{"latitude":14.15,"longitude":121.05}'
+```
 
-The Flutter app connects to the computer running the ML API.
+The prediction response should contain `predictions` with the five rainfall
+fields for 1, 3, 6, 12, and 24 hours.
 
-On Linux:
+To check the DNS-SD advertisement on Linux, install `avahi-utils` and run:
 
-hostname -I
+```bash
+avahi-browse --resolve --terminate _detectco-ml._tcp
+```
 
-Example:
+## Flutter
 
-192.168.18.14
-
-Then make sure the Flutter app's ML API URL uses:
-
-http://YOUR_COMPUTER_IP:8000/predict
-
-Example:
-
-http://192.168.18.14:8000/predict
-
-7. IMPORTANT
-
----
-
-The phone/tablet running DETECT-CO and the computer running the FastAPI server must be connected to the same Wi-Fi network.
-
-Keep the FastAPI terminal running while using the Flutter app.
-
-The API automatically gets new weather data from Open-Meteo when /predict is called.
-
-The Flutter app currently requests a new ML prediction every 5 minutes.
-
-8. TEST THE API
-
----
-
-With the FastAPI server running, open another terminal and run:
-
-curl -X POST http://127.0.0.1:8000/predict 
--H "Content-Type: application/json" 
--d '{"latitude":14.15,"longitude":121.05}'
-
-If the API is working, it will return the ML rainfall predictions for:
-
-1 hour
-3 hours
-6 hours
-12 hours
-24 hours
-
-9. START FLUTTER
-
----
-
-In another terminal, go back to the DETECT-CO project:
-
-cd DETECT-CO
-
-Then run:
-
+```bash
+cd ~/DETECT-CO
 flutter pub get
-
 flutter run
+```
 
-## PIPELINE
+`ML_API_URL` remains available for local development and tests and takes
+priority over discovery:
 
-Flutter
-↓
-FastAPI
-↓
-Open-Meteo
-↓
-LSTM + XGBoost + Random Forest
-↓
-Rainfall Prediction
-↓
-Flutter
+```bash
+flutter run --dart-define=ML_API_URL=http://127.0.0.1:8000/predict
+```
 
-## NOTE
+If Android mDNS is blocked by the Wi-Fi network or device, open Menu > Display
+Settings > ML Server Address and enter `192.168.1.41:8000` (or the laptop's
+current LAN address). Leave it empty or choose Auto Discover to return to
+DNS-SD discovery. On Android emulators, use `10.0.2.2:8000` as the manual
+address. Do not enter `0.0.0.0` or rely on `detectco-server.local` resolving.
 
-The ML models are already trained.
+## Firewall and network
 
-Running the FastAPI server does NOT retrain the models.
+Both devices must be on the same Wi-Fi/LAN, and the router must allow local
+device-to-device traffic and multicast DNS. For Linux firewalls, allow inbound
+TCP port 8000 only from the private Wi-Fi subnet and allow local UDP multicast
+to `224.0.0.251:5353` on the Wi-Fi interface. For UFW, replace the example
+subnet with the laptop's actual subnet:
 
-It loads the existing trained models and uses newly retrieved Open-Meteo weather data to generate predictions.
+```bash
+sudo ufw allow from 192.168.1.0/24 to any port 8000 proto tcp
+```
+
+Do not create a public port-forward. Android debug builds permit HTTP for this
+LAN development API; release traffic should use an HTTPS deployment. The main
+Android manifest includes INTERNET permission, and Bonsoir supplies the
+multicast permission and short-lived receive lock needed for discovery.
+
+## Test a Wi-Fi change
+
+Keep Uvicorn running, move the laptop and phone to another shared Wi-Fi
+network, then wait for the network connection event and the laptop's mDNS
+address refresh. The Flutter app discards its cached IP and rediscovers the
+server. If that network blocks multicast, save the laptop's new IP in the
+manual setting. If the devices are separated or the laptop is off, ML requests
+fail with a connection message and the existing Open-Meteo fallback remains
+active.

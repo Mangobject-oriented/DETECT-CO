@@ -1,33 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:detectco/pages/home.dart';
+import 'package:detectco/services/ml_api_connection.dart';
 
 // =====================================================
 // HOME BACKGROUND CHOICE
 // =====================================================
 
-enum HomeBgChoice {
-  auto,
-  storm,
-  rain,
-  cloudy,
-  sunny,
-}
+enum HomeBgChoice { auto, storm, rain, cloudy, sunny }
 
-final ValueNotifier<HomeBgChoice> homeBgChoice =
-    ValueNotifier<HomeBgChoice>(HomeBgChoice.auto);
+final ValueNotifier<HomeBgChoice> homeBgChoice = ValueNotifier<HomeBgChoice>(
+  HomeBgChoice.auto,
+);
 
 // =====================================================
 // HOME BACKGROUND QUALITY
 // =====================================================
 
-enum HomeBgQuality {
-  high,
-  low,
-}
+enum HomeBgQuality { high, low }
 
-final ValueNotifier<HomeBgQuality> homeBgQuality =
-    ValueNotifier<HomeBgQuality>(HomeBgQuality.high);
+final ValueNotifier<HomeBgQuality> homeBgQuality = ValueNotifier<HomeBgQuality>(
+  HomeBgQuality.high,
+);
 
 // =====================================================
 // MENU SETTINGS STORAGE
@@ -37,8 +31,7 @@ const String _homeBgChoiceKey = 'home_bg_choice';
 const String _homeBgQualityKey = 'home_bg_quality';
 const String _homeRefreshRateKey = 'home_refresh_rate';
 const String _homeWaterLiteKey = 'home_water_lite';
-const String _homePerformanceModeKey =
-    'home_performance_mode';
+const String _homePerformanceModeKey = 'home_performance_mode';
 
 // =====================================================
 // MENU TAB
@@ -87,12 +80,9 @@ class _MenuTabState extends State<MenuTab> {
 
     final savedBg = prefs.getString(_homeBgChoiceKey);
     final savedQuality = prefs.getString(_homeBgQualityKey);
-    final savedRefreshRate =
-        prefs.getInt(_homeRefreshRateKey);
-    final savedWaterLite =
-        prefs.getBool(_homeWaterLiteKey);
-    final savedPerformanceMode =
-        prefs.getBool(_homePerformanceModeKey);
+    final savedRefreshRate = prefs.getInt(_homeRefreshRateKey);
+    final savedWaterLite = prefs.getBool(_homeWaterLiteKey);
+    final savedPerformanceMode = prefs.getBool(_homePerformanceModeKey);
 
     if (savedBg != null) {
       HomeBgChoice? bg;
@@ -125,9 +115,7 @@ class _MenuTabState extends State<MenuTab> {
     }
 
     if (savedRefreshRate != null) {
-      setHomeRefreshRate(
-        Duration(seconds: savedRefreshRate),
-      );
+      setHomeRefreshRate(Duration(seconds: savedRefreshRate));
     }
 
     if (savedWaterLite != null) {
@@ -147,57 +135,34 @@ class _MenuTabState extends State<MenuTab> {
   // SAVE SETTINGS
   // ============================================================
 
-  Future<void> _saveHomeBgChoice(
-    HomeBgChoice choice,
-  ) async {
+  Future<void> _saveHomeBgChoice(HomeBgChoice choice) async {
     final prefs = await SharedPreferences.getInstance();
 
-    await prefs.setString(
-      _homeBgChoiceKey,
-      choice.name,
-    );
+    await prefs.setString(_homeBgChoiceKey, choice.name);
   }
 
-  Future<void> _saveHomeBgQuality(
-    HomeBgQuality quality,
-  ) async {
+  Future<void> _saveHomeBgQuality(HomeBgQuality quality) async {
     final prefs = await SharedPreferences.getInstance();
 
-    await prefs.setString(
-      _homeBgQualityKey,
-      quality.name,
-    );
+    await prefs.setString(_homeBgQualityKey, quality.name);
   }
 
-  Future<void> _saveRefreshRate(
-    Duration duration,
-  ) async {
+  Future<void> _saveRefreshRate(Duration duration) async {
     final prefs = await SharedPreferences.getInstance();
 
-    await prefs.setInt(
-      _homeRefreshRateKey,
-      duration.inSeconds,
-    );
+    await prefs.setInt(_homeRefreshRateKey, duration.inSeconds);
   }
 
   Future<void> _saveWaterLite(bool value) async {
     final prefs = await SharedPreferences.getInstance();
 
-    await prefs.setBool(
-      _homeWaterLiteKey,
-      value,
-    );
+    await prefs.setBool(_homeWaterLiteKey, value);
   }
 
-  Future<void> _savePerformanceMode(
-    bool value,
-  ) async {
+  Future<void> _savePerformanceMode(bool value) async {
     final prefs = await SharedPreferences.getInstance();
 
-    await prefs.setBool(
-      _homePerformanceModeKey,
-      value,
-    );
+    await prefs.setBool(_homePerformanceModeKey, value);
   }
 
   // ============================================================
@@ -328,11 +293,9 @@ class _MenuTabState extends State<MenuTab> {
       // Get the field RenderBox safely.
       // --------------------------------------------------------
 
-      final RenderObject? fieldObject =
-          fieldContext.findRenderObject();
+      final RenderObject? fieldObject = fieldContext.findRenderObject();
 
-      if (fieldObject == null ||
-          fieldObject is! RenderBox) {
+      if (fieldObject == null || fieldObject is! RenderBox) {
         return null;
       }
 
@@ -346,8 +309,7 @@ class _MenuTabState extends State<MenuTab> {
       // Get the root overlay safely.
       // --------------------------------------------------------
 
-      final OverlayState? overlayState =
-          Overlay.maybeOf(
+      final OverlayState? overlayState = Overlay.maybeOf(
         fieldContext,
         rootOverlay: true,
       );
@@ -356,11 +318,10 @@ class _MenuTabState extends State<MenuTab> {
         return null;
       }
 
-      final RenderObject? overlayObject =
-          overlayState.context.findRenderObject();
+      final RenderObject? overlayObject = overlayState.context
+          .findRenderObject();
 
-      if (overlayObject == null ||
-          overlayObject is! RenderBox) {
+      if (overlayObject == null || overlayObject is! RenderBox) {
         return null;
       }
 
@@ -374,23 +335,18 @@ class _MenuTabState extends State<MenuTab> {
       // Calculate position.
       // --------------------------------------------------------
 
-      final Offset position =
-          button.localToGlobal(
+      final Offset position = button.localToGlobal(
         Offset.zero,
         ancestor: overlay,
       );
 
-      final double overlayWidth =
-          overlay.size.width;
+      final double overlayWidth = overlay.size.width;
 
-      final double overlayHeight =
-          overlay.size.height;
+      final double overlayHeight = overlay.size.height;
 
-      final double buttonWidth =
-          button.size.width;
+      final double buttonWidth = button.size.width;
 
-      final double buttonHeight =
-          button.size.height;
+      final double buttonHeight = button.size.height;
 
       // --------------------------------------------------------
       // Make sure the position is valid.
@@ -409,10 +365,7 @@ class _MenuTabState extends State<MenuTab> {
 
       double left = position.dx;
 
-      double right =
-          overlayWidth -
-          position.dx -
-          buttonWidth;
+      double right = overlayWidth - position.dx - buttonWidth;
 
       // Keep the popup inside the screen.
       if (left < 0) {
@@ -429,8 +382,7 @@ class _MenuTabState extends State<MenuTab> {
       // Normally it opens below the field.
       // --------------------------------------------------------
 
-      double top =
-          position.dy + buttonHeight + 4;
+      double top = position.dy + buttonHeight + 4;
 
       if (top < 0) {
         top = 0;
@@ -449,9 +401,7 @@ class _MenuTabState extends State<MenuTab> {
         useRootNavigator: true,
         color: const Color(0xFF303030),
         elevation: 8,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
 
         // Keep popup the same width as the field.
         constraints: BoxConstraints(
@@ -459,62 +409,45 @@ class _MenuTabState extends State<MenuTab> {
           maxWidth: buttonWidth,
         ),
 
-        position: RelativeRect.fromLTRB(
-          left,
-          top,
-          right,
-          0,
-        ),
+        position: RelativeRect.fromLTRB(left, top, right, 0),
 
-        items: values.map(
-          (value) {
-            return PopupMenuItem<T>(
-              value: value,
-              height: 44,
-              padding:
-                  const EdgeInsets.symmetric(
-                horizontal: 14,
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    iconOf(value),
-                    size: 20,
-                    color: Colors.white70,
-                  ),
+        items: values.map((value) {
+          return PopupMenuItem<T>(
+            value: value,
+            height: 44,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Row(
+              children: [
+                Icon(iconOf(value), size: 20, color: Colors.white70),
 
-                  const SizedBox(width: 10),
+                const SizedBox(width: 10),
 
-                  Expanded(
-                    child: Text(
-                      labelOf(value),
-                      overflow:
-                          TextOverflow.ellipsis,
-                      maxLines: 1,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight:
-                            FontWeight.w500,
-                      ),
-                    ),
-                  ),
-
-                  // --------------------------------------------
-                  // CHECK CURRENT ITEM
-                  // --------------------------------------------
-
-                  if (value == current)
-                    const Icon(
-                      Icons.check_rounded,
+                Expanded(
+                  child: Text(
+                    labelOf(value),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    style: const TextStyle(
                       color: Colors.white,
-                      size: 20,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
                     ),
-                ],
-              ),
-            );
-          },
-        ).toList(),
+                  ),
+                ),
+
+                // --------------------------------------------
+                // CHECK CURRENT ITEM
+                // --------------------------------------------
+                if (value == current)
+                  const Icon(
+                    Icons.check_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+              ],
+            ),
+          );
+        }).toList(),
       );
 
       return selected;
@@ -523,9 +456,7 @@ class _MenuTabState extends State<MenuTab> {
       // Prevent a popup/layout error from killing the app.
       // --------------------------------------------------------
 
-      debugPrint(
-        'Menu dropdown error: $error',
-      );
+      debugPrint('Menu dropdown error: $error');
 
       return null;
     } finally {
@@ -554,25 +485,19 @@ class _MenuTabState extends State<MenuTab> {
           width: double.infinity,
           decoration: BoxDecoration(
             color: const Color(0xFF303030),
-            borderRadius:
-                BorderRadius.circular(14),
-            border: Border.all(
-              color:
-                  Colors.white.withOpacity(0.12),
-            ),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white.withOpacity(0.12)),
           ),
           child: Material(
             color: Colors.transparent,
             child: InkWell(
-              borderRadius:
-                  BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(14),
               onTap: () async {
                 if (_isSelectMenuOpen) {
                   return;
                 }
 
-                final T? selected =
-                    await _openSelectMenu<T>(
+                final T? selected = await _openSelectMenu<T>(
                   fieldContext: fieldContext,
                   values: values,
                   current: current,
@@ -590,38 +515,28 @@ class _MenuTabState extends State<MenuTab> {
               },
               child: Container(
                 height: 48,
-                padding:
-                    const EdgeInsets.symmetric(
-                  horizontal: 14,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
                 child: Row(
                   children: [
-                    Icon(
-                      iconOf(current),
-                      size: 20,
-                      color: Colors.white70,
-                    ),
+                    Icon(iconOf(current), size: 20, color: Colors.white70),
 
                     const SizedBox(width: 10),
 
                     Expanded(
                       child: Text(
                         labelOf(current),
-                        overflow:
-                            TextOverflow.ellipsis,
+                        overflow: TextOverflow.ellipsis,
                         maxLines: 1,
                         style: const TextStyle(
                           fontSize: 15,
                           color: Colors.white,
-                          fontWeight:
-                              FontWeight.w500,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ),
 
                     const Icon(
-                      Icons
-                          .keyboard_arrow_down_rounded,
+                      Icons.keyboard_arrow_down_rounded,
                       color: Colors.white70,
                     ),
                   ],
@@ -640,20 +555,15 @@ class _MenuTabState extends State<MenuTab> {
 
   @override
   Widget build(BuildContext context) {
-    const Color backgroundColor =
-        Color(0xFF212121);
+    const Color backgroundColor = Color(0xFF212121);
 
-    const Color headerColor =
-        Color(0xFF212121);
+    const Color headerColor = Color(0xFF212121);
 
-    const Color cardColor =
-        Color(0xFF2C2C2C);
+    const Color cardColor = Color(0xFF2C2C2C);
 
-    const Color textColor =
-        Colors.white;
+    const Color textColor = Colors.white;
 
-    const Color secondaryColor =
-        Colors.white70;
+    const Color secondaryColor = Colors.white70;
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -669,11 +579,7 @@ class _MenuTabState extends State<MenuTab> {
 
             Container(
               width: double.infinity,
-              padding:
-                  const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 12,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               color: headerColor,
 
               child: Row(
@@ -681,9 +587,7 @@ class _MenuTabState extends State<MenuTab> {
                   SizedBox(
                     width: 50,
                     height: 50,
-                    child: Image.asset(
-                      'assets/icon/detect-co_logo.png',
-                    ),
+                    child: Image.asset('assets/icon/detect-co_logo.png'),
                   ),
 
                   const SizedBox(width: 8),
@@ -692,8 +596,7 @@ class _MenuTabState extends State<MenuTab> {
                     'Menu',
                     style: TextStyle(
                       fontSize: 20,
-                      fontWeight:
-                          FontWeight.bold,
+                      fontWeight: FontWeight.bold,
                       color: Colors.white,
                     ),
                   ),
@@ -704,28 +607,19 @@ class _MenuTabState extends State<MenuTab> {
             // =====================================================
             // CONTENT
             // =====================================================
-
             Expanded(
               child: SingleChildScrollView(
-                padding:
-                    const EdgeInsets.fromLTRB(
-                  20,
-                  24,
-                  20,
-                  30,
-                ),
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 30),
 
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
 
                   children: [
                     const Text(
                       'Menu',
                       style: TextStyle(
                         fontSize: 28,
-                        fontWeight:
-                            FontWeight.bold,
+                        fontWeight: FontWeight.bold,
                         color: textColor,
                       ),
                     ),
@@ -734,11 +628,7 @@ class _MenuTabState extends State<MenuTab> {
 
                     const Text(
                       'Manage and learn more about DETECT-CO',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color:
-                            secondaryColor,
-                      ),
+                      style: TextStyle(fontSize: 14, color: secondaryColor),
                     ),
 
                     const SizedBox(height: 24),
@@ -746,14 +636,11 @@ class _MenuTabState extends State<MenuTab> {
                     // =================================================
                     // HOW TO USE
                     // =================================================
-
                     _buildMenuCard(
                       cardColor: cardColor,
-                      icon:
-                          Icons.help_outline_rounded,
+                      icon: Icons.help_outline_rounded,
                       title: 'How to Use',
-                      subtitle:
-                          'Learn how to use DETECT-CO',
+                      subtitle: 'Learn how to use DETECT-CO',
                       onTap: () {
                         // Open How to Use page
                       },
@@ -764,15 +651,11 @@ class _MenuTabState extends State<MenuTab> {
                     // =================================================
                     // TERMS OF SERVICE
                     // =================================================
-
                     _buildMenuCard(
                       cardColor: cardColor,
-                      icon:
-                          Icons.description_outlined,
-                      title:
-                          'Terms of Service',
-                      subtitle:
-                          'Read the terms and conditions',
+                      icon: Icons.description_outlined,
+                      title: 'Terms of Service',
+                      subtitle: 'Read the terms and conditions',
                       onTap: () {
                         // Open Terms of Service page
                       },
@@ -783,14 +666,11 @@ class _MenuTabState extends State<MenuTab> {
                     // =================================================
                     // ABOUT APP
                     // =================================================
-
                     _buildMenuCard(
                       cardColor: cardColor,
-                      icon:
-                          Icons.info_outline_rounded,
+                      icon: Icons.info_outline_rounded,
                       title: 'About App',
-                      subtitle:
-                          'Learn more about DETECT-CO',
+                      subtitle: 'Learn more about DETECT-CO',
                       onTap: () {
                         // Open About App page
                       },
@@ -801,10 +681,7 @@ class _MenuTabState extends State<MenuTab> {
                     // =================================================
                     // DISPLAY SETTINGS
                     // =================================================
-
-                    _buildDisplaySettingsCard(
-                      cardColor: cardColor,
-                    ),
+                    _buildDisplaySettingsCard(cardColor: cardColor),
                   ],
                 ),
               ),
@@ -830,40 +707,29 @@ class _MenuTabState extends State<MenuTab> {
       color: Colors.transparent,
 
       child: InkWell(
-        borderRadius:
-            BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(20),
 
         onTap: onTap,
 
         child: AnimatedContainer(
-          duration:
-              const Duration(milliseconds: 250),
+          duration: const Duration(milliseconds: 250),
 
           width: double.infinity,
 
-          padding:
-              const EdgeInsets.symmetric(
-            horizontal: 18,
-            vertical: 18,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
 
           decoration: BoxDecoration(
             color: cardColor,
 
-            borderRadius:
-                BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(20),
 
-            border: Border.all(
-              color: Colors.grey.shade800,
-            ),
+            border: Border.all(color: Colors.grey.shade800),
 
             boxShadow: [
               BoxShadow(
-                color:
-                    Colors.black.withOpacity(0.25),
+                color: Colors.black.withOpacity(0.25),
                 blurRadius: 6,
-                offset:
-                    const Offset(0, 4),
+                offset: const Offset(0, 4),
               ),
             ],
           ),
@@ -874,36 +740,26 @@ class _MenuTabState extends State<MenuTab> {
                 width: 52,
                 height: 52,
 
-                decoration:
-                    BoxDecoration(
-                  color:
-                      const Color(0xFF383838),
-                  borderRadius:
-                      BorderRadius.circular(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF383838),
+                  borderRadius: BorderRadius.circular(16),
                 ),
 
-                child: Icon(
-                  icon,
-                  size: 27,
-                  color: Colors.white,
-                ),
+                child: Icon(icon, size: 27, color: Colors.white),
               ),
 
               const SizedBox(width: 16),
 
               Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
 
                   children: [
                     Text(
                       title,
-                      style:
-                          const TextStyle(
+                      style: const TextStyle(
                         fontSize: 17,
-                        fontWeight:
-                            FontWeight.w600,
+                        fontWeight: FontWeight.w600,
                         color: Colors.white,
                       ),
                     ),
@@ -912,11 +768,9 @@ class _MenuTabState extends State<MenuTab> {
 
                     Text(
                       subtitle,
-                      style:
-                          const TextStyle(
+                      style: const TextStyle(
                         fontSize: 13,
-                        color:
-                            Colors.white60,
+                        color: Colors.white60,
                       ),
                     ),
                   ],
@@ -939,36 +793,28 @@ class _MenuTabState extends State<MenuTab> {
   // DISPLAY SETTINGS CARD
   // =====================================================
 
-  Widget _buildDisplaySettingsCard({
-    required Color cardColor,
-  }) {
+  Widget _buildDisplaySettingsCard({required Color cardColor}) {
     return Container(
       width: double.infinity,
 
       decoration: BoxDecoration(
         color: cardColor,
 
-        borderRadius:
-            BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(20),
 
-        border: Border.all(
-          color: Colors.grey.shade800,
-        ),
+        border: Border.all(color: Colors.grey.shade800),
 
         boxShadow: [
           BoxShadow(
-            color:
-                Colors.black.withOpacity(0.25),
+            color: Colors.black.withOpacity(0.25),
             blurRadius: 6,
-            offset:
-                const Offset(0, 4),
+            offset: const Offset(0, 4),
           ),
         ],
       ),
 
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
 
         children: [
           // =================================================
@@ -979,8 +825,7 @@ class _MenuTabState extends State<MenuTab> {
             color: Colors.transparent,
 
             child: InkWell(
-              borderRadius:
-                  BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(20),
 
               onTap: () {
                 // Close any open menu before changing
@@ -990,14 +835,12 @@ class _MenuTabState extends State<MenuTab> {
                 }
 
                 setState(() {
-                  _displaySettingsExpanded =
-                      !_displaySettingsExpanded;
+                  _displaySettingsExpanded = !_displaySettingsExpanded;
                 });
               },
 
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(
+                padding: const EdgeInsets.symmetric(
                   horizontal: 18,
                   vertical: 18,
                 ),
@@ -1008,18 +851,13 @@ class _MenuTabState extends State<MenuTab> {
                       width: 52,
                       height: 52,
 
-                      decoration:
-                          BoxDecoration(
-                        color:
-                            const Color(0xFF383838),
-                        borderRadius:
-                            BorderRadius.circular(
-                                16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF383838),
+                        borderRadius: BorderRadius.circular(16),
                       ),
 
                       child: const Icon(
-                        Icons
-                            .display_settings_rounded,
+                        Icons.display_settings_rounded,
                         size: 27,
                         color: Colors.white,
                       ),
@@ -1029,20 +867,15 @@ class _MenuTabState extends State<MenuTab> {
 
                     const Expanded(
                       child: Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment
-                                .start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
 
                         children: [
                           Text(
                             'Display Settings',
-                            style:
-                                TextStyle(
+                            style: TextStyle(
                               fontSize: 17,
-                              fontWeight:
-                                  FontWeight.w600,
-                              color:
-                                  Colors.white,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
                             ),
                           ),
 
@@ -1050,11 +883,9 @@ class _MenuTabState extends State<MenuTab> {
 
                           Text(
                             'Customize the Home display and performance',
-                            style:
-                                TextStyle(
+                            style: TextStyle(
                               fontSize: 13,
-                              color:
-                                  Colors.white60,
+                              color: Colors.white60,
                             ),
                           ),
                         ],
@@ -1062,22 +893,14 @@ class _MenuTabState extends State<MenuTab> {
                     ),
 
                     AnimatedRotation(
-                      turns:
-                          _displaySettingsExpanded
-                              ? 0.25
-                              : 0.0,
+                      turns: _displaySettingsExpanded ? 0.25 : 0.0,
 
-                      duration:
-                          const Duration(
-                        milliseconds: 250,
-                      ),
+                      duration: const Duration(milliseconds: 250),
 
                       child: const Icon(
-                        Icons
-                            .chevron_right_rounded,
+                        Icons.chevron_right_rounded,
                         size: 28,
-                        color:
-                            Colors.white54,
+                        color: Colors.white54,
                       ),
                     ),
                   ],
@@ -1089,117 +912,149 @@ class _MenuTabState extends State<MenuTab> {
           // =================================================
           // DISPLAY SETTINGS CONTENT
           // =================================================
-
           AnimatedSize(
-            duration:
-                const Duration(milliseconds: 250),
+            duration: const Duration(milliseconds: 250),
             curve: Curves.easeInOut,
-            alignment:
-                Alignment.topCenter,
+            alignment: Alignment.topCenter,
 
-            child:
-                _displaySettingsExpanded
-                    ? Padding(
-                        padding:
-                            const EdgeInsets
-                                .fromLTRB(
-                          18,
-                          0,
-                          18,
-                          18,
+            child: _displaySettingsExpanded
+                ? Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+
+                    child: Column(
+                      children: [
+                        _buildBackgroundSelectorSection(),
+
+                        const SizedBox(height: 12),
+
+                        _buildRefreshRateSection(),
+
+                        const SizedBox(height: 12),
+
+                        _buildMlServerAddressSetting(),
+
+                        const SizedBox(height: 12),
+
+                        // =========================================
+                        // WATER LITE MODE
+                        // =========================================
+                        ValueListenableBuilder<bool>(
+                          valueListenable: homeWaterLite,
+                          builder: (context, isLite, _) {
+                            return _buildSwitchCard(
+                              icon: Icons.waves_rounded,
+                              title: 'Water Lite Mode',
+                              subtitle:
+                                  'Straight water, no waves or rubber duck',
+                              value: isLite,
+                              onChanged: (value) {
+                                setHomeWaterLiteMode(value);
+
+                                _saveWaterLite(value);
+                              },
+                            );
+                          },
                         ),
 
-                        child: Column(
-                          children: [
-                            _buildBackgroundSelectorSection(),
+                        const SizedBox(height: 12),
 
-                            const SizedBox(height: 12),
+                        // =========================================
+                        // LOW-END PERFORMANCE MODE
+                        // =========================================
+                        ValueListenableBuilder<bool>(
+                          valueListenable: homePerformanceMode,
+                          builder: (context, isPerf, _) {
+                            return _buildSwitchCard(
+                              icon: Icons.speed_rounded,
+                              title: 'Low-End Performance Mode',
+                              subtitle: 'Smoother Home page on low-end devices',
+                              value: isPerf,
+                              onChanged: (value) {
+                                setHomePerformanceMode(value);
 
-                            _buildRefreshRateSection(),
-
-                            const SizedBox(height: 12),
-
-                            // =========================================
-                            // WATER LITE MODE
-                            // =========================================
-
-                            ValueListenableBuilder<bool>(
-                              valueListenable:
-                                  homeWaterLite,
-                              builder:
-                                  (
-                                context,
-                                isLite,
-                                _,
-                              ) {
-                                return _buildSwitchCard(
-                                  icon:
-                                      Icons.waves_rounded,
-                                  title:
-                                      'Water Lite Mode',
-                                  subtitle:
-                                      'Straight water, no waves or rubber duck',
-                                  value: isLite,
-                                  onChanged:
-                                      (value) {
-                                    setHomeWaterLiteMode(
-                                      value,
-                                    );
-
-                                    _saveWaterLite(
-                                      value,
-                                    );
-                                  },
-                                );
+                                _savePerformanceMode(value);
                               },
-                            ),
-
-                            const SizedBox(height: 12),
-
-                            // =========================================
-                            // LOW-END PERFORMANCE MODE
-                            // =========================================
-
-                            ValueListenableBuilder<bool>(
-                              valueListenable:
-                                  homePerformanceMode,
-                              builder:
-                                  (
-                                context,
-                                isPerf,
-                                _,
-                              ) {
-                                return _buildSwitchCard(
-                                  icon:
-                                      Icons.speed_rounded,
-                                  title:
-                                      'Low-End Performance Mode',
-                                  subtitle:
-                                      'Smoother Home page on low-end devices',
-                                  value: isPerf,
-                                  onChanged:
-                                      (value) {
-                                    setHomePerformanceMode(
-                                      value,
-                                    );
-
-                                    _savePerformanceMode(
-                                      value,
-                                    );
-                                  },
-                                );
-                              },
-                            ),
-                          ],
+                            );
+                          },
                         ),
-                      )
-                    : const SizedBox(
-                        width: double.infinity,
-                      ),
+                      ],
+                    ),
+                  )
+                : const SizedBox(width: double.infinity),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildMlServerAddressSetting() {
+    return Material(
+      color: const Color(0xFF383838),
+      borderRadius: BorderRadius.circular(16),
+      child: ListTile(
+        leading: const Icon(Icons.wifi_tethering_rounded, color: Colors.white),
+        title: const Text(
+          'ML Server Address',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+        ),
+        subtitle: const Text(
+          'Auto-discover on Wi-Fi, or save a manual address',
+          style: TextStyle(color: Colors.white60),
+        ),
+        trailing: const Icon(
+          Icons.chevron_right_rounded,
+          color: Colors.white54,
+        ),
+        onTap: _editMlServerAddress,
+      ),
+    );
+  }
+
+  Future<void> _editMlServerAddress() async {
+    final service = MlApiConnection.instance;
+    final current = await service.manualUrl;
+    if (!mounted) return;
+    final controller = TextEditingController(text: current ?? '');
+    final value = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('ML Server Address'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.url,
+          decoration: const InputDecoration(
+            hintText: '192.168.1.41:8000 or http://server:8000/predict',
+            helperText: 'Leave empty to use automatic discovery.',
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, ''),
+            child: const Text('Auto Discover'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, controller.text),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (value == null) return;
+    try {
+      await service.saveManualUrl(value);
+    } on FormatException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    }
   }
 
   // =====================================================
@@ -1220,18 +1075,13 @@ class _MenuTabState extends State<MenuTab> {
       decoration: BoxDecoration(
         color: const Color(0xFF383838),
 
-        borderRadius:
-            BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(16),
 
-        border: Border.all(
-          color:
-              Colors.white.withOpacity(0.08),
-        ),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
       ),
 
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
 
         children: [
           // =================================================
@@ -1242,8 +1092,7 @@ class _MenuTabState extends State<MenuTab> {
             color: Colors.transparent,
 
             child: InkWell(
-              borderRadius:
-                  BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(16),
 
               onTap: () {
                 if (_isSelectMenuOpen) {
@@ -1254,8 +1103,7 @@ class _MenuTabState extends State<MenuTab> {
               },
 
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(
+                padding: const EdgeInsets.symmetric(
                   horizontal: 14,
                   vertical: 14,
                 ),
@@ -1266,40 +1114,27 @@ class _MenuTabState extends State<MenuTab> {
                       width: 44,
                       height: 44,
 
-                      decoration:
-                          BoxDecoration(
-                        color:
-                            const Color(0xFF444444),
-                        borderRadius:
-                            BorderRadius.circular(
-                                13),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF444444),
+                        borderRadius: BorderRadius.circular(13),
                       ),
 
-                      child: Icon(
-                        icon,
-                        size: 23,
-                        color: Colors.white,
-                      ),
+                      child: Icon(icon, size: 23, color: Colors.white),
                     ),
 
                     const SizedBox(width: 13),
 
                     Expanded(
                       child: Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment
-                                .start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
 
                         children: [
                           Text(
                             title,
-                            style:
-                                const TextStyle(
+                            style: const TextStyle(
                               fontSize: 16,
-                              fontWeight:
-                                  FontWeight.w600,
-                              color:
-                                  Colors.white,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
                             ),
                           ),
 
@@ -1307,11 +1142,9 @@ class _MenuTabState extends State<MenuTab> {
 
                           Text(
                             subtitle,
-                            style:
-                                const TextStyle(
+                            style: const TextStyle(
                               fontSize: 12,
-                              color:
-                                  Colors.white60,
+                              color: Colors.white60,
                             ),
                           ),
                         ],
@@ -1319,22 +1152,14 @@ class _MenuTabState extends State<MenuTab> {
                     ),
 
                     AnimatedRotation(
-                      turns:
-                          expanded
-                              ? 0.25
-                              : 0.0,
+                      turns: expanded ? 0.25 : 0.0,
 
-                      duration:
-                          const Duration(
-                        milliseconds: 250,
-                      ),
+                      duration: const Duration(milliseconds: 250),
 
                       child: const Icon(
-                        Icons
-                            .chevron_right_rounded,
+                        Icons.chevron_right_rounded,
                         size: 26,
-                        color:
-                            Colors.white54,
+                        color: Colors.white54,
                       ),
                     ),
                   ],
@@ -1346,29 +1171,17 @@ class _MenuTabState extends State<MenuTab> {
           // =================================================
           // OPTIONS
           // =================================================
-
           AnimatedSize(
-            duration:
-                const Duration(milliseconds: 250),
+            duration: const Duration(milliseconds: 250),
             curve: Curves.easeInOut,
-            alignment:
-                Alignment.topCenter,
+            alignment: Alignment.topCenter,
 
             child: expanded
                 ? Padding(
-                    padding:
-                        const EdgeInsets
-                            .fromLTRB(
-                      14,
-                      0,
-                      14,
-                      14,
-                    ),
+                    padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
                     child: child,
                   )
-                : const SizedBox(
-                    width: double.infinity,
-                  ),
+                : const SizedBox(width: double.infinity),
           ),
         ],
       ),
@@ -1383,8 +1196,7 @@ class _MenuTabState extends State<MenuTab> {
     return _buildSectionCard(
       icon: Icons.wallpaper_rounded,
       title: 'Home Background',
-      subtitle:
-          'Choose the weather shown on Home',
+      subtitle: 'Choose the weather shown on Home',
       expanded: _bgExpanded,
 
       onToggle: () {
@@ -1394,8 +1206,7 @@ class _MenuTabState extends State<MenuTab> {
       },
 
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
 
         children: [
           // =================================================
@@ -1405,10 +1216,8 @@ class _MenuTabState extends State<MenuTab> {
           ValueListenableBuilder<HomeBgChoice>(
             valueListenable: homeBgChoice,
 
-            builder:
-                (context, choice, _) {
-              return _buildSelectField<
-                  HomeBgChoice>(
+            builder: (context, choice, _) {
+              return _buildSelectField<HomeBgChoice>(
                 current: choice,
 
                 // IMPORTANT:
@@ -1419,12 +1228,9 @@ class _MenuTabState extends State<MenuTab> {
                 labelOf: _bgLabel,
 
                 onSelected: (value) {
-                  homeBgChoice.value =
-                      value;
+                  homeBgChoice.value = value;
 
-                  _saveHomeBgChoice(
-                    value,
-                  );
+                  _saveHomeBgChoice(value);
                 },
               );
             },
@@ -1435,13 +1241,11 @@ class _MenuTabState extends State<MenuTab> {
           // =================================================
           // QUALITY LABEL
           // =================================================
-
           const Text(
             'Background Quality',
             style: TextStyle(
               fontSize: 14,
-              fontWeight:
-                  FontWeight.w600,
+              fontWeight: FontWeight.w600,
               color: Colors.white,
             ),
           ),
@@ -1450,10 +1254,7 @@ class _MenuTabState extends State<MenuTab> {
 
           const Text(
             'Choose Low for smoother performance on low-end devices',
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.white60,
-            ),
+            style: TextStyle(fontSize: 12, color: Colors.white60),
           ),
 
           const SizedBox(height: 10),
@@ -1461,32 +1262,23 @@ class _MenuTabState extends State<MenuTab> {
           // =================================================
           // QUALITY CHOICE
           // =================================================
-
           ValueListenableBuilder<HomeBgQuality>(
-            valueListenable:
-                homeBgQuality,
+            valueListenable: homeBgQuality,
 
-            builder:
-                (context, quality, _) {
-              return _buildSelectField<
-                  HomeBgQuality>(
+            builder: (context, quality, _) {
+              return _buildSelectField<HomeBgQuality>(
                 current: quality,
 
-                values:
-                    HomeBgQuality.values,
+                values: HomeBgQuality.values,
 
                 iconOf: _qualityIcon,
 
-                labelOf:
-                    _qualityLabel,
+                labelOf: _qualityLabel,
 
                 onSelected: (value) {
-                  homeBgQuality.value =
-                      value;
+                  homeBgQuality.value = value;
 
-                  _saveHomeBgQuality(
-                    value,
-                  );
+                  _saveHomeBgQuality(value);
                 },
               );
             },
@@ -1503,71 +1295,49 @@ class _MenuTabState extends State<MenuTab> {
   Widget _buildRefreshRateSection() {
     return _buildSectionCard(
       icon: Icons.update_rounded,
-      title:
-          'Dashboard Refresh Rate',
-      subtitle:
-          'Choose how often Home info updates',
+      title: 'Dashboard Refresh Rate',
+      subtitle: 'Choose how often Home info updates',
 
       expanded: _refreshExpanded,
 
       onToggle: () {
         setState(() {
-          _refreshExpanded =
-              !_refreshExpanded;
+          _refreshExpanded = !_refreshExpanded;
         });
       },
 
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
 
         children: [
           const Text(
             'Lower the refresh rate to reduce how often the dashboard changes',
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.white60,
-            ),
+            style: TextStyle(fontSize: 12, color: Colors.white60),
           ),
 
           const SizedBox(height: 10),
 
           ValueListenableBuilder<Duration>(
-            valueListenable:
-                homeRefreshInterval,
+            valueListenable: homeRefreshInterval,
 
-            builder:
-                (context, interval, _) {
-              final Duration selected =
-                  _refreshOptions.contains(
-                interval,
-              )
-                      ? interval
-                      : const Duration(
-                          seconds: 30,
-                        );
+            builder: (context, interval, _) {
+              final Duration selected = _refreshOptions.contains(interval)
+                  ? interval
+                  : const Duration(seconds: 30);
 
-              return _buildSelectField<
-                  Duration>(
+              return _buildSelectField<Duration>(
                 current: selected,
 
-                values:
-                    _refreshOptions,
+                values: _refreshOptions,
 
-                iconOf:
-                    _refreshIcon,
+                iconOf: _refreshIcon,
 
-                labelOf:
-                    _refreshLabel,
+                labelOf: _refreshLabel,
 
                 onSelected: (value) {
-                  setHomeRefreshRate(
-                    value,
-                  );
+                  setHomeRefreshRate(value);
 
-                  _saveRefreshRate(
-                    value,
-                  );
+                  _saveRefreshRate(value);
                 },
               );
             },
@@ -1592,34 +1362,21 @@ class _MenuTabState extends State<MenuTab> {
       color: Colors.transparent,
 
       child: InkWell(
-        borderRadius:
-            BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(16),
 
-        onTap: () =>
-            onChanged(!value),
+        onTap: () => onChanged(!value),
 
         child: Container(
           width: double.infinity,
 
-          padding:
-              const EdgeInsets.symmetric(
-            horizontal: 14,
-            vertical: 14,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
 
           decoration: BoxDecoration(
-            color:
-                const Color(0xFF383838),
+            color: const Color(0xFF383838),
 
-            borderRadius:
-                BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(16),
 
-            border: Border.all(
-              color:
-                  Colors.white.withOpacity(
-                0.08,
-              ),
-            ),
+            border: Border.all(color: Colors.white.withOpacity(0.08)),
           ),
 
           child: Row(
@@ -1628,40 +1385,27 @@ class _MenuTabState extends State<MenuTab> {
                 width: 44,
                 height: 44,
 
-                decoration:
-                    BoxDecoration(
-                  color:
-                      const Color(0xFF444444),
-                  borderRadius:
-                      BorderRadius.circular(
-                    13,
-                  ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF444444),
+                  borderRadius: BorderRadius.circular(13),
                 ),
 
-                child: Icon(
-                  icon,
-                  size: 23,
-                  color: Colors.white,
-                ),
+                child: Icon(icon, size: 23, color: Colors.white),
               ),
 
               const SizedBox(width: 13),
 
               Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
 
                   children: [
                     Text(
                       title,
-                      style:
-                          const TextStyle(
+                      style: const TextStyle(
                         fontSize: 16,
-                        fontWeight:
-                            FontWeight.w600,
-                        color:
-                            Colors.white,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
                       ),
                     ),
 
@@ -1669,11 +1413,9 @@ class _MenuTabState extends State<MenuTab> {
 
                     Text(
                       subtitle,
-                      style:
-                          const TextStyle(
+                      style: const TextStyle(
                         fontSize: 12,
-                        color:
-                            Colors.white60,
+                        color: Colors.white60,
                       ),
                     ),
                   ],
@@ -1684,8 +1426,7 @@ class _MenuTabState extends State<MenuTab> {
 
               Switch(
                 value: value,
-                activeColor:
-                    Colors.lightBlueAccent,
+                activeColor: Colors.lightBlueAccent,
                 onChanged: onChanged,
               ),
             ],

@@ -18,6 +18,7 @@ flutter_native_splash:
     icon_background_color: "#ffffff"
 
 dependencies:
+  bonsoir: ^7.1.5
   connectivity_plus: ^6.0.5
   flutter:
     sdk: flutter
