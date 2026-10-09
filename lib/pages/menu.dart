@@ -1024,7 +1024,8 @@ class _MenuTabState extends State<MenuTab> {
           keyboardType: TextInputType.url,
           decoration: const InputDecoration(
             hintText: 'https://your-public-ml-host/predict',
-            helperText: 'Leave empty to use the URL supplied in the app build.',
+            helperText:
+                'Leave empty to retry the shared URL, then use the app build URL.',
           ),
           autofocus: true,
         ),

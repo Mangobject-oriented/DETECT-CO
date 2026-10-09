@@ -1,3 +1,4 @@
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -12,6 +13,7 @@ import 'package:detectco/pages/notification.dart';
 import 'package:detectco/pages/menu.dart';
 import 'package:detectco/pages/local_ai_test.dart';
 import 'package:detectco/services/emergency_location_service.dart';
+import 'package:detectco/services/ml_api_connection.dart';
 
 // =====================================================
 // LOCAL NOTIFICATIONS
@@ -219,6 +221,10 @@ Future<void> firebaseMessagingBackgroundHandler(
 
   await Firebase.initializeApp();
 
+  if (await MlApiConnection.instance.handleFcmData(message.data)) {
+    return;
+  }
+
   // ===================================================
   // INITIALIZE LOCAL NOTIFICATIONS IN BACKGROUND
   // ===================================================
@@ -309,6 +315,8 @@ Future<void> firebaseMessagingBackgroundHandler(
 // =====================================================
 
 Future<void> initializeFirebaseMessagingServices() async {
+  unawaited(MlApiConnection.instance.synchronizeRemoteConfig());
+
   // ===================================================
   // LOCAL NOTIFICATIONS
   // ===================================================
@@ -372,6 +380,12 @@ Future<void> initializeFirebaseMessagingServices() async {
     print('FCM TOPIC ERROR: $e');
   }
 
+  try {
+    await messaging.subscribeToTopic('detect_co_ml_config');
+  } catch (e) {
+    print('ML CONFIG TOPIC ERROR: $e');
+  }
+
   // ===================================================
   // GET FCM TOKEN
   // ===================================================
@@ -386,7 +400,7 @@ Future<void> initializeFirebaseMessagingServices() async {
       'FCM: Token request completed.',
     );
 
-    print('FCM TOKEN: $token');
+    print('FCM token available: ${token != null}');
   } catch (e) {
     print('FCM TOKEN ERROR: $e');
   }
@@ -397,6 +411,10 @@ Future<void> initializeFirebaseMessagingServices() async {
 
   FirebaseMessaging.onMessage.listen(
     (RemoteMessage message) async {
+      if (await MlApiConnection.instance.handleFcmData(message.data)) {
+        return;
+      }
+
       print('================================');
       print('FOREGROUND FCM MESSAGE');
       print('================================');
@@ -527,6 +545,15 @@ Future<void> initializeFirebaseMessagingServices() async {
       print('================================');
     },
   );
+
+  FirebaseMessaging.onMessageOpenedApp.listen((message) async {
+    await MlApiConnection.instance.handleFcmData(message.data);
+  });
+
+  final initialMessage = await messaging.getInitialMessage();
+  if (initialMessage != null) {
+    await MlApiConnection.instance.handleFcmData(initialMessage.data);
+  }
 }
 
 // =====================================================
@@ -623,7 +650,26 @@ class BottomNavPage extends StatefulWidget {
 }
 
 class _BottomNavPageState
-    extends State<BottomNavPage> {
+    extends State<BottomNavPage> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(MlApiConnection.instance.synchronizeRemoteConfig());
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
   // ===================================================
   // START ON HOME
   //

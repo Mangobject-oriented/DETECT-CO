@@ -3,7 +3,9 @@
   "description": "Local DETECT-CO Firebase notification tools",
   "scripts": {
     "announcement-listener": "node announcement-listener.js",
-    "test-notification": "node test-notification.js"
+    "test-notification": "node test-notification.js",
+    "publish-ml-api-url": "node publish-ml-api-url.js",
+    "test": "node test/ml-api-config.test.js"
   },
   "engines": {
     "node": "22"

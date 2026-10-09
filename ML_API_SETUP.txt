@@ -15,19 +15,31 @@ Temporary tunnel for initial testing
 1. Install cloudflared using Cloudflare's official Linux instructions:
    https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/
    Ensure `cloudflared` is on PATH. A temporary quick tunnel needs no login.
-2. In a laptop terminal run:
+2. Confirm the existing Firebase Admin credential is present at
+   ~/DETECT-CO/checker/serviceAccountKey.json. This ignored service-account
+   JSON authenticates the publisher; never copy it into either ML repository,
+   Flutter assets, or the admin website. The publisher reads Firebase project
+   and database settings from admin_web/.env.local.
+3. In Firebase Realtime Database rules, allow app clients to read
+   /ml_api/config and ensure client SDKs cannot write that path. Admin SDK
+   writes from the laptop bypass client rules. No database rules source is
+   checked into this repository, so inspect the deployed rules without
+   replacing sensor or announcement permissions.
+4. In a laptop terminal run:
    cd ~/DETECT-CO-ML
    bash ./start-tunnel.sh
-3. Wait until FastAPI is healthy. Copy the HTTPS trycloudflare.com URL printed
-   by cloudflared and leave this terminal open.
-4. In the Flutter project, replace the example URL and run:
-   cd ~/DETECT-CO
-   flutter run --dart-define=ML_API_URL=https://example.trycloudflare.com/predict
-   For a release APK use:
-   flutter build apk --dart-define=ML_API_URL=https://example.trycloudflare.com/predict
-5. Verify using a phone on mobile data or unrelated Wi-Fi. Open the URL with
-   /health and confirm status is healthy and models_loaded is true, then
-   request a prediction in the app.
+5. The script starts FastAPI on loopback, reads the generated tunnel URL from
+   cloudflared output, waits for the public /health response with loaded models,
+   then writes /ml_api/config in Firebase and sends `ml_api_update` to the
+   dedicated `detect_co_ml_config` FCM topic. The app subscribes to this topic
+   separately from `detect_co_announcements`. It suppresses a repeated URL.
+   Keep the terminal open.
+6. Start the app normally with `flutter run`. The app also fetches this fixed
+   Firebase config path on startup and resume, so a missed FCM push does not
+   require copying a URL. Foreground and background FCM updates are handled
+   without adding configuration messages to announcement history.
+7. For an actual network check, test from a phone on mobile data or unrelated
+   Wi-Fi. A successful laptop-local check is not a handset test.
 
 Stop
 ----
@@ -88,6 +100,9 @@ protect /monitoring with a Cloudflare Access application/policy before making
 the hostname public. The active ~/DETECT-CO-ML service does not implement that
 route.
 
+The FCM URL update has not been tested on a physical device. FCM is best-effort;
+the Firebase configuration record is the recovery source.
+
 The laptop must stay powered on, awake, online, and keep FastAPI and
 cloudflared running. Sleep, network loss, laptop shutdown, model errors, or
 tunnel interruption make predictions unavailable. This has no guaranteed
@@ -102,6 +117,13 @@ is displayed separately from flood risk.
 * App cannot connect: ensure ML_API_URL ends in /predict and /health reports
   models_loaded true. Rebuild after changing `--dart-define`.
 * Browser CORS failure: configure the exact admin origin and restart API.
+* URL is verified but not published: confirm the ignored service-account file,
+  matching `VITE_FIREBASE_PROJECT_ID`, Realtime Database URL, and FCM Admin SDK
+  permissions; publication errors do not print credentials.
+* App cannot retrieve the record: confirm `/ml_api/config` client read access
+  in deployed Realtime Database rules and that client writes remain denied.
+* FCM update is missed: reopen/resume the app or use Menu > Display Settings >
+  ML Server Address > Clear URL to retry the fixed backend config read.
 * A local curl does not verify public access. Test /health from mobile data.
 
 Local checks

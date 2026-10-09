@@ -46,6 +46,9 @@ app.*.map.json
 
 checker/serviceAccountKey.json
 /functions/.announcement-listener-state.json
+/functions/.env
+/functions/.env.*
+!/functions/.env.example
 
 .venv/
 DETECT-CO-ML/.venv/
@@ -54,3 +57,6 @@ DETECT-CO-ML/venv/
 __pycache__/
 DETECT-CO-ML/__pycache__/
 DETECT-CO-ML/data/ml_monitoring.sqlite3*
+DETECT-CO-ML/.env
+DETECT-CO-ML/.env.*
+!DETECT-CO-ML/.env.example

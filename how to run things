@@ -8,11 +8,12 @@ Start laptop-hosted ML API and temporary HTTPS tunnel
     cd ~/DETECT-CO-ML
     bash ./start-tunnel.sh
 
-Keep the tunnel terminal open. Copy the trycloudflare.com URL it prints, then
-run Flutter with that URL (temporary URLs change when the tunnel restarts):
+Keep the tunnel terminal open. The script publishes each verified new URL to
+Firebase automatically. Start Flutter normally; the app also syncs the latest
+URL at startup and when resumed:
 
     cd ~/DETECT-CO
-    flutter run --dart-define=ML_API_URL=https://replace-me.trycloudflare.com/predict
+    flutter run
 
 Stop the API and tunnel with Ctrl-C in the tunnel terminal, or from another
 terminal run:
@@ -24,3 +25,22 @@ Start notification listener
 
     cd ~/DETECT-CO
     node functions/announcement-listener.js
+
+
+When you restart your server:
+
+Run:
+
+cd ~/DETECT-CO-ML
+bash ./start-tunnel.sh
+
+Cloudflare may generate a new URL.
+
+Your script should automatically publish that URL to Firebase.
+
+DETECT-CO users should retrieve the updated URL from Firebase.
+
+You only need to run the manual publishing command if automatic publishing fails:
+
+cd ~/DETECT-CO/functions
+npm run publish-ml-api-url -- https://YOUR-NEW-URL.trycloudflare.com

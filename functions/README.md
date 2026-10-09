@@ -57,3 +57,34 @@ The listener skips records whose timestamp predates its start time and records
 successfully sent IDs locally. Restarting it does not replay old announcements.
 Do not delete the ignored state file during normal restarts; remove it only if
 you intentionally want to reset the listener's local delivery history.
+
+## Automatic ML Quick Tunnel URL updates
+
+The laptop's `~/DETECT-CO-ML/start-tunnel.sh` captures the Quick Tunnel host,
+waits for its public `/health` response to report loaded models, and then runs
+`node functions/publish-ml-api-url.js <verified-url>`. The publisher uses the
+same local Firebase Admin service account as the announcement listener. That
+credential is the publishing authorization; there is no public URL-update
+endpoint or token in the app.
+
+The publisher transactionally stores the current record at Realtime Database
+`/ml_api/config` (`url`, `version`, `updatedAt`) and sends a data-only
+`ml_api_update` message to the dedicated `detect_co_ml_config` topic. It uses
+the existing FCM infrastructure while keeping config messages out of the
+announcement topic, where legacy app versions would treat them as visible
+announcements. It suppresses duplicate URL messages and retries a missed FCM
+send for the same version. Existing announcement records and notifications are
+unchanged.
+
+Flutter reads this fixed Firebase path on startup and app resume, and it also
+handles the FCM update in foreground and background. It accepts only HTTPS
+Quick Tunnel hosts, checks `/health`, and persists a replacement only after
+that check passes. If a push is missed, startup/resume synchronization is the
+fallback. On the Menu > Display Settings > ML Server Address dialog, Clear URL
+also retries the shared configuration.
+
+The repository does not contain the Firebase Realtime Database security-rule
+source. In the Firebase console, verify `/ml_api/config` can be read by app
+clients but cannot be written by client SDKs; Admin SDK writes bypass those
+client rules. Do not loosen existing announcement or sensor rules to make this
+path work. The app verifies the value's format and health before using it.

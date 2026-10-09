@@ -1,24 +1,44 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show ValueNotifier;
+import 'package:firebase_database/firebase_database.dart';
+import 'package:flutter/foundation.dart' show ValueNotifier, debugPrint;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+typedef MlApiConfigLoader = Future<Map<String, dynamic>?> Function();
+
 /// Resolves, health-checks, and caches the DETECT-CO ML API endpoint.
 ///
-/// Public deployments should set ML_API_URL to the HTTPS prediction endpoint.
+/// A verified Firebase RTDB update takes priority over build-time and manual
+/// fallback URLs so new Quick Tunnel hosts propagate without reinstalling.
 class MlApiConnection {
-  MlApiConnection._();
+  MlApiConnection._({http.Client? client, MlApiConfigLoader? configLoader})
+    : _client = client ?? http.Client(),
+      _configLoader = configLoader ?? _loadFirebaseConfig;
 
   static final instance = MlApiConnection._();
   final ValueNotifier<int> configurationChanges = ValueNotifier<int>(0);
 
   static const _manualUrlKey = 'ml_api_manual_url';
+  static const _remoteConfigKey = 'ml_api_remote_config';
   static const _environmentUrl = String.fromEnvironment('ML_API_URL');
   static const _healthTimeout = Duration(seconds: 8);
+  static const _configTimeout = Duration(seconds: 10);
+  static final _quickTunnelHost = RegExp(
+    r'^[a-z0-9]+(?:-[a-z0-9]+){1,3}\.trycloudflare\.com$',
+  );
+
+  final http.Client _client;
+  final MlApiConfigLoader _configLoader;
 
   Uri? _cachedPredictionUri;
   Future<Uri>? _resolveInFlight;
+  Future<bool>? _syncInFlight;
+
+  factory MlApiConnection.forTesting({
+    required http.Client client,
+    required MlApiConfigLoader configLoader,
+  }) => MlApiConnection._(client: client, configLoader: configLoader);
 
   void invalidate() {
     _cachedPredictionUri = null;
@@ -36,11 +56,132 @@ class MlApiConnection {
         : normalizeManualUrl(input);
     if (normalized == null) {
       await prefs.remove(_manualUrlKey);
+      invalidate();
+      final previousChangeCount = configurationChanges.value;
+      await synchronizeRemoteConfig();
+      if (configurationChanges.value == previousChangeCount) {
+        configurationChanges.value++;
+      }
+      return;
     } else {
       await prefs.setString(_manualUrlKey, normalized);
     }
     invalidate();
     configurationChanges.value++;
+  }
+
+  static String normalizeQuickTunnelUrl(String value) {
+    final parsed = Uri.tryParse(value.trim());
+    if (parsed == null ||
+        parsed.scheme != 'https' ||
+        !_quickTunnelHost.hasMatch(parsed.host) ||
+        parsed.userInfo.isNotEmpty ||
+        parsed.hasPort ||
+        (parsed.path.isNotEmpty && parsed.path != '/') ||
+        parsed.hasQuery ||
+        parsed.hasFragment) {
+      throw const FormatException(
+        'ML API update must use a valid HTTPS Cloudflare Quick Tunnel URL.',
+      );
+    }
+    return parsed.origin;
+  }
+
+  static Future<Map<String, dynamic>?> _loadFirebaseConfig() async {
+    final snapshot = await FirebaseDatabase.instance
+        .ref('ml_api/config')
+        .get()
+        .timeout(_configTimeout);
+    final value = snapshot.value;
+    if (value is! Map) return null;
+    return Map<String, dynamic>.from(value);
+  }
+
+  Future<bool> synchronizeRemoteConfig() {
+    final pending = _syncInFlight;
+    if (pending != null) return pending;
+    final syncing = _synchronizeRemoteConfig();
+    _syncInFlight = syncing;
+    return syncing.whenComplete(() {
+      if (identical(_syncInFlight, syncing)) _syncInFlight = null;
+    });
+  }
+
+  Future<bool> _synchronizeRemoteConfig() async {
+    try {
+      final config = await _configLoader().timeout(_configTimeout);
+      if (config == null) return false;
+      return await applyRemoteConfig(config);
+    } catch (error) {
+      debugPrint('ML API configuration sync unavailable: $error');
+      return false;
+    }
+  }
+
+  Future<bool> applyRemoteConfig(Map<String, dynamic> config) async {
+    final url = normalizeQuickTunnelUrl(config['url']?.toString() ?? '');
+    final version = config['version']?.toString().trim() ?? '';
+    final updatedAtValue = config['updatedAt'];
+    final updatedAt = int.tryParse(updatedAtValue?.toString() ?? '');
+    if (version.isEmpty ||
+        version.length > 100 ||
+        updatedAt == null ||
+        updatedAt <= 0) {
+      throw const FormatException('ML API update metadata is invalid.');
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final current = _readStoredRemoteConfig(prefs);
+    final currentUpdatedAt = int.tryParse(
+      current?['updatedAt']?.toString() ?? '',
+    );
+    if (currentUpdatedAt != null && updatedAt < currentUpdatedAt) {
+      return false;
+    }
+    if (current?['version'] == version && current?['url'] == url) {
+      return false;
+    }
+
+    final changedUrl = current?['url'] != url;
+    if (changedUrl) {
+      await _requireHealthy(Uri.parse('$url/predict'));
+    }
+
+    await prefs.setString(
+      _remoteConfigKey,
+      jsonEncode({'url': url, 'version': version, 'updatedAt': updatedAt}),
+    );
+    if (changedUrl) {
+      invalidate();
+      configurationChanges.value++;
+    }
+    return changedUrl;
+  }
+
+  Future<bool> handleFcmData(Map<String, dynamic> data) async {
+    if (data['type']?.toString() != 'ml_api_update') return false;
+    try {
+      await applyRemoteConfig(data);
+    } catch (error) {
+      debugPrint('Rejected ML API configuration update: $error');
+    }
+    return true;
+  }
+
+  Map<String, dynamic>? _readStoredRemoteConfig(SharedPreferences prefs) {
+    final raw = prefs.getString(_remoteConfigKey);
+    if (raw == null) return null;
+    try {
+      final value = jsonDecode(raw);
+      return value is Map ? Map<String, dynamic>.from(value) : null;
+    } on FormatException {
+      return null;
+    }
+  }
+
+  Future<String?> get remoteUrl async {
+    final prefs = await SharedPreferences.getInstance();
+    return _readStoredRemoteConfig(prefs)?['url']?.toString();
   }
 
   static String normalizeManualUrl(String input) {
@@ -92,6 +233,14 @@ class MlApiConnection {
   }
 
   Future<Uri> _resolvePredictionUri() async {
+    final remote = await remoteUrl;
+    if (remote != null && remote.isNotEmpty) {
+      final uri = _predictionUri(remote);
+      await _requireHealthy(uri);
+      _cachedPredictionUri = uri;
+      return uri;
+    }
+
     final override = _environmentUrl.trim();
     if (override.isNotEmpty) {
       final uri = _predictionUri(override);
@@ -156,7 +305,7 @@ class MlApiConnection {
   );
 
   Future<void> _requireHealthy(Uri predictionUri) async {
-    final response = await http
+    final response = await _client
         .get(_healthUri(predictionUri))
         .timeout(_healthTimeout);
     if (response.statusCode != 200) {

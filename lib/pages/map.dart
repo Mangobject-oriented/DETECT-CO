@@ -1059,6 +1059,9 @@ class _MapTabState extends State<MapTab> {
   double waterLevel = 0;
   bool _waterSensorAvailable = false;
 
+  // Map consumes Home's shared five-minute ML forecast; it must not create a
+  // separate API client, URL cache, or prediction timer. Home resolves each
+  // request through MlApiConnection and publishes results to this shared store.
   MlForecastSnapshot _mlForecast = MlFloodRiskStore.instance.forecast;
 
   FloodRiskStatus get _currentFloodRisk =>
