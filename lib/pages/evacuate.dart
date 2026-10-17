@@ -10,6 +10,7 @@ import 'package:detectco/main.dart'; // for isDarkModeNotifier
 import 'package:detectco/pages/during_after_flood.dart';
 import 'package:detectco/pages/flood_prep_checklist.dart';
 import 'package:detectco/pages/local_ai_test.dart';
+import 'package:detectco/tutorial/tutorial_coordinator.dart';
 
 class EvacuateTab extends StatefulWidget {
   const EvacuateTab({super.key, this.onGoToMap});
@@ -17,20 +18,32 @@ class EvacuateTab extends StatefulWidget {
   /// Called when the user taps an evacuation card.
   /// (name, address, latitude, longitude)
   final void Function(String name, String address, double lat, double lng)?
-      onGoToMap;
+  onGoToMap;
 
   @override
-  State<EvacuateTab> createState() => _EvacuateTabState();
+  State<EvacuateTab> createState() => EvacuateTabState();
 }
 
-class _EvacuateTabState extends State<EvacuateTab>
-    with WidgetsBindingObserver {
+class EvacuateTabState extends State<EvacuateTab> with WidgetsBindingObserver {
   // 0 = Evacuation Centers, 1 = Emergency Numbers, 2 = Flood Prep Guides,
   // 3 = Tools
   int _selectedSection = 0;
 
-  late final PageController _pageController =
-      PageController(initialPage: _selectedSection);
+  late final PageController _pageController = PageController(
+    initialPage: _selectedSection,
+  );
+
+  Future<void> showTutorialSection(int section) async {
+    if (!mounted || section < 0 || section > 3) return;
+    if (_selectedSection != section) {
+      setState(() => _selectedSection = section);
+      await _pageController.animateToPage(
+        section,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
 
   final EmergencyLocationService _emergencyLocationService =
       EmergencyLocationService();
@@ -92,7 +105,9 @@ class _EvacuateTabState extends State<EvacuateTab>
         int secondsRemaining = 10;
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            countdownTimer ??= Timer.periodic(const Duration(seconds: 1), (timer) {
+            countdownTimer ??= Timer.periodic(const Duration(seconds: 1), (
+              timer,
+            ) {
               if (secondsRemaining <= 1) {
                 timer.cancel();
                 setDialogState(() => secondsRemaining = 0);
@@ -102,25 +117,61 @@ class _EvacuateTabState extends State<EvacuateTab>
             });
             return AlertDialog(
               backgroundColor: const Color(0xFF303030),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
               title: const Text('Allow Emergency Location?'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('DETECT-CO needs your location to send your current position to the authorized DETECT-CO emergency response system so rescuers can locate you. Location updates are shared for up to 30 minutes, and you can stop sharing at any time.'),
+                  const Text(
+                    'DETECT-CO needs your location to send your current position to the authorized DETECT-CO emergency response system so rescuers can locate you. Location updates are shared for up to 30 minutes, and you can stop sharing at any time.',
+                  ),
                   const SizedBox(height: 14),
-                  const Row(children: [Icon(Icons.privacy_tip_outlined, size: 19, color: Colors.redAccent), SizedBox(width: 8), Expanded(child: Text('Your location is shared only for emergency response.', style: TextStyle(fontSize: 13)))]),
+                  const Row(
+                    children: [
+                      Icon(
+                        Icons.privacy_tip_outlined,
+                        size: 19,
+                        color: Colors.redAccent,
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Your location is shared only for emergency response.',
+                          style: TextStyle(fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 12),
-                  Text(secondsRemaining == 0 ? 'You can now allow location sharing.' : 'Please wait $secondsRemaining seconds before confirming.', style: const TextStyle(fontWeight: FontWeight.w600)),
+                  Text(
+                    secondsRemaining == 0
+                        ? 'You can now allow location sharing.'
+                        : 'Please wait $secondsRemaining seconds before confirming.',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
                 ],
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Cancel'),
+                ),
                 ElevatedButton(
-                  onPressed: secondsRemaining == 0 ? () => Navigator.pop(dialogContext, true) : null,
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700, foregroundColor: Colors.white),
-                  child: Text(secondsRemaining == 0 ? 'Allow Location' : 'Wait $secondsRemaining s'),
+                  onPressed: secondsRemaining == 0
+                      ? () => Navigator.pop(dialogContext, true)
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red.shade700,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: Text(
+                    secondsRemaining == 0
+                        ? 'Allow Location'
+                        : 'Wait $secondsRemaining s',
+                  ),
                 ),
               ],
             );
@@ -186,9 +237,7 @@ class _EvacuateTabState extends State<EvacuateTab>
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              'Flashlight is not available on this device.',
-            ),
+            content: Text('Flashlight is not available on this device.'),
           ),
         );
 
@@ -206,11 +255,7 @@ class _EvacuateTabState extends State<EvacuateTab>
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Unable to start SOS flashlight.',
-          ),
-        ),
+        const SnackBar(content: Text('Unable to start SOS flashlight.')),
       );
     }
   }
@@ -228,11 +273,7 @@ class _EvacuateTabState extends State<EvacuateTab>
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Unable to stop SOS flashlight.',
-          ),
-        ),
+        const SnackBar(content: Text('Unable to stop SOS flashlight.')),
       );
     }
   }
@@ -260,11 +301,7 @@ class _EvacuateTabState extends State<EvacuateTab>
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Unable to start emergency alarm.',
-          ),
-        ),
+        const SnackBar(content: Text('Unable to start emergency alarm.')),
       );
     }
   }
@@ -282,11 +319,7 @@ class _EvacuateTabState extends State<EvacuateTab>
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Unable to stop emergency alarm.',
-          ),
-        ),
+        const SnackBar(content: Text('Unable to stop emergency alarm.')),
       );
     }
   }
@@ -305,14 +338,8 @@ class _EvacuateTabState extends State<EvacuateTab>
   // COPY TO CLIPBOARD (still used by emergency numbers)
   // =====================================================
 
-  void _copyToClipboard(
-    BuildContext context,
-    String text,
-    String message,
-  ) {
-    Clipboard.setData(
-      ClipboardData(text: text),
-    );
+  void _copyToClipboard(BuildContext context, String text, String message) {
+    Clipboard.setData(ClipboardData(text: text));
 
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
 
@@ -320,21 +347,14 @@ class _EvacuateTabState extends State<EvacuateTab>
       SnackBar(
         content: Row(
           children: [
-            const Icon(
-              Icons.check_circle,
-              color: Colors.white,
-            ),
+            const Icon(Icons.check_circle, color: Colors.white),
             const SizedBox(width: 10),
-            Expanded(
-              child: Text(message),
-            ),
+            Expanded(child: Text(message)),
           ],
         ),
         duration: const Duration(seconds: 2),
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }
@@ -347,18 +367,19 @@ class _EvacuateTabState extends State<EvacuateTab>
     final labels = ['Evacuation', 'Emergency', 'Guides', 'Tools'];
 
     return Container(
+      key: TutorialTargets.toolsSections,
       margin: const EdgeInsets.only(top: 16, bottom: 8),
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: isDarkMode
-            ? const Color(0xFF303030)
-            : const Color(0xFFF0F2F5),
+        color: isDarkMode ? const Color(0xFF303030) : const Color(0xFFF0F2F5),
         borderRadius: BorderRadius.circular(14),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final compact = constraints.maxWidth < 420;
-          final tabWidth = compact ? 76.0 : constraints.maxWidth / labels.length;
+          final tabWidth = compact
+              ? 76.0
+              : constraints.maxWidth / labels.length;
 
           return SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -393,9 +414,7 @@ class _EvacuateTabState extends State<EvacuateTab>
                         horizontal: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: isSelected
-                            ? selectedColor
-                            : Colors.transparent,
+                        color: isSelected ? selectedColor : Colors.transparent,
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Row(
@@ -408,8 +427,8 @@ class _EvacuateTabState extends State<EvacuateTab>
                               color: isSelected
                                   ? Colors.white
                                   : (isDarkMode
-                                      ? Colors.grey[400]
-                                      : Colors.grey[600]),
+                                        ? Colors.grey[400]
+                                        : Colors.grey[600]),
                             ),
                             const SizedBox(width: 3),
                           ],
@@ -425,8 +444,8 @@ class _EvacuateTabState extends State<EvacuateTab>
                                 color: isSelected
                                     ? Colors.white
                                     : (isDarkMode
-                                        ? Colors.grey[400]
-                                        : Colors.grey[600]),
+                                          ? Colors.grey[400]
+                                          : Colors.grey[600]),
                               ),
                             ),
                           ),
@@ -447,24 +466,16 @@ class _EvacuateTabState extends State<EvacuateTab>
   // SECTION TITLE
   // =====================================================
 
-  Widget _sectionTitle(
-    String title,
-    bool isDarkMode,
-  ) {
+  Widget _sectionTitle(String title, bool isDarkMode) {
     return Padding(
-      padding: const EdgeInsets.only(
-        top: 12,
-        bottom: 18,
-      ),
+      padding: const EdgeInsets.only(top: 12, bottom: 18),
       child: Center(
         child: Text(
           title,
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
-            color: isDarkMode
-                ? Colors.white
-                : const Color(0xFF1D2B4A),
+            color: isDarkMode ? Colors.white : const Color(0xFF1D2B4A),
           ),
         ),
       ),
@@ -475,12 +486,7 @@ class _EvacuateTabState extends State<EvacuateTab>
   // EVACUATE ON MAP
   // =====================================================
 
-  void _openOnMap(
-    String name,
-    String address,
-    double lat,
-    double lng,
-  ) {
+  void _openOnMap(String name, String address, double lat, double lng) {
     widget.onGoToMap?.call(name, address, lat, lng);
   }
 
@@ -509,9 +515,7 @@ class _EvacuateTabState extends State<EvacuateTab>
         margin: const EdgeInsets.only(bottom: 14),
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          color: isDarkMode
-              ? const Color(0xFF303030)
-              : Colors.white,
+          color: isDarkMode ? const Color(0xFF303030) : Colors.white,
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
@@ -619,9 +623,7 @@ class _EvacuateTabState extends State<EvacuateTab>
         margin: const EdgeInsets.only(bottom: 14),
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          color: isDarkMode
-              ? const Color(0xFF303030)
-              : Colors.white,
+          color: isDarkMode ? const Color(0xFF303030) : Colors.white,
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
@@ -637,11 +639,7 @@ class _EvacuateTabState extends State<EvacuateTab>
               width: 50,
               height: double.infinity,
               color: const Color(0xFFFF3035),
-              child: const Icon(
-                Icons.phone,
-                color: Colors.white,
-                size: 30,
-              ),
+              child: const Icon(Icons.phone, color: Colors.white, size: 30),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -692,14 +690,9 @@ class _EvacuateTabState extends State<EvacuateTab>
             Flexible(
               flex: 0,
               child: Padding(
-                padding: const EdgeInsets.only(
-                  left: 8,
-                  right: 16,
-                ),
+                padding: const EdgeInsets.only(left: 8, right: 16),
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    maxWidth: 110,
-                  ),
+                  constraints: const BoxConstraints(maxWidth: 110),
                   child: Text(
                     description,
                     style: const TextStyle(
@@ -723,11 +716,7 @@ class _EvacuateTabState extends State<EvacuateTab>
   // FLOOD PREPARATION CARD
   // =====================================================
 
-  Widget _guideCard(
-    String title,
-    bool isDarkMode,
-    VoidCallback onTap,
-  ) {
+  Widget _guideCard(String title, bool isDarkMode, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -735,9 +724,7 @@ class _EvacuateTabState extends State<EvacuateTab>
         margin: const EdgeInsets.only(bottom: 14),
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          color: isDarkMode
-              ? const Color(0xFF303030)
-              : Colors.white,
+          color: isDarkMode ? const Color(0xFF303030) : Colors.white,
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
@@ -753,11 +740,7 @@ class _EvacuateTabState extends State<EvacuateTab>
               width: 50,
               height: double.infinity,
               color: const Color(0xFF2867F5),
-              child: const Icon(
-                Icons.shield,
-                color: Colors.white,
-                size: 30,
-              ),
+              child: const Icon(Icons.shield, color: Colors.white, size: 30),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -766,9 +749,7 @@ class _EvacuateTabState extends State<EvacuateTab>
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.bold,
-                  color: isDarkMode
-                      ? Colors.white
-                      : const Color(0xFF1D2B4A),
+                  color: isDarkMode ? Colors.white : const Color(0xFF1D2B4A),
                 ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
@@ -778,10 +759,7 @@ class _EvacuateTabState extends State<EvacuateTab>
               padding: EdgeInsets.only(right: 16),
               child: Text(
                 'Read »',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Color(0xFF8194BB),
-                ),
+                style: TextStyle(fontSize: 13, color: Color(0xFF8194BB)),
               ),
             ),
           ],
@@ -800,9 +778,7 @@ class _EvacuateTabState extends State<EvacuateTab>
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDarkMode
-            ? const Color(0xFF303030)
-            : Colors.white,
+        color: isDarkMode ? const Color(0xFF303030) : Colors.white,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
@@ -869,19 +845,12 @@ class _EvacuateTabState extends State<EvacuateTab>
             width: double.infinity,
             height: 48,
             child: ElevatedButton.icon(
+              key: TutorialTargets.toolsSosFlashlight,
               onPressed: _isSosActive
                   ? _stopSosFlashlight
                   : _startSosFlashlight,
-              icon: Icon(
-                _isSosActive
-                    ? Icons.stop_circle
-                    : Icons.sos,
-              ),
-              label: Text(
-                _isSosActive
-                    ? 'STOP SOS'
-                    : 'START SOS FLASHLIGHT',
-              ),
+              icon: Icon(_isSosActive ? Icons.stop_circle : Icons.sos),
+              label: Text(_isSosActive ? 'STOP SOS' : 'START SOS FLASHLIGHT'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: _isSosActive
                     ? const Color(0xFFFF3035)
@@ -909,9 +878,7 @@ class _EvacuateTabState extends State<EvacuateTab>
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDarkMode
-            ? const Color(0xFF303030)
-            : Colors.white,
+        color: isDarkMode ? const Color(0xFF303030) : Colors.white,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
@@ -978,6 +945,7 @@ class _EvacuateTabState extends State<EvacuateTab>
             width: double.infinity,
             height: 48,
             child: ElevatedButton.icon(
+              key: TutorialTargets.toolsEmergencyAlarm,
               onPressed: _isEmergencyAlarmActive
                   ? _stopEmergencyAlarm
                   : _startEmergencyAlarm,
@@ -1012,15 +980,9 @@ class _EvacuateTabState extends State<EvacuateTab>
   // SECTION CONTENT
   // =====================================================
 
-  List<Widget> _evacuationSection(
-    BuildContext context,
-    bool isDarkMode,
-  ) {
+  List<Widget> _evacuationSection(BuildContext context, bool isDarkMode) {
     return [
-      _sectionTitle(
-        'EVACUATION CENTERS',
-        isDarkMode,
-      ),
+      _sectionTitle('EVACUATION CENTERS', isDarkMode),
       _evacuationCard(
         context,
         'Lingga Elementary School',
@@ -1051,27 +1013,11 @@ class _EvacuateTabState extends State<EvacuateTab>
     ];
   }
 
-  List<Widget> _emergencySection(
-    BuildContext context,
-    bool isDarkMode,
-  ) {
+  List<Widget> _emergencySection(BuildContext context, bool isDarkMode) {
     return [
-      _sectionTitle(
-        'EMERGENCY NUMBERS',
-        isDarkMode,
-      ),
-      _emergencyCard(
-        context,
-        '911',
-        'Emergency Hotline',
-        isDarkMode,
-      ),
-      _emergencyCard(
-        context,
-        '0917 148 9813',
-        'Calamba CDRRMO',
-        isDarkMode,
-      ),
+      _sectionTitle('EMERGENCY NUMBERS', isDarkMode),
+      _emergencyCard(context, '911', 'Emergency Hotline', isDarkMode),
+      _emergencyCard(context, '0917 148 9813', 'Calamba CDRRMO', isDarkMode),
       _emergencyCard(
         context,
         '(+63) 992 377 5096',
@@ -1081,49 +1027,28 @@ class _EvacuateTabState extends State<EvacuateTab>
     ];
   }
 
-  List<Widget> _guidesSection(
-    BuildContext context,
-    bool isDarkMode,
-  ) {
+  List<Widget> _guidesSection(BuildContext context, bool isDarkMode) {
     return [
-      _sectionTitle(
-        'FLOOD PREPARATION GUIDES',
-        isDarkMode,
-      ),
-      _guideCard(
-        'Flood Preparation Checklist',
-        isDarkMode,
-        () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) =>
-                  const FloodPreparationChecklist(),
-            ),
-          );
-        },
-      ),
+      _sectionTitle('FLOOD PREPARATION GUIDES', isDarkMode),
+      _guideCard('Flood Preparation Checklist', isDarkMode, () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const FloodPreparationChecklist(),
+          ),
+        );
+      }),
 
-      _guideCard(
-        'During and After Flood',
-        isDarkMode,
-        () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) =>
-                  const DuringAfterFlood(),
-            ),
-          );
-        },
-      ),
+      _guideCard('During and After Flood', isDarkMode, () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const DuringAfterFlood()),
+        );
+      }),
     ];
   }
 
-  List<Widget> _toolsSection(
-    BuildContext context,
-    bool isDarkMode,
-  ) {
+  List<Widget> _toolsSection(BuildContext context, bool isDarkMode) {
     return [
       _sectionTitle('TOOLS', isDarkMode),
       _emergencyAlarmCard(isDarkMode),
@@ -1135,12 +1060,11 @@ class _EvacuateTabState extends State<EvacuateTab>
 
   Widget _localAiCard(BuildContext context, bool isDarkMode) {
     return GestureDetector(
+      key: TutorialTargets.toolsLocalAi,
       onTap: () {
         Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (context) => const LocalAiTestPage(),
-          ),
+          MaterialPageRoute(builder: (context) => const LocalAiTestPage()),
         );
       },
       child: Container(
@@ -1218,8 +1142,8 @@ class _EvacuateTabState extends State<EvacuateTab>
 
   Widget _emergencyLocationCard(bool isDarkMode) {
     final session = _emergencyLocationService.session;
-    final active = session != null &&
-        DateTime.now().isBefore(session.expiresAt);
+    final active =
+        session != null && DateTime.now().isBefore(session.expiresAt);
     final expiryLabel = session == null
         ? ''
         : TimeOfDay.fromDateTime(session.expiresAt).format(context);
@@ -1229,9 +1153,7 @@ class _EvacuateTabState extends State<EvacuateTab>
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDarkMode
-            ? const Color(0xFF303030)
-            : Colors.white,
+        color: isDarkMode ? const Color(0xFF303030) : Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: active
             ? Border.all(color: const Color(0xFFFF3035), width: 1.5)
@@ -1289,10 +1211,11 @@ class _EvacuateTabState extends State<EvacuateTab>
                         color: active
                             ? const Color(0xFFFF6B6B)
                             : (isDarkMode
-                                ? Colors.grey[400]
-                                : const Color(0xFF8194BB)),
-                        fontWeight:
-                            active ? FontWeight.w600 : FontWeight.normal,
+                                  ? Colors.grey[400]
+                                  : const Color(0xFF8194BB)),
+                        fontWeight: active
+                            ? FontWeight.w600
+                            : FontWeight.normal,
                       ),
                     ),
                   ],
@@ -1305,11 +1228,10 @@ class _EvacuateTabState extends State<EvacuateTab>
             width: double.infinity,
             height: 48,
             child: ElevatedButton.icon(
+              key: TutorialTargets.toolsEmergencyLocation,
               onPressed: _startingEmergencySession
                   ? null
-                  : (active
-                      ? _stopEmergencyLocation
-                      : _startEmergencyLocation),
+                  : (active ? _stopEmergencyLocation : _startEmergencyLocation),
               icon: _startingEmergencySession
                   ? const SizedBox(
                       width: 18,
@@ -1320,9 +1242,7 @@ class _EvacuateTabState extends State<EvacuateTab>
               label: Text(
                 _startingEmergencySession
                     ? 'GETTING LOCATION…'
-                    : (active
-                        ? 'STOP EMERGENCY'
-                        : 'EMERGENCY LOCATE ME'),
+                    : (active ? 'STOP EMERGENCY' : 'EMERGENCY LOCATE ME'),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: active
@@ -1350,15 +1270,9 @@ class _EvacuateTabState extends State<EvacuateTab>
   Widget build(BuildContext context) {
     return ValueListenableBuilder<bool>(
       valueListenable: isDarkModeNotifier,
-      builder: (
-        context,
-        isDarkMode,
-        child,
-      ) {
+      builder: (context, isDarkMode, child) {
         return Scaffold(
-          backgroundColor: isDarkMode
-              ? const Color(0xFF212121)
-              : Colors.white,
+          backgroundColor: isDarkMode ? const Color(0xFF212121) : Colors.white,
 
           body: Column(
             children: [
@@ -1370,12 +1284,7 @@ class _EvacuateTabState extends State<EvacuateTab>
                 width: double.infinity,
                 color: isDarkMode
                     ? const Color(0xFF212121)
-                    : const Color.fromARGB(
-                        255,
-                        72,
-                        119,
-                        247,
-                      ),
+                    : const Color.fromARGB(255, 72, 119, 247),
                 child: SafeArea(
                   bottom: false,
                   child: Padding(
@@ -1412,7 +1321,6 @@ class _EvacuateTabState extends State<EvacuateTab>
               // =================================================
               // SEGMENTED TABS
               // =================================================
-
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: _sectionTabs(isDarkMode),
@@ -1421,7 +1329,6 @@ class _EvacuateTabState extends State<EvacuateTab>
               // =================================================
               // PAGE CONTENT — SWIPEABLE SECTIONS
               // =================================================
-
               Expanded(
                 child: PageView(
                   controller: _pageController,
@@ -1438,10 +1345,7 @@ class _EvacuateTabState extends State<EvacuateTab>
                       ),
                       child: Column(
                         children: [
-                          ..._evacuationSection(
-                            context,
-                            isDarkMode,
-                          ),
+                          ..._evacuationSection(context, isDarkMode),
                           const SizedBox(height: 20),
                         ],
                       ),
@@ -1453,10 +1357,7 @@ class _EvacuateTabState extends State<EvacuateTab>
                       ),
                       child: Column(
                         children: [
-                          ..._emergencySection(
-                            context,
-                            isDarkMode,
-                          ),
+                          ..._emergencySection(context, isDarkMode),
                           const SizedBox(height: 20),
                         ],
                       ),
@@ -1468,10 +1369,7 @@ class _EvacuateTabState extends State<EvacuateTab>
                       ),
                       child: Column(
                         children: [
-                          ..._guidesSection(
-                            context,
-                            isDarkMode,
-                          ),
+                          ..._guidesSection(context, isDarkMode),
                           const SizedBox(height: 20),
                         ],
                       ),

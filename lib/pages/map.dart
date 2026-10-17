@@ -19,6 +19,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:detectco/services/weather_condition.dart';
 import 'package:detectco/services/flood_risk.dart';
 import 'package:detectco/services/ml_flood_risk.dart';
+import 'package:detectco/tutorial/tutorial_coordinator.dart';
 
 // Firebase Realtime Database
 import 'package:firebase_database/firebase_database.dart';
@@ -2875,6 +2876,7 @@ class _MapTabState extends State<MapTab> {
         height: 40,
         decoration: _glassDecoration(isDarkMode, radius: 12),
         child: TextField(
+          key: TutorialTargets.mapSearch,
           controller: _searchController,
           textInputAction: TextInputAction.search,
           textAlignVertical: TextAlignVertical.center,
@@ -2974,6 +2976,7 @@ class _MapTabState extends State<MapTab> {
       left: 10,
       right: 10,
       child: SingleChildScrollView(
+        key: TutorialTargets.mapFilters,
         scrollDirection: Axis.horizontal,
         child: Row(
           children: [
@@ -3600,6 +3603,7 @@ class _MapTabState extends State<MapTab> {
                       right: 58,
                       bottom: 74,
                       child: GestureDetector(
+                        key: TutorialTargets.mapMlRisk,
                         onTap: () => _showMlRiskDetails(isDarkMode),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
@@ -3676,6 +3680,7 @@ class _MapTabState extends State<MapTab> {
                       top: 94,
                       right: 10,
                       child: Column(
+                        key: TutorialTargets.mapNearestResources,
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           // ===== NEAREST EVACUATION CENTER BUTTON =====
@@ -3754,6 +3759,7 @@ class _MapTabState extends State<MapTab> {
                       bottom: 10,
                       right: 10,
                       child: FloatingActionButton(
+                        key: TutorialTargets.mapLocateMe,
                         heroTag: 'gps',
                         tooltip: 'Show my location',
                         mini: true,
@@ -3820,6 +3826,7 @@ class _MapTabState extends State<MapTab> {
                                   ? 'Hide map symbols'
                                   : 'Show map symbols',
                               child: InkWell(
+                                key: TutorialTargets.mapLegend,
                                 onTap: () {
                                   setState(() {
                                     _legendExpanded = !_legendExpanded;

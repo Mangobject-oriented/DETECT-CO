@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:detectco/pages/home.dart';
 import 'package:detectco/services/ml_api_connection.dart';
+import 'package:detectco/tutorial/tutorial_coordinator.dart';
 
 // =====================================================
 // HOME BACKGROUND CHOICE
@@ -38,7 +39,9 @@ const String _homePerformanceModeKey = 'home_performance_mode';
 // =====================================================
 
 class MenuTab extends StatefulWidget {
-  const MenuTab({super.key});
+  const MenuTab({super.key, this.onStartTutorial});
+
+  final VoidCallback? onStartTutorial;
 
   @override
   State<MenuTab> createState() => _MenuTabState();
@@ -636,14 +639,15 @@ class _MenuTabState extends State<MenuTab> {
                     // =================================================
                     // HOW TO USE
                     // =================================================
-                    _buildMenuCard(
-                      cardColor: cardColor,
-                      icon: Icons.help_outline_rounded,
-                      title: 'How to Use',
-                      subtitle: 'Learn how to use DETECT-CO',
-                      onTap: () {
-                        // Open How to Use page
-                      },
+                    KeyedSubtree(
+                      key: TutorialTargets.menuHowToUse,
+                      child: _buildMenuCard(
+                        cardColor: cardColor,
+                        icon: Icons.help_outline_rounded,
+                        title: 'How to Use',
+                        subtitle: 'Learn how to use DETECT-CO',
+                        onTap: widget.onStartTutorial ?? () {},
+                      ),
                     ),
 
                     const SizedBox(height: 14),

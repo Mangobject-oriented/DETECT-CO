@@ -5,6 +5,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:curved_navigation_bar/curved_navigation_bar.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 
 import 'package:detectco/pages/home.dart';
 import 'package:detectco/pages/map.dart';
@@ -14,6 +16,7 @@ import 'package:detectco/pages/menu.dart';
 import 'package:detectco/pages/local_ai_test.dart';
 import 'package:detectco/services/emergency_location_service.dart';
 import 'package:detectco/services/ml_api_connection.dart';
+import 'package:detectco/tutorial/tutorial_coordinator.dart';
 
 // =====================================================
 // LOCAL NOTIFICATIONS
@@ -81,15 +84,13 @@ Future<void> initializeLocalNotifications() async {
   const AndroidInitializationSettings androidSettings =
       AndroidInitializationSettings('@mipmap/ic_launcher');
 
-  const InitializationSettings initializationSettings =
-      InitializationSettings(
+  const InitializationSettings initializationSettings = InitializationSettings(
     android: androidSettings,
   );
 
   await flutterLocalNotificationsPlugin.initialize(
     settings: initializationSettings,
-    onDidReceiveNotificationResponse:
-        emergencyLocationNotificationResponse,
+    onDidReceiveNotificationResponse: emergencyLocationNotificationResponse,
     onDidReceiveBackgroundNotificationResponse:
         emergencyLocationNotificationBackgroundResponse,
   );
@@ -97,7 +98,8 @@ Future<void> initializeLocalNotifications() async {
   final AndroidFlutterLocalNotificationsPlugin? androidPlugin =
       flutterLocalNotificationsPlugin
           .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>();
+            AndroidFlutterLocalNotificationsPlugin
+          >();
 
   if (androidPlugin == null) {
     print('ANDROID LOCAL NOTIFICATIONS PLUGIN NOT AVAILABLE');
@@ -108,8 +110,7 @@ Future<void> initializeLocalNotifications() async {
   // CLASS ALERT CHANNEL
   // ===================================================
 
-  const AndroidNotificationChannel classChannel =
-      AndroidNotificationChannel(
+  const AndroidNotificationChannel classChannel = AndroidNotificationChannel(
     classNotificationChannelId,
     'Class Alerts',
     description: 'Notifications for class suspension announcements.',
@@ -123,8 +124,7 @@ Future<void> initializeLocalNotifications() async {
   // TEST ALERT CHANNEL
   // ===================================================
 
-  const AndroidNotificationChannel testChannel =
-      AndroidNotificationChannel(
+  const AndroidNotificationChannel testChannel = AndroidNotificationChannel(
     testNotificationChannelId,
     'Test Alerts',
     description: 'Custom sound notifications for DETECT-CO testing.',
@@ -137,14 +137,14 @@ Future<void> initializeLocalNotifications() async {
 
   const AndroidNotificationChannel emergencyLocationChannel =
       AndroidNotificationChannel(
-    emergencyLocationNotificationChannelId,
-    'Emergency Location Sharing',
-    description:
-        'Shows while Emergency Locate Me is sharing your location.',
-    importance: Importance.high,
-    playSound: false,
-    enableVibration: false,
-  );
+        emergencyLocationNotificationChannelId,
+        'Emergency Location Sharing',
+        description:
+            'Shows while Emergency Locate Me is sharing your location.',
+        importance: Importance.high,
+        playSound: false,
+        enableVibration: false,
+      );
 
   await androidPlugin.createNotificationChannel(emergencyLocationChannel);
 
@@ -212,9 +212,7 @@ Future<void> showLocalNotification({
 // =====================================================
 
 @pragma('vm:entry-point')
-Future<void> firebaseMessagingBackgroundHandler(
-  RemoteMessage message,
-) async {
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   print('================================');
   print('BACKGROUND FCM MESSAGE');
   print('================================');
@@ -241,38 +239,29 @@ Future<void> firebaseMessagingBackgroundHandler(
   // DETERMINE TYPE
   // ===================================================
 
-  final bool isTestNotification =
-      message.data['type'] == 'test';
+  final bool isTestNotification = message.data['type'] == 'test';
 
-  final String notificationType =
-      message.data['type'] == 'alert'
-          ? 'alert'
-          : 'announcement';
+  final String notificationType = message.data['type'] == 'alert'
+      ? 'alert'
+      : 'announcement';
 
   // ===================================================
   // SAVE NOTIFICATION TO LOCAL HISTORY
   // ===================================================
 
-  final RemoteNotification? notification =
-      message.notification;
+  final RemoteNotification? notification = message.notification;
 
   final String title =
-      notification?.title ??
-      message.data['title'] ??
-      'DETECT-CO';
+      notification?.title ?? message.data['title'] ?? 'DETECT-CO';
 
-  final String body =
-      notification?.body ??
-      message.data['body'] ??
-      '';
+  final String body = notification?.body ?? message.data['body'] ?? '';
 
   await NotificationStorage.saveNotification(
     AppNotification(
-      id: message.data['announcementId']?.toString() ??
+      id:
+          message.data['announcementId']?.toString() ??
           message.messageId ??
-          DateTime.now()
-              .millisecondsSinceEpoch
-              .toString(),
+          DateTime.now().millisecondsSinceEpoch.toString(),
       title: title,
       body: body,
       type: notificationType,
@@ -341,16 +330,14 @@ Future<void> initializeFirebaseMessagingServices() async {
   // FIREBASE MESSAGING
   // ===================================================
 
-  final FirebaseMessaging messaging =
-      FirebaseMessaging.instance;
+  final FirebaseMessaging messaging = FirebaseMessaging.instance;
 
   // ===================================================
   // REQUEST NOTIFICATION PERMISSION
   // ===================================================
 
   try {
-    final NotificationSettings settings =
-        await messaging.requestPermission(
+    final NotificationSettings settings = await messaging.requestPermission(
       alert: true,
       badge: true,
       sound: true,
@@ -369,13 +356,9 @@ Future<void> initializeFirebaseMessagingServices() async {
   // ===================================================
 
   try {
-    await messaging.subscribeToTopic(
-      'detect_co_announcements',
-    );
+    await messaging.subscribeToTopic('detect_co_announcements');
 
-    print(
-      'FCM: Subscribed to detect_co_announcements',
-    );
+    print('FCM: Subscribed to detect_co_announcements');
   } catch (e) {
     print('FCM TOPIC ERROR: $e');
   }
@@ -393,12 +376,9 @@ Future<void> initializeFirebaseMessagingServices() async {
   print('FCM: Getting token...');
 
   try {
-    final String? token =
-        await messaging.getToken();
+    final String? token = await messaging.getToken();
 
-    print(
-      'FCM: Token request completed.',
-    );
+    print('FCM: Token request completed.');
 
     print('FCM token available: ${token != null}');
   } catch (e) {
@@ -409,142 +389,112 @@ Future<void> initializeFirebaseMessagingServices() async {
   // FOREGROUND FCM MESSAGE
   // ===================================================
 
-  FirebaseMessaging.onMessage.listen(
-    (RemoteMessage message) async {
-      if (await MlApiConnection.instance.handleFcmData(message.data)) {
-        return;
-      }
+  FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
+    if (await MlApiConnection.instance.handleFcmData(message.data)) {
+      return;
+    }
 
-      print('================================');
-      print('FOREGROUND FCM MESSAGE');
-      print('================================');
+    print('================================');
+    print('FOREGROUND FCM MESSAGE');
+    print('================================');
 
-      print(
-        'Title: ${message.notification?.title}',
-      );
+    print('Title: ${message.notification?.title}');
 
-      print(
-        'Body: ${message.notification?.body}',
-      );
+    print('Body: ${message.notification?.body}');
 
-      print(
-        'Type: ${message.data['type']}',
-      );
+    print('Type: ${message.data['type']}');
 
-      print(
-        'Data: ${message.data}',
-      );
+    print('Data: ${message.data}');
 
-      final RemoteNotification? notification =
-          message.notification;
+    final RemoteNotification? notification = message.notification;
 
-      // =================================================
-      // GET TITLE/BODY
-      // =================================================
+    // =================================================
+    // GET TITLE/BODY
+    // =================================================
 
-      final String title =
-          notification?.title ??
-          message.data['title'] ??
-          'DETECT-CO';
+    final String title =
+        notification?.title ?? message.data['title'] ?? 'DETECT-CO';
 
-      final String body =
-          notification?.body ??
-          message.data['body'] ??
-          '';
+    final String body = notification?.body ?? message.data['body'] ?? '';
 
-      // =================================================
-      // DETERMINE TEST NOTIFICATION
-      // =================================================
+    // =================================================
+    // DETERMINE TEST NOTIFICATION
+    // =================================================
 
-      final bool isTestNotification =
-          message.data['type'] == 'test';
+    final bool isTestNotification = message.data['type'] == 'test';
 
-      // =================================================
-      // DETERMINE HISTORY TYPE
-      // =================================================
+    // =================================================
+    // DETERMINE HISTORY TYPE
+    // =================================================
 
-      final String notificationType =
-          message.data['type'] == 'alert'
-              ? 'alert'
-              : 'announcement';
+    final String notificationType = message.data['type'] == 'alert'
+        ? 'alert'
+        : 'announcement';
 
-      // =================================================
-      // DEBUG
-      // =================================================
+    // =================================================
+    // DEBUG
+    // =================================================
 
-      if (isTestNotification) {
-        print('--------------------------------');
-        print('TEST NOTIFICATION DETECTED');
-        print(
-          'Channel: $testNotificationChannelId',
-        );
-        print('Sound: test_alert');
-        print('--------------------------------');
-      } else {
-        print('--------------------------------');
-        print('CLASS NOTIFICATION DETECTED');
-        print(
-          'Channel: $classNotificationChannelId',
-        );
-        print('Sound: DEFAULT');
-        print('--------------------------------');
-      }
+    if (isTestNotification) {
+      print('--------------------------------');
+      print('TEST NOTIFICATION DETECTED');
+      print('Channel: $testNotificationChannelId');
+      print('Sound: test_alert');
+      print('--------------------------------');
+    } else {
+      print('--------------------------------');
+      print('CLASS NOTIFICATION DETECTED');
+      print('Channel: $classNotificationChannelId');
+      print('Sound: DEFAULT');
+      print('--------------------------------');
+    }
 
-      // =================================================
-      // SAVE NOTIFICATION TO LOCAL HISTORY
-      // =================================================
+    // =================================================
+    // SAVE NOTIFICATION TO LOCAL HISTORY
+    // =================================================
 
-      await NotificationStorage.saveNotification(
-        AppNotification(
-          id: message.data['announcementId']?.toString() ??
-              message.messageId ??
-              DateTime.now()
-                  .millisecondsSinceEpoch
-                  .toString(),
-          title: title,
-          body: body,
-          type: notificationType,
-          timestamp: DateTime.now(),
-          isRead: false,
-        ),
-      );
-
-      // =================================================
-      // UPDATE UNREAD COUNT
-      // =================================================
-
-      await refreshUnreadNotificationCount();
-
-      print(
-        'Unread notification count: '
-        '${unreadNotificationCount.value}',
-      );
-
-      print(
-        'Notification saved to history!',
-      );
-
-      // =================================================
-      // SHOW LOCAL NOTIFICATION
-      // =================================================
-
-      await showLocalNotification(
-        id: message.messageId?.hashCode ??
-            DateTime.now()
-                .millisecondsSinceEpoch,
+    await NotificationStorage.saveNotification(
+      AppNotification(
+        id:
+            message.data['announcementId']?.toString() ??
+            message.messageId ??
+            DateTime.now().millisecondsSinceEpoch.toString(),
         title: title,
         body: body,
-        isTestNotification:
-            isTestNotification,
-      );
+        type: notificationType,
+        timestamp: DateTime.now(),
+        isRead: false,
+      ),
+    );
 
-      print(
-        'Local notification displayed.',
-      );
+    // =================================================
+    // UPDATE UNREAD COUNT
+    // =================================================
 
-      print('================================');
-    },
-  );
+    await refreshUnreadNotificationCount();
+
+    print(
+      'Unread notification count: '
+      '${unreadNotificationCount.value}',
+    );
+
+    print('Notification saved to history!');
+
+    // =================================================
+    // SHOW LOCAL NOTIFICATION
+    // =================================================
+
+    await showLocalNotification(
+      id: message.messageId?.hashCode ?? DateTime.now().millisecondsSinceEpoch,
+      title: title,
+      body: body,
+      isTestNotification: isTestNotification,
+    );
+
+    print('Local notification displayed.');
+
+    print('================================');
+  });
 
   FirebaseMessaging.onMessageOpenedApp.listen((message) async {
     await MlApiConnection.instance.handleFcmData(message.data);
@@ -573,9 +523,7 @@ void main() async {
   // REGISTER BACKGROUND HANDLER
   // ===================================================
 
-  FirebaseMessaging.onBackgroundMessage(
-    firebaseMessagingBackgroundHandler,
-  );
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
   // ===================================================
   // START APP
@@ -594,8 +542,7 @@ void main() async {
 // GLOBAL DARK MODE
 // =====================================================
 
-final ValueNotifier<bool> isDarkModeNotifier =
-    ValueNotifier<bool>(true);
+final ValueNotifier<bool> isDarkModeNotifier = ValueNotifier<bool>(true);
 
 // =====================================================
 // APP
@@ -613,18 +560,14 @@ class MyApp extends StatelessWidget {
       // =================================================
       // LOCAL AI TEST ROUTE
       // =================================================
-      routes: {
-        '/local-ai-test': (context) =>
-            const LocalAiTestPage(),
-      },
+      routes: {'/local-ai-test': (context) => const LocalAiTestPage()},
 
       // =================================================
       // DARK THEME ONLY
       // =================================================
       theme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor:
-            const Color(0xFF212121),
+        scaffoldBackgroundColor: const Color(0xFF212121),
       ),
 
       // =================================================
@@ -645,29 +588,323 @@ class BottomNavPage extends StatefulWidget {
   const BottomNavPage({super.key});
 
   @override
-  State<BottomNavPage> createState() =>
-      _BottomNavPageState();
+  State<BottomNavPage> createState() => _BottomNavPageState();
 }
 
-class _BottomNavPageState
-    extends State<BottomNavPage> with WidgetsBindingObserver {
+class _BottomNavPageState extends State<BottomNavPage>
+    with WidgetsBindingObserver {
+  static const String _tutorialCompleteKey = 'detectco_tutorial_completed_v1';
+  static const String _tutorialLanguageKey = 'detectco_tutorial_language_v1';
+
+  final ValueNotifier<TutorialLanguage> _tutorialLanguage = ValueNotifier(
+    TutorialLanguage.english,
+  );
+  TutorialCoachMark? _tutorial;
+  OverlayEntry? _tutorialCardEntry;
+  bool _tutorialCompleted = false;
+  bool _tutorialRequested = false;
+  bool _tutorialActive = false;
+  bool _criticalFloodWarning = false;
+  bool _tutorialEndedByUser = false;
+  int _tutorialStep = 0;
+  final GlobalKey<EvacuateTabState> _toolsTabKey =
+      GlobalKey<EvacuateTabState>();
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadTutorialPreferencesAndMaybeStart();
+    });
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(MlApiConnection.instance.synchronizeRemoteConfig());
+      if (_tutorialRequested && !_criticalFloodWarning) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _startTutorialAt(_tutorialStep);
+        });
+      }
+    } else if (_tutorialActive) {
+      _closeTutorialForInterruption();
     }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _removeTutorialCardEntry();
+    _tutorialLanguage.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadTutorialPreferencesAndMaybeStart() async {
+    final preferences = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    _tutorialCompleted = preferences.getBool(_tutorialCompleteKey) ?? false;
+    final storedLanguage = preferences.getString(_tutorialLanguageKey);
+    if (storedLanguage == TutorialLanguage.filipino.name) {
+      _tutorialLanguage.value = TutorialLanguage.filipino;
+    } else if (storedLanguage == TutorialLanguage.english.name) {
+      _tutorialLanguage.value = TutorialLanguage.english;
+    } else {
+      final languageCode = Localizations.localeOf(context).languageCode;
+      _tutorialLanguage.value = languageCode == 'fil' || languageCode == 'tl'
+          ? TutorialLanguage.filipino
+          : TutorialLanguage.english;
+    }
+    if (!_tutorialCompleted) {
+      _tutorialRequested = true;
+      _startTutorialAt(0);
+    }
+  }
+
+  Future<void> _saveTutorialLanguage(TutorialLanguage language) async {
+    _tutorialLanguage.value = language;
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString(_tutorialLanguageKey, language.name);
+  }
+
+  void _onCriticalFloodWarningChanged(bool critical) {
+    if (_criticalFloodWarning == critical) return;
+    _criticalFloodWarning = critical;
+    if (critical && _tutorialActive) {
+      _closeTutorialForInterruption();
+    } else if (!critical && _tutorialRequested && !_tutorialActive) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _startTutorialAt(_tutorialStep);
+      });
+    }
+  }
+
+  Future<void> _startTutorialReplay() async {
+    _tutorialRequested = true;
+    _tutorialStep = 0;
+    if (_criticalFloodWarning) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Tutorial paused while a critical flood warning is active.',
+          ),
+        ),
+      );
+      return;
+    }
+    await _startTutorialAt(0);
+  }
+
+  int _tabForTutorialStep(int step) => switch (step) {
+    0 || 1 || 2 || 3 || 4 || 5 => 2,
+    6 || 7 || 8 || 9 || 10 || 11 => 0,
+    12 || 13 || 14 || 15 || 16 || 17 => 1,
+    18 => 3,
+    19 || 20 => 4,
+    _ => 2,
+  };
+
+  GlobalKey _targetForTutorialStep(int step) => switch (step) {
+    0 => TutorialTargets.homeBarangay,
+    1 => TutorialTargets.homeRisk,
+    2 => TutorialTargets.homeWeather,
+    3 => TutorialTargets.homeWater,
+    4 => TutorialTargets.homeRainfall,
+    5 => TutorialTargets.bottomNavigation,
+    6 => TutorialTargets.toolsSections,
+    7 => TutorialTargets.toolsEmergencyAlarm,
+    8 || 9 => TutorialTargets.toolsSosFlashlight,
+    10 => TutorialTargets.toolsEmergencyLocation,
+    11 => TutorialTargets.toolsLocalAi,
+    12 => TutorialTargets.mapSearch,
+    13 => TutorialTargets.mapFilters,
+    14 => TutorialTargets.mapLegend,
+    15 => TutorialTargets.mapMlRisk,
+    16 => TutorialTargets.mapNearestResources,
+    17 => TutorialTargets.mapLocateMe,
+    18 => TutorialTargets.notificationTabs,
+    19 => TutorialTargets.menuHowToUse,
+    20 => TutorialTargets.bottomMenu,
+    _ => TutorialTargets.homeBarangay,
+  };
+
+  Future<bool> _prepareTutorialTarget(int step) async {
+    if (!mounted || step < 0 || step >= tutorialEnglishCopy.length) {
+      return false;
+    }
+    final tab = _tabForTutorialStep(step);
+    if (_currentIndex != tab) {
+      setState(() => _currentIndex = tab);
+    }
+    await WidgetsBinding.instance.endOfFrame;
+    if (step >= 7 && step <= 11) {
+      await _toolsTabKey.currentState?.showTutorialSection(3);
+      await WidgetsBinding.instance.endOfFrame;
+    }
+    var targetContext = _targetForTutorialStep(step).currentContext;
+    for (var attempt = 0; targetContext == null && attempt < 3; attempt++) {
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      await WidgetsBinding.instance.endOfFrame;
+      targetContext = _targetForTutorialStep(step).currentContext;
+    }
+    if (targetContext == null || !targetContext.mounted) return false;
+    final renderObject = targetContext.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) return false;
+    try {
+      await Scrollable.ensureVisible(
+        targetContext,
+        alignment: 0.35,
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+      );
+    } catch (_) {
+      // Targets outside a Scrollable are already visible and need no action.
+    }
+    await WidgetsBinding.instance.endOfFrame;
+    return mounted && _targetForTutorialStep(step).currentContext != null;
+  }
+
+  Future<void> _startTutorialAt(int requestedStep) async {
+    if (!mounted || _criticalFloodWarning || _tutorialActive) return;
+    var step = requestedStep.clamp(0, tutorialEnglishCopy.length - 1);
+    while (step < tutorialEnglishCopy.length &&
+        !await _prepareTutorialTarget(step)) {
+      step++;
+    }
+    if (!mounted ||
+        _criticalFloodWarning ||
+        step >= tutorialEnglishCopy.length) {
+      return;
+    }
+
+    _tutorialStep = step;
+    _tutorialEndedByUser = false;
+    final targets = <TargetFocus>[];
+    for (var index = 0; index < tutorialEnglishCopy.length; index++) {
+      final targetKey = _targetForTutorialStep(index);
+      targets.add(
+        TargetFocus(
+          identify: 'detectco_tutorial_$index',
+          keyTarget: targetKey,
+          shape: ShapeLightFocus.RRect,
+          radius: 12,
+          paddingFocus: 6,
+          enableTargetTab: false,
+          enableOverlayTab: false,
+          // Keep the spotlight target only. The dialogue is placed in a
+          // separate safe-area overlay so its position is recalculated for
+          // the active target and current device metrics.
+          contents: const [],
+        ),
+      );
+    }
+
+    _tutorialActive = true;
+    _tutorialRequested = true;
+    final coachMark = TutorialCoachMark(
+      targets: targets,
+      initialFocus: step,
+      colorShadow: Colors.black,
+      opacityShadow: 0.82,
+      pulseEnable: false,
+      useSafeArea: true,
+      hideSkip: true,
+      onFinish: _handleTutorialOverlayClosed,
+      onSkip: () {
+        _handleTutorialOverlayClosed();
+        return true;
+      },
+    );
+    _tutorial = coachMark;
+    coachMark.show(context: context);
+    await WidgetsBinding.instance.endOfFrame;
+    if (mounted && _tutorialActive && _tutorialCardEntry == null) {
+      _tutorialCardEntry = OverlayEntry(builder: _buildTutorialCardOverlay);
+      Overlay.of(context, rootOverlay: true).insert(_tutorialCardEntry!);
+    }
+  }
+
+  Widget _buildTutorialCardOverlay(BuildContext context) {
+    final step = _tutorialStep;
+    final targetContext = _targetForTutorialStep(step).currentContext;
+    final renderObject = targetContext?.findRenderObject();
+    Rect? targetRect;
+    if (renderObject is RenderBox && renderObject.hasSize) {
+      targetRect = renderObject.localToGlobal(Offset.zero) & renderObject.size;
+    }
+    return TutorialCardOverlay(
+      targetRect: targetRect,
+      cardBuilder: (placement) => Align(
+        alignment: Alignment.center,
+        child: TutorialStepCard(
+          language: _tutorialLanguage,
+          stepIndex: step,
+          isLast: step == tutorialEnglishCopy.length - 1,
+          canGoBack: step > 0,
+          maxHeight: placement.maxHeight,
+          onLanguageChanged: (language) {
+            unawaited(_saveTutorialLanguage(language));
+          },
+          onBack: () => unawaited(_moveTutorialTo(step - 1)),
+          onNext: () => unawaited(
+            step == tutorialEnglishCopy.length - 1
+                ? _completeTutorial()
+                : _moveTutorialTo(step + 1),
+          ),
+          onSkip: () => unawaited(_completeTutorial()),
+        ),
+      ),
+    );
+  }
+
+  void _removeTutorialCardEntry() {
+    _tutorialCardEntry?.remove();
+    _tutorialCardEntry = null;
+  }
+
+  Future<void> _moveTutorialTo(int requestedStep) async {
+    if (!_tutorialActive || _criticalFloodWarning) return;
+    final step = requestedStep.clamp(0, tutorialEnglishCopy.length - 1);
+    if (!await _prepareTutorialTarget(step) || !_tutorialActive) {
+      if (step + 1 < tutorialEnglishCopy.length) {
+        await _moveTutorialTo(step + 1);
+      }
+      return;
+    }
+    _tutorialStep = step;
+    _tutorial?.goTo(step);
+    _tutorialCardEntry?.markNeedsBuild();
+  }
+
+  Future<void> _completeTutorial() async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setBool(_tutorialCompleteKey, true);
+    _tutorialCompleted = true;
+    _tutorialEndedByUser = true;
+    _tutorial?.finish();
+  }
+
+  void _closeTutorialForInterruption() {
+    if (!_tutorialActive) return;
+    _tutorialEndedByUser = false;
+    _tutorial?.finish();
+  }
+
+  void _handleTutorialOverlayClosed() {
+    _removeTutorialCardEntry();
+    _tutorial = null;
+    _tutorialActive = false;
+    if (_tutorialEndedByUser) {
+      _tutorialRequested = false;
+      _tutorialEndedByUser = false;
+    } else if (_tutorialRequested &&
+        !_criticalFloodWarning &&
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _startTutorialAt(_tutorialStep);
+      });
+    }
   }
 
   // ===================================================
@@ -682,8 +919,7 @@ class _BottomNavPageState
 
   int _currentIndex = 2;
 
-  final GlobalKey<CurvedNavigationBarState>
-      _navKey =
+  final GlobalKey<CurvedNavigationBarState> _navKey =
       GlobalKey<CurvedNavigationBarState>();
 
   // ===================================================
@@ -696,12 +932,7 @@ class _BottomNavPageState
   double? _focusLng;
   int _focusRequestId = 0;
 
-  void _goToEvacSiteOnMap(
-    String name,
-    String address,
-    double lat,
-    double lng,
-  ) {
+  void _goToEvacSiteOnMap(String name, String address, double lat, double lng) {
     setState(() {
       _focusName = name;
       _focusAddress = address;
@@ -717,20 +948,18 @@ class _BottomNavPageState
   // ===================================================
 
   List<Widget> get _tabs => [
-        EvacuateTab(
-          onGoToMap: _goToEvacSiteOnMap,
-        ),
-        MapTab(
-          focusRequestId: _focusRequestId,
-          focusName: _focusName,
-          focusLat: _focusLat,
-          focusLng: _focusLng,
-          focusDescription: _focusAddress,
-        ),
-        const HomeTab(),
-        const NotificationTab(),
-        const MenuTab(),
-      ];
+    EvacuateTab(key: _toolsTabKey, onGoToMap: _goToEvacSiteOnMap),
+    MapTab(
+      focusRequestId: _focusRequestId,
+      focusName: _focusName,
+      focusLat: _focusLat,
+      focusLng: _focusLng,
+      focusDescription: _focusAddress,
+    ),
+    HomeTab(onCriticalFloodWarningChanged: _onCriticalFloodWarningChanged),
+    const NotificationTab(),
+    MenuTab(onStartTutorial: _startTutorialReplay),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -738,11 +967,9 @@ class _BottomNavPageState
     // NAVIGATION COLORS
     // =================================================
 
-    final Color navBackground =
-        const Color(0xFF212121);
+    final Color navBackground = const Color(0xFF212121);
 
-    final Color barColor =
-        const Color(0xFF303030);
+    final Color barColor = const Color(0xFF303030);
 
     // =================================================
     // ICON COLORS
@@ -754,11 +981,9 @@ class _BottomNavPageState
     // SELECTED BUTTON
     // =================================================
 
-    final Color selectedButtonColor =
-        const Color(0xFF424242);
+    final Color selectedButtonColor = const Color(0xFF424242);
 
-    final Color selectedIconColor =
-        Colors.white;
+    final Color selectedIconColor = Colors.white;
 
     return Scaffold(
       backgroundColor: navBackground,
@@ -766,10 +991,7 @@ class _BottomNavPageState
       // =================================================
       // CURRENT TAB
       // =================================================
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _tabs,
-      ),
+      body: IndexedStack(index: _currentIndex, children: _tabs),
 
       // =================================================
       // BOTTOM NAVIGATION
@@ -777,253 +999,190 @@ class _BottomNavPageState
       bottomNavigationBar: SafeArea(
         top: false,
         child: Container(
+          key: TutorialTargets.bottomNavigation,
           height: 75,
           color: barColor,
           child: Stack(
             children: [
-            // =================================================
-            // CURVED NAVIGATION BAR
-            // =================================================
+              // =================================================
+              // CURVED NAVIGATION BAR
+              // =================================================
 
-            Positioned(
-              left: 0,
-              right: 0,
-              top: 0,
-              height: 55,
-
-              child: CurvedNavigationBar(
-                key: _navKey,
-
-                index: _currentIndex,
-
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
                 height: 55,
 
-                backgroundColor:
-                    navBackground,
+                child: CurvedNavigationBar(
+                  key: _navKey,
 
-                color: barColor,
+                  index: _currentIndex,
 
-                // =================================================
-                // SELECTED ICON CIRCLE
-                // =================================================
-                buttonBackgroundColor:
-                    selectedButtonColor,
+                  height: 55,
 
-                // =================================================
-                // ANIMATION
-                // =================================================
-                animationDuration:
-                    const Duration(
-                  milliseconds: 350,
-                ),
+                  backgroundColor: navBackground,
 
-                animationCurve:
-                    Curves.easeInOut,
-
-                // =================================================
-                // ICONS
-                // =================================================
-                items: [
-                  // =================================================
-                  // TOOLS
-                  // =================================================
-
-                  Image.asset(
-                    'assets/icon/tools.png',
-                    width: 26,
-                    height: 26,
-                    color: _currentIndex == 0
-                        ? selectedIconColor
-                        : iconColor,
-                  ),
+                  color: barColor,
 
                   // =================================================
-                  // MAP
+                  // SELECTED ICON CIRCLE
                   // =================================================
-                  Icon(
-                    Icons.map,
-                    size: 26,
-                    color: _currentIndex == 1
-                        ? selectedIconColor
-                        : iconColor,
-                  ),
+                  buttonBackgroundColor: selectedButtonColor,
 
                   // =================================================
-                  // HOME
+                  // ANIMATION
                   // =================================================
-                  Icon(
-                    Icons.home,
-                    size: 26,
-                    color: _currentIndex == 2
-                        ? selectedIconColor
-                        : iconColor,
-                  ),
+                  animationDuration: const Duration(milliseconds: 350),
+
+                  animationCurve: Curves.easeInOut,
 
                   // =================================================
-                  // NOTIFICATIONS
+                  // ICONS
                   // =================================================
-                  ValueListenableBuilder<int>(
-                    valueListenable:
-                        unreadNotificationCount,
+                  items: [
+                    // =================================================
+                    // TOOLS
+                    // =================================================
 
-                    builder: (
-                      context,
-                      unreadCount,
-                      child,
-                    ) {
-                      return Stack(
-                        clipBehavior:
-                            Clip.none,
+                    Image.asset(
+                      'assets/icon/tools.png',
+                      width: 26,
+                      height: 26,
+                      color: _currentIndex == 0 ? selectedIconColor : iconColor,
+                    ),
 
-                        children: [
-                          Icon(
-                            Icons
-                                .notifications_none_rounded,
-                            size: 26,
-                            color:
-                                _currentIndex == 3
-                                    ? selectedIconColor
-                                    : iconColor,
-                          ),
+                    // =================================================
+                    // MAP
+                    // =================================================
+                    Icon(
+                      Icons.map,
+                      size: 26,
+                      color: _currentIndex == 1 ? selectedIconColor : iconColor,
+                    ),
 
-                          // =================================================
-                          // RED UNREAD BADGE
-                          // =================================================
-                          if (unreadCount > 0)
-                            Positioned(
-                              right: -8,
-                              top: -8,
+                    // =================================================
+                    // HOME
+                    // =================================================
+                    Icon(
+                      Icons.home,
+                      size: 26,
+                      color: _currentIndex == 2 ? selectedIconColor : iconColor,
+                    ),
 
-                              child: Container(
-                                constraints:
-                                    const BoxConstraints(
-                                  minWidth: 18,
-                                  minHeight: 18,
-                                ),
+                    // =================================================
+                    // NOTIFICATIONS
+                    // =================================================
+                    ValueListenableBuilder<int>(
+                      valueListenable: unreadNotificationCount,
 
-                                padding:
-                                    const EdgeInsets
-                                        .symmetric(
-                                  horizontal: 4,
-                                ),
+                      builder: (context, unreadCount, child) {
+                        return Stack(
+                          clipBehavior: Clip.none,
 
-                                decoration:
-                                    BoxDecoration(
-                                  color:
-                                      Colors.red,
+                          children: [
+                            Icon(
+                              Icons.notifications_none_rounded,
+                              size: 26,
+                              color: _currentIndex == 3
+                                  ? selectedIconColor
+                                  : iconColor,
+                            ),
 
-                                  borderRadius:
-                                      BorderRadius
-                                          .circular(
-                                    20,
+                            // =================================================
+                            // RED UNREAD BADGE
+                            // =================================================
+                            if (unreadCount > 0)
+                              Positioned(
+                                right: -8,
+                                top: -8,
+
+                                child: Container(
+                                  constraints: const BoxConstraints(
+                                    minWidth: 18,
+                                    minHeight: 18,
                                   ),
 
-                                  border:
-                                      Border.all(
-                                    color:
-                                        Colors.white,
-                                    width: 1.5,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
                                   ),
-                                ),
 
-                                child: Text(
-                                  unreadCount > 99
-                                      ? '99+'
-                                      : unreadCount
-                                          .toString(),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red,
 
-                                  textAlign:
-                                      TextAlign
-                                          .center,
+                                    borderRadius: BorderRadius.circular(20),
 
-                                  style:
-                                      const TextStyle(
-                                    color:
-                                        Colors.white,
-                                    fontSize: 10,
-                                    fontWeight:
-                                        FontWeight
-                                            .bold,
+                                    border: Border.all(
+                                      color: Colors.white,
+                                      width: 1.5,
+                                    ),
+                                  ),
+
+                                  child: Text(
+                                    unreadCount > 99
+                                        ? '99+'
+                                        : unreadCount.toString(),
+
+                                    textAlign: TextAlign.center,
+
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                        ],
-                      );
-                    },
-                  ),
+                          ],
+                        );
+                      },
+                    ),
+
+                    // =================================================
+                    // MENU
+                    // =================================================
+                    Icon(
+                      Icons.menu_rounded,
+                      key: TutorialTargets.bottomMenu,
+                      size: 26,
+                      color: _currentIndex == 4 ? selectedIconColor : iconColor,
+                    ),
+                  ],
 
                   // =================================================
-                  // MENU
+                  // NAVIGATION TAP
                   // =================================================
-                  Icon(
-                    Icons.menu_rounded,
-                    size: 26,
-                    color: _currentIndex == 4
-                        ? selectedIconColor
-                        : iconColor,
-                  ),
-                ],
-
-                // =================================================
-                // NAVIGATION TAP
-                // =================================================
-                onTap: (index) {
-                  setState(() {
-                    _currentIndex = index;
-                  });
-                },
+                  onTap: (index) {
+                    setState(() {
+                      _currentIndex = index;
+                    });
+                  },
+                ),
               ),
-            ),
 
-            // =================================================
-            // LABELS
-            // =================================================
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 15,
-              height: 14,
+              // =================================================
+              // LABELS
+              // =================================================
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 15,
+                height: 14,
 
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _buildLabel(
-                      'Tools',
-                      0,
-                    ),
-                  ),
+                child: Row(
+                  children: [
+                    Expanded(child: _buildLabel('Tools', 0)),
 
-                  Expanded(
-                    child: _buildLabel(
-                      'Map',
-                      1,
-                    ),
-                  ),
+                    Expanded(child: _buildLabel('Map', 1)),
 
-                  Expanded(
-                    child: _buildLabel(
-                      'Home',
-                      2,
-                    ),
-                  ),
+                    Expanded(child: _buildLabel('Home', 2)),
 
-                  Expanded(
-                    child: _buildLabel(
-                      'Notifications',
-                      3,
-                    ),
-                  ),
+                    Expanded(child: _buildLabel('Notifications', 3)),
 
-                  Expanded(
-                    child: _buildLabel(
-                      'Menu',
-                      4,
-                    ),
-                  ),
-                ],
+                    Expanded(child: _buildLabel('Menu', 4)),
+                  ],
+                ),
               ),
-            ),
             ],
           ),
         ),
@@ -1035,12 +1194,8 @@ class _BottomNavPageState
   // NAVIGATION LABEL
   // =====================================================
 
-  Widget _buildLabel(
-    String label,
-    int index,
-  ) {
-    final bool isSelected =
-        _currentIndex == index;
+  Widget _buildLabel(String label, int index) {
+    final bool isSelected = _currentIndex == index;
 
     return Center(
       child: Text(
@@ -1048,22 +1203,16 @@ class _BottomNavPageState
 
         maxLines: 1,
 
-        overflow:
-            TextOverflow.ellipsis,
+        overflow: TextOverflow.ellipsis,
 
-        textAlign:
-            TextAlign.center,
+        textAlign: TextAlign.center,
 
         style: TextStyle(
           fontSize: 10,
 
-          fontWeight: isSelected
-              ? FontWeight.bold
-              : FontWeight.w500,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
 
-          color: isSelected
-              ? Colors.white
-              : Colors.white70,
+          color: isSelected ? Colors.white : Colors.white70,
         ),
       ),
     );

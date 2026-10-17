@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:detectco/main.dart';
+import 'package:detectco/tutorial/tutorial_coordinator.dart';
 
 // =====================================================
 // NOTIFICATION COUNT NOTIFIER
@@ -861,6 +862,7 @@ class _NotificationTabState extends State<NotificationTab>
                   ),
                 ),
                 child: TabBar(
+                  key: TutorialTargets.notificationTabs,
                   controller: _tabController,
                   labelColor: const Color(0xFF4A7FF7),
                   unselectedLabelColor: isDarkMode

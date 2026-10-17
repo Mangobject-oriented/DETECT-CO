@@ -15,6 +15,7 @@ import 'package:detectco/services/flood_risk.dart';
 import 'package:detectco/services/ml_flood_risk.dart';
 import 'package:detectco/services/ml_api_connection.dart';
 import 'package:detectco/pages/notification.dart';
+import 'package:detectco/tutorial/tutorial_coordinator.dart';
 
 // =====================================================
 // ONE-TIME DEVICE LOCATION (FOR OPEN-METEO)
@@ -387,6 +388,7 @@ void setHomePerformanceMode(bool enabled) {
 // skipped and the card is wrapped in a RepaintBoundary.
 
 Widget _glassCard({
+  Key? key,
   required Widget child,
   Color? glowColor,
   EdgeInsetsGeometry padding = const EdgeInsets.all(14),
@@ -400,6 +402,7 @@ Widget _glassCard({
   if (homePerformanceMode.value) {
     return RepaintBoundary(
       child: Container(
+        key: key,
         padding: padding,
         decoration: BoxDecoration(
           borderRadius: radius,
@@ -430,6 +433,7 @@ Widget _glassCard({
     child: BackdropFilter(
       filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
       child: Container(
+        key: key,
         padding: padding,
         decoration: BoxDecoration(
           borderRadius: radius,
@@ -461,13 +465,25 @@ Widget _glassCard({
 }
 
 class HomeTab extends StatefulWidget {
-  const HomeTab({super.key});
+  const HomeTab({super.key, this.onCriticalFloodWarningChanged});
+
+  final ValueChanged<bool>? onCriticalFloodWarningChanged;
 
   @override
   State<HomeTab> createState() => _HomeTabState();
 }
 
 class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
+  bool? _lastTutorialCriticalState;
+
+  void _notifyTutorialCriticalState(bool critical) {
+    if (_lastTutorialCriticalState == critical) return;
+    _lastTutorialCriticalState = critical;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.onCriticalFloodWarningChanged?.call(critical);
+    });
+  }
+
   String _selectedBarangay = 'Uwisan';
 
   // Shortcut for the low-end performance switch.
@@ -1895,6 +1911,9 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
 
                   final FloodRiskStatus floodRisk =
                       FloodRiskReading.statusForWaterRise(waterLevel);
+                  _notifyTutorialCriticalState(
+                    sensorActive && floodRisk == FloodRiskStatus.critical,
+                  );
                   final MlFloodRiskAssessment mlRiskAssessment =
                       MlFloodRiskAssessment.calculate(
                         waterRiseCm: waterLevel,
@@ -2098,6 +2117,8 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
                                                 fieldContext,
                                               ),
                                               child: Padding(
+                                                key: TutorialTargets
+                                                    .homeBarangay,
                                                 padding:
                                                     const EdgeInsets.symmetric(
                                                       horizontal: 12,
@@ -2165,6 +2186,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
                               // (Placed ABOVE the temperature + humidity row.)
 
                               _glassCard(
+                                key: TutorialTargets.homeRisk,
                                 glowColor: floodColor,
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 16,
@@ -2261,6 +2283,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
                               //
                               // (Placed BELOW the flood risk status card.)
                               Row(
+                                key: TutorialTargets.homeWeather,
                                 children: [
                                   Expanded(
                                     child: _glassCard(
@@ -2371,6 +2394,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
                               // smaller / fixed, it is much taller than before.
                               Expanded(
                                 child: _glassCard(
+                                  key: TutorialTargets.homeWater,
                                   padding: const EdgeInsets.all(16),
                                   child: Column(
                                     crossAxisAlignment:
@@ -2719,6 +2743,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
                               SizedBox(
                                 height: 154,
                                 child: _glassCard(
+                                  key: TutorialTargets.homeRainfall,
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 14,
                                     vertical: 9,
