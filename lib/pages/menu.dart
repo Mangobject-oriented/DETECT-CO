@@ -590,7 +590,11 @@ class _MenuTabState extends State<MenuTab> {
                   SizedBox(
                     width: 50,
                     height: 50,
-                    child: Image.asset('assets/icon/detect-co_logo.png'),
+                    child: const Icon(
+                      Icons.menu_rounded,
+                      size: 32,
+                      color: Colors.white,
+                    ),
                   ),
 
                   const SizedBox(width: 8),

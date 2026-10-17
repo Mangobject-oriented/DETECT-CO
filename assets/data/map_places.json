@@ -208,14 +208,6 @@
     "type": "evacuation"
   },
   {
-    "name": "Brgy. La Mesa Covered Court",
-    "description": "Supplied coordinate",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.18134448099071,
-    "longitude": 121.15551189061159,
-    "type": "evacuation"
-  },
-  {
     "name": "Our Lady of Fatima Church - Lawa",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",

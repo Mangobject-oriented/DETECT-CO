@@ -1296,10 +1296,11 @@ class EvacuateTabState extends State<EvacuateTab> with WidgetsBindingObserver {
                       children: [
                         GestureDetector(
                           child: SizedBox(
-                            width: 50,
-                            height: 50,
+                            width: 40,
+                            height: 40,
                             child: Image.asset(
-                              "assets/icon/detect-co_logo.png",
+                              "assets/icon/tools.png",
+                              color: Colors.white,
                             ),
                           ),
                         ),

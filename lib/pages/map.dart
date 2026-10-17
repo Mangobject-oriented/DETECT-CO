@@ -3270,8 +3270,10 @@ class _MapTabState extends State<MapTab> {
                           child: SizedBox(
                             width: 40,
                             height: 40,
-                            child: Image.asset(
-                              "assets/icon/detect-co_logo.png",
+                            child: const Icon(
+                              Icons.map,
+                              size: 32,
+                              color: Colors.white,
                             ),
                           ),
                         ),
@@ -3510,9 +3512,13 @@ class _MapTabState extends State<MapTab> {
                                         child: Stack(
                                           clipBehavior: Clip.none,
                                           children: [
-                                            Positioned.fill(
-                                              child: Image.asset(
-                                                'assets/icon/evacsite.png',
+                                            const Center(
+                                              child: Image(
+                                                image: AssetImage(
+                                                  'assets/icon/evacsite.png',
+                                                ),
+                                                width: 38,
+                                                height: 38,
                                               ),
                                             ),
                                             // Small status icon (not color only);

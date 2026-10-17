@@ -793,8 +793,10 @@ class _NotificationTabState extends State<NotificationTab>
                           child: SizedBox(
                             width: 50,
                             height: 50,
-                            child: Image.asset(
-                              "assets/icon/detect-co_logo.png",
+                            child: const Icon(
+                              Icons.notifications_none_rounded,
+                              size: 32,
+                              color: Colors.white,
                             ),
                           ),
                         ),
