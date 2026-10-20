@@ -2,12 +2,32 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <WiFi.h>
+#include <WiFiManager.h>   // "WiFiManager" by tzapu (v2.0.17 recommended)
 #include <HTTPClient.h>
 #include "DHT.h"
 
 // ================= WIFI =================
-const char* ssid = "HUAWEI-7dbi";
-const char* password = "8cejbbef";
+// No SSID/password is stored in this source code.
+// Credentials are entered through the WiFiManager portal and saved in the
+// ESP32's flash (NVS), so they survive restarts and power loss.
+#define AP_NAME "DETECT-CO-Setup"          // setup access point (open, portal at 192.168.4.1)
+
+const unsigned long CONNECT_TIMEOUT_S          = 20;      // max wait when joining a saved network
+const unsigned long PORTAL_TIMEOUT_S           = 180;     // portal auto-closes after 3 min
+const unsigned long WIFI_RECONNECT_INTERVAL_MS = 15000;   // retry saved network every 15 s
+const unsigned long WIFI_PORTAL_REOPEN_MS      = 300000;  // reopen portal after 5 min offline
+
+// Config button: BOOT button on most ESP32 DevKit boards (GPIO0, otherwise unused here)
+#define CONFIG_BUTTON_PIN 0
+const unsigned long BUTTON_PORTAL_HOLD_MS = 3000;    // hold 3 s  -> open portal
+const unsigned long BUTTON_ERASE_HOLD_MS  = 10000;   // hold 10 s -> erase saved WiFi + open portal
+
+WiFiManager wm;
+bool wifiWasConnected = false;
+bool portalWasActive = false;
+bool disconnectTracking = false;
+unsigned long disconnectedSince = 0;
+unsigned long lastReconnectAttempt = 0;
 
 // ================= FIREBASE =================
 const char* firebaseURL = "https://test1-thesisgrp20-default-rtdb.asia-southeast1.firebasedatabase.app/flood.json";
@@ -31,14 +51,6 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 #define DHTTYPE DHT11
 DHT ky015(KY015_PIN, DHTTYPE);
 
-// Buzzer
-#define BUZZER_PIN 14
-
-// RGB LED pins (Common Cathode)
-#define RED_PIN 25
-#define GREEN_PIN 27
-#define BLUE_PIN 26 // optional, keep off
-
 // Firebase update timing
 unsigned long previousFirebase = 0;
 const long FIREBASE_INTERVAL = 1000; // 1 second
@@ -49,17 +61,138 @@ bool waterDetected = false;
 float temperature = 0;
 float humidity = 0;
 
+// ================= WIFI HELPERS =================
+void onPortalStart(WiFiManager* w) {
+  Serial.println("Config portal started.");
+  Serial.println("Connect to WiFi: " AP_NAME);
+  Serial.println("Then open http://192.168.4.1");
+}
+
+void onCredentialsSaved() {
+  Serial.println("WiFi credentials saved.");
+}
+
+// Start the configuration portal without blocking the sensors.
+void openConfigPortal() {
+  if (wm.getConfigPortalActive()) return;
+  Serial.println("Opening WiFi config portal...");
+  wm.setConfigPortalTimeout(PORTAL_TIMEOUT_S);
+  wm.startConfigPortal(AP_NAME);   // non-blocking: returns immediately
+  portalWasActive = true;
+}
+
+void eraseWiFiCredentials() {
+  Serial.println("Erasing saved WiFi credentials...");
+  wm.resetSettings();
+  wifiWasConnected = false;
+  openConfigPortal();
+}
+
+// Must be called every loop(): runs the portal and handles reconnection.
+void serviceWiFi() {
+  wm.process();   // does nothing when the portal is not active
+
+  unsigned long now = millis();
+  bool portalActive = wm.getConfigPortalActive();
+
+  // Portal just closed (saved successfully, or timed out)
+  if (portalWasActive && !portalActive) {
+    portalWasActive = false;
+    WiFi.mode(WIFI_STA);
+    if (WiFi.status() != WL_CONNECTED) {
+      Serial.println("Portal closed without a connection. Will keep retrying.");
+      disconnectTracking = true;
+      disconnectedSince = now;
+      lastReconnectAttempt = now;
+      if (wm.getWiFiIsSaved()) WiFi.begin();
+    }
+  }
+
+  if (portalActive) {
+    portalWasActive = true;
+    return;   // portal handles the connection while it is open
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    if (!wifiWasConnected) {
+      wifiWasConnected = true;
+      Serial.print("WiFi connected. IP: ");
+      Serial.println(WiFi.localIP());
+    }
+    disconnectTracking = false;
+    return;
+  }
+
+  // ---- Not connected ----
+  if (wifiWasConnected) {
+    wifiWasConnected = false;
+    Serial.println("WiFi connection lost.");
+  }
+  if (!disconnectTracking) {
+    disconnectTracking = true;
+    disconnectedSince = now;
+    lastReconnectAttempt = now;
+  }
+
+  // Offline too long (bad/changed credentials or router gone): reopen portal
+  if (now - disconnectedSince >= WIFI_PORTAL_REOPEN_MS) {
+    disconnectedSince = now;
+    openConfigPortal();
+    return;
+  }
+
+  // Periodic reconnect attempt to the saved network
+  if (now - lastReconnectAttempt >= WIFI_RECONNECT_INTERVAL_MS) {
+    lastReconnectAttempt = now;
+    if (wm.getWiFiIsSaved()) {
+      Serial.println("Retrying saved WiFi network...");
+      WiFi.disconnect();   // does not erase saved credentials
+      WiFi.begin();
+    }
+  }
+}
+
+// Hold the BOOT button: 3 s = open portal, 10 s = erase credentials.
+void handleConfigButton() {
+  static unsigned long pressStart = 0;
+  static bool portalTriggered = false;
+  static bool eraseTriggered = false;
+
+  if (digitalRead(CONFIG_BUTTON_PIN) == LOW) {
+    if (pressStart == 0) pressStart = millis();
+    unsigned long held = millis() - pressStart;
+    if (!portalTriggered && held >= BUTTON_PORTAL_HOLD_MS) {
+      portalTriggered = true;
+      openConfigPortal();
+    }
+    if (!eraseTriggered && held >= BUTTON_ERASE_HOLD_MS) {
+      eraseTriggered = true;
+      eraseWiFiCredentials();
+    }
+  } else {
+    pressStart = 0;
+    portalTriggered = false;
+    eraseTriggered = false;
+  }
+}
+
+// Serial Monitor commands: 'p' = open portal, 'e' = erase saved WiFi
+void handleSerialCommands() {
+  while (Serial.available()) {
+    char c = Serial.read();
+    if (c == 'p') openConfigPortal();
+    else if (c == 'e') eraseWiFiCredentials();
+  }
+}
+
 void setup() {
   Serial.begin(115200);
 
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
   pinMode(WATER_PIN, INPUT);
-  pinMode(BUZZER_PIN, OUTPUT);
 
-  pinMode(RED_PIN, OUTPUT);
-  pinMode(GREEN_PIN, OUTPUT);
-  pinMode(BLUE_PIN, OUTPUT);
+  pinMode(CONFIG_BUTTON_PIN, INPUT_PULLUP);
 
   // Initialize I2C for OLED
   Wire.begin(21, 22);
@@ -75,22 +208,47 @@ void setup() {
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(0,0);
   display.println("Flood Monitor");
+  display.println("Connecting WiFi...");
   display.display();
 
   // Initialize KY-015
   ky015.begin();
 
-  // Connect WiFi
-  WiFi.begin(ssid, password);
-  Serial.print("Connecting to WiFi");
-  while(WiFi.status() != WL_CONNECTED){
-    delay(500);
-    Serial.print(".");
+  // ================= WIFI MANAGER =================
+  WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true);
+
+  wm.setDebugOutput(false);                 // never print credentials to Serial
+  wm.setConfigPortalBlocking(false);        // sensors keep running while portal is open
+  wm.setConnectTimeout(CONNECT_TIMEOUT_S);
+  wm.setConfigPortalTimeout(PORTAL_TIMEOUT_S);
+  wm.setAPStaticIPConfig(IPAddress(192,168,4,1), IPAddress(192,168,4,1), IPAddress(255,255,255,0));
+  wm.setAPCallback(onPortalStart);
+  wm.setSaveConfigCallback(onCredentialsSaved);
+
+  Serial.println("Starting WiFi Manager...");
+  Serial.println("If no saved WiFi is found, connect to:");
+  Serial.println(AP_NAME);
+
+  // Tries saved credentials (max CONNECT_TIMEOUT_S). If that fails, starts the
+  // portal in non-blocking mode and returns false. No restart, no endless loop.
+  if (wm.autoConnect(AP_NAME)) {
+    wifiWasConnected = true;
+    Serial.println("\nWiFi Connected!");
+    Serial.print("IP Address: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    portalWasActive = wm.getConfigPortalActive();
+    Serial.println("WiFi not connected. Running offline; portal open if enabled.");
   }
-  Serial.println("\nWiFi Connected!");
 }
 
 void loop() {
+  // ================= WIFI SERVICE =================
+  serviceWiFi();
+  handleConfigButton();
+  handleSerialCommands();
+
   // ================= READ ULTRASONIC =================
   long duration;
   digitalWrite(TRIG_PIN, LOW);
@@ -113,25 +271,6 @@ void loop() {
     if(!isnan(t)) temperature = t;
     if(!isnan(h)) humidity = h;
   }
-
-  // ================= BUZZER =================
-  if((distance > 0 && distance <= 21) || waterDetected){
-    digitalWrite(BUZZER_PIN, HIGH);
-  } else {
-    digitalWrite(BUZZER_PIN, LOW);
-  }
-
-  // ================= RGB LED =================
-  if(waterDetected || (distance > 0 && distance <= 21)){ 
-    // Water detected OR distance too low → RED
-    digitalWrite(RED_PIN, HIGH);
-    digitalWrite(GREEN_PIN, LOW);
-  } else { 
-    // Safe → GREEN
-    digitalWrite(RED_PIN, LOW);
-    digitalWrite(GREEN_PIN, HIGH);
-  }
-  digitalWrite(BLUE_PIN, LOW); // keep off
 
   // ================= SERIAL MONITOR =================
   Serial.print("Distance: ");
@@ -164,6 +303,12 @@ void loop() {
   display.print("Humidity: ");
   display.print(humidity,0);
   display.println("%");
+
+  // WiFi status line (only addition to the display; delete if not wanted)
+  display.setCursor(0,56);
+  if (wm.getConfigPortalActive()) display.print("AP:" AP_NAME);
+  else if (WiFi.status() == WL_CONNECTED) display.print("WiFi: connected");
+  else display.print("WiFi: offline");
 
   display.display();
 
