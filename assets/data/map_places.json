@@ -48,14 +48,6 @@
     "type": "evacuation"
   },
   {
-    "name": "Bubuyan's Mystica Church",
-    "description": "Supplied coordinate",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.172963720486747,
-    "longitude": 121.10557921410229,
-    "type": "evacuation"
-  },
-  {
     "name": "Bubuyan's National High School",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
@@ -85,14 +77,6 @@
     "image": "assets/images/evac1.png",
     "latitude": 14.1606442315348,
     "longitude": 121.08255004753215,
-    "type": "evacuation"
-  },
-  {
-    "name": "Bunggo Gitna Chapel",
-    "description": "Supplied coordinate",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.156989529900981,
-    "longitude": 121.06391365513119,
     "type": "evacuation"
   },
   {
@@ -149,14 +133,6 @@
     "image": "assets/images/evac1.png",
     "latitude": 14.171235841465467,
     "longitude": 121.06845088677825,
-    "type": "evacuation"
-  },
-  {
-    "name": "Immanuel Church",
-    "description": "Supplied coordinate",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.16468392333159,
-    "longitude": 121.11166297009778,
     "type": "evacuation"
   },
   {
@@ -232,14 +208,6 @@
     "type": "evacuation"
   },
   {
-    "name": "Lecheria Elementary School",
-    "description": "Supplied coordinate",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.203316989780198,
-    "longitude": 121.16152022776481,
-    "type": "evacuation"
-  },
-  {
     "name": "Lecheria Brgy. Hall",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
@@ -248,35 +216,11 @@
     "type": "evacuation"
   },
   {
-    "name": "Lingga Memorial Church",
-    "description": "Supplied coordinate",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.21500465075427,
-    "longitude": 121.18263593884583,
-    "type": "evacuation"
-  },
-  {
-    "name": "Looc Covered Court",
-    "description": "Supplied coordinate",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.226867070119598,
-    "longitude": 121.1791843408803,
-    "type": "evacuation"
-  },
-  {
     "name": "Looc Elementary School",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
     "latitude": 14.223606762143497,
     "longitude": 121.17913294369943,
-    "type": "evacuation"
-  },
-  {
-    "name": "Saint Mary Magdalene Parish Church",
-    "description": "Supplied coordinate",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.227311567599813,
-    "longitude": 121.17801168719132,
     "type": "evacuation"
   },
   {
@@ -384,14 +328,6 @@
     "type": "evacuation"
   },
   {
-    "name": "Brgy. Milagrosa Basketball Court",
-    "description": "Supplied coordinate",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.168667146420542,
-    "longitude": 121.13890417103521,
-    "type": "evacuation"
-  },
-  {
     "name": "Iglesia ni Cristo - Milagrosa",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
@@ -440,14 +376,6 @@
     "type": "evacuation"
   },
   {
-    "name": "Hacienda Hills Court - Palo Alto",
-    "description": "Supplied coordinate",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.185505636435487,
-    "longitude": 121.10514984241068,
-    "type": "evacuation"
-  },
-  {
     "name": "Basketball Court 1 - Palo Alto",
     "description": "Supplied coordinate",
     "image": "assets/images/evac1.png",
@@ -461,22 +389,6 @@
     "image": "assets/images/evac1.png",
     "latitude": 14.180415280449884,
     "longitude": 121.17911049698672,
-    "type": "evacuation"
-  },
-  {
-    "name": "E. Barreto Sr. National High School - Pansol",
-    "description": "Supplied coordinate",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.179814627414459,
-    "longitude": 121.1788240508865,
-    "type": "evacuation"
-  },
-  {
-    "name": "Holy Trinity Parish Church - Pansol",
-    "description": "Supplied coordinate",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.180055211653634,
-    "longitude": 121.18543688551486,
     "type": "evacuation"
   },
   {
@@ -501,14 +413,6 @@
     "image": "assets/images/evac1.png",
     "latitude": 14.200979717555436,
     "longitude": 121.14041785088628,
-    "type": "evacuation"
-  },
-  {
-    "name": "Prinza Basketball Court",
-    "description": "Supplied coordinate",
-    "image": "assets/images/evac1.png",
-    "latitude": 14.198048393372924,
-    "longitude": 121.14038347822171,
     "type": "evacuation"
   },
   {
